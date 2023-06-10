@@ -320,13 +320,20 @@
 //! the `Send` trait, allowing it to be safely moved 
 //! to another thread for execution. 
 //! 
-//! ##
-//! ⚠️ Warning: Before using the interthread macro in your project, 
-//! please ensure that you have imported the oneshot crate. If you are 
-//! using an async library other than tokio, the macro also requires 
-//! the async_channel crate to be imported.
 //! 
+//! ⚠️ Warning: The `interthread` macro generates code that 
+//! utilizes channels for communication. However, the macro 
+//! itself does not provide any channel implementations. 
+//! Therefore, depending on the libraries used in your project,
+//! you may need to import additional crates such as 
+//! [oneshot](https://crates.io/crates/oneshot) and 
+//! [async_channel](https://crates.io/crates/async-channel) 
+//! if your project uses an `async` library other than 
+//! [tokio](https://crates.io/crates/tokio). If any of these 
+//! dependencies are required, you will be prompted with an 
+//! error message indicating the necessary imports.
 //! 
+
 mod attribute;
 mod use_macro;
 mod show;
@@ -741,9 +748,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    assert_eq!(bb.is_even(84), Aa::is_even(84));
 ///}
 ///```
-///
-/// 
-/// 
+
 
 
 

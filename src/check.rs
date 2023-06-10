@@ -8,7 +8,9 @@ pub fn is_imported( name: &str ){
 
         _ => {
             let msg = format!("Error. Crate {} not found.", name);
-            let help = format!("Consider importing carte {} by running 'cargo add {}'. ",name, name );
+            let help = 
+            format!("This issue can be easily solved by importing the '{}' crate into the project.
+            Simply run the following command in your terminal: cargo add {}",name, name );
             proc_macro_error::abort!( proc_macro2::Span::call_site(), msg; help=help);
         }
     }
