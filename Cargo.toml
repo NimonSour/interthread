@@ -6,7 +6,7 @@ description = "Auto implementation of the Actor Model"
 license = "MIT OR Apache-2.0"
 author = "Simon Nour"
 repository = "https://github.com/NimonSour/interthread.git"
-keywords = ["actor","async","spawn","thread","task","actor-model","concurrency","parallelism","interthread","async-std","tokio","smol"]
+keywords = ["actor","async","thread","interthread","actor-model"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
