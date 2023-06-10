@@ -10,8 +10,14 @@ keywords = ["actor","actor model","concurrency","parallelism"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+proc-macro = true
+
+
 [dependencies]
 
-oneshot = "^0.1.5"
-async-channel = "^1.8.0"
-interthread_macro = { version = "0.1.0", path = "./interthread_macro" }
+quote = { version = "1" }
+syn   = { version = "2", features = ["parsing","full","extra-traits"]}
+proc-macro2 = { version = "1" }
+proc-macro-error = { version = "1" }
+proc-macro-crate = "1.3.1"

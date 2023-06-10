@@ -633,6 +633,8 @@ The flowing are all possible method signatures.
 }
 
 
+
+
 struct Channels {
 
     live_field_sender:   proc_macro2::TokenStream,
@@ -658,10 +660,10 @@ impl Channels {
         let new_live_send_recv:  proc_macro2::TokenStream;
 
         let mut live_meth_send_recv = 
-            quote::quote!{ let ( send, recv ) = interthread::oneshot::channel(); };
+            quote::quote!{ let ( send, recv ) = oneshot::channel(); };
 
         let mut script_field_output: std::boxed::Box<dyn Fn(Box<syn::Type>) -> proc_macro2::TokenStream> =
-            std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: interthread::oneshot::Sender<#out_type>, }); 
+            std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: oneshot::Sender<#out_type>, }); 
        
         let mut live_send_input: proc_macro2::TokenStream =
             quote::quote!{let _ = self.sender.send(msg).expect("'Live::method.send' Channel is closed");};
@@ -692,14 +694,13 @@ impl Channels {
                         script_field_output = 
                         std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
                     
-                        // live_send_input =  quote::quote!{let _ = self.sender.send(msg).expect("'Live::method.send' Channel is closed");};
                         live_recv_output = quote::quote!{ recv.await.expect("'Live::method.recv' Channel is closed")};
                     },
 
                     _ => {
-                        live_field_sender   = quote::quote!{ sender: interthread::async_channel::Sender<#type_ident>, };
-                        play_input_receiver = quote::quote!{ receiver: interthread::async_channel::Receiver<#type_ident>, };
-                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) =  interthread::async_channel::unbounded(); }; 
+                        live_field_sender   = quote::quote!{ sender: async_channel::Sender<#type_ident>, };
+                        play_input_receiver = quote::quote!{ receiver: async_channel::Receiver<#type_ident>, };
+                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) =  async_channel::unbounded(); }; 
                         live_send_input     = quote::quote!{ let _ = self.sender.send(msg).await;};
                         live_recv_output    = quote::quote!{ recv.await.expect("'Live::method.recv' Channel is closed")};
                     
@@ -729,9 +730,9 @@ impl Channels {
                     },
 
                     _ => {
-                        live_field_sender   = quote::quote!{ sender: interthread::async_channel::Sender<#type_ident>, };
-                        play_input_receiver = quote::quote!{ receiver: interthread::async_channel::Receiver<#type_ident>, };
-                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = interthread::async_channel::bounded(#val); };
+                        live_field_sender   = quote::quote!{ sender: async_channel::Sender<#type_ident>, };
+                        play_input_receiver = quote::quote!{ receiver: async_channel::Receiver<#type_ident>, };
+                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = async_channel::bounded(#val); };
                         live_recv_output    = quote::quote!{ recv.await.expect("'Live::method.recv' Channel is closed")};
                         
                         live_send_input = quote::quote!{let _ = self.sender.send(msg).await;};
@@ -780,4 +781,5 @@ impl Channels {
         }
     }
 }
+
 
