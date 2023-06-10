@@ -1,0 +1,17 @@
+[package]
+name = "interthread"
+version = "0.1.0"
+edition = "2021"
+description = "Auto implementation of the Actor Model"
+license = "MIT OR Apache-2.0"
+author = "Simon Nour"
+repository = "https://github.com/NimonSour/interthread.git"
+keywords = ["actor","actor model","concurrency","parallelism"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+
+oneshot = "^0.1.5"
+async-channel = "^1.8.0"
+interthread_macro = { path = "./interthread_macro" }
