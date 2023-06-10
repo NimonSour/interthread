@@ -686,7 +686,7 @@ impl Channels {
 
                     crate::attribute::AALib::Tokio    => {
                         live_field_sender   = quote::quote!{ sender: tokio::sync::mpsc::UnboundedSender<#type_ident>, };
-                        play_input_receiver = quote::quote!{ receiver: tokio::sync::mpsc::UnboundedReceiver<#type_ident>, }; 
+                        play_input_receiver = quote::quote!{ mut receiver: tokio::sync::mpsc::UnboundedReceiver<#type_ident>, }; 
                         new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = tokio::sync::mpsc::unbounded_channel(); }; 
 
                         live_meth_send_recv = quote::quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
@@ -719,7 +719,7 @@ impl Channels {
                     },
                     crate::attribute::AALib::Tokio    => {
                         live_field_sender   = quote::quote!{ sender: tokio::sync::mpsc::Sender<#type_ident>, };
-                        play_input_receiver = quote::quote!{ receiver: tokio::sync::mpsc::Receiver<#type_ident>, };
+                        play_input_receiver = quote::quote!{ mut receiver: tokio::sync::mpsc::Receiver<#type_ident>, };
                         new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = tokio::sync::mpsc::channel(#val); }; 
                         live_meth_send_recv = quote::quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
                         
