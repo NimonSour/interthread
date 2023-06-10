@@ -326,10 +326,10 @@
 //! itself does not provide any channel implementations. 
 //! Therefore, depending on the libraries used in your project,
 //! you may need to import additional crates such as 
-//! [oneshot](https://crates.io/crates/oneshot) and 
-//! [async_channel](https://crates.io/crates/async-channel) 
+//! [oneshot](https://docs.rs/oneshot) and 
+//! [async_channel](https://docs.rs/async-channel) 
 //! if your project uses an `async` library other than 
-//! [tokio](https://crates.io/crates/tokio). If any of these 
+//! [tokio](https://docs.rs/tokio). If any of these 
 //! dependencies are required, you will be prompted with an 
 //! error message indicating the necessary imports.
 //! 
