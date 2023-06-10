@@ -263,7 +263,16 @@
 //! thread allowing for parallel execution,
 //! returns an instance of itself.
 //! 
-//! ``` 
+//! 
+//! Filename: Cargo.toml
+//! 
+//! ```text
+//! interthread = "0.1.1"
+//! oneshot     = "0.1.5" 
+//! ```
+//! 
+//! Filename: main.rs
+//! ```rust 
 //! 
 //!#[derive(Clone, Debug)]
 //!pub struct MyActorLive {
