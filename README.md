@@ -38,7 +38,7 @@ the core logic of the program.
 
 Moreover, existing libraries like [`actix`](https://docs.rs/actixlatest/actix/), [`axiom`](https://docs.rs/axiom/latest/axiom/), 
 designed to simplify working within the Actor Model,
-often employ specific concepts, vocabulary, traits and types thatmay
+often employ specific concepts, vocabulary, traits and types that may
 be unfamiliar to users who are less experienced with 
 asynchronous programming and futures. 
 
@@ -103,11 +103,16 @@ fn main() {
     });
 
     let handle_b = std::thread::spawn( move || {
-    actor_b.add_number(5);
+    actor_b.add_number(5)
     });
 
-    let _ = handle_a.join();
-    let _ = handle_b.join();
+    let _  = handle_a.join();
+    let hb = handle_b.join().unwrap();
+
+    // we never know which thread will
+    // be first to call the actor so
+    // hb = 10 or 11
+    assert!(hb >= 10);
 
     assert_eq!(actor.get_value(), 11);
 }
@@ -144,6 +149,8 @@ Filename: Cargo.toml
 interthread = "0.1.1"
 tokio       = { version="1.28.2",features=["full"]}
 ```
+Filename: main.rs
+
 ```rust
 
 pub struct MyActor {
@@ -156,7 +163,9 @@ impl MyActor {
     pub fn new( v: i8 ) -> Self {
        Self { value: v } 
     }
-    pub fn increment(&mut self) {
+    // if the "lib" is defined
+    // object methods can be "async" 
+    pub async fn increment(&mut self) {
         self.value += 1;
     }
     pub fn add_number(&mut self, num: i8) -> i8 {
@@ -181,16 +190,19 @@ async fn main() {
     });
 
     let handle_b = tokio::spawn( async move {
-    actor_b.add_number(5).await;
+    actor_b.add_number(5).await
     });
 
-    let _ = handle_a.await;
-    let _ = handle_b.await;
+    let _  = handle_a.await;
+    let hb = handle_b.await.unwrap();
+
+    // hb = 10 or 11
+    assert!(hb >= 10);
 
     assert_eq!(actor.get_value().await, 11);
 }
 ```
-The crate also includes a powerful macro called [`example`](https://docs.rs/interthread/latest/interthread/attr.example.html) that can expand the actor macro, ensuring that users always have the opportunity to visualize and interact with the generated code. Which makes [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html)  100%  transparent macro . 
+The crate also includes a powerful macro called [`example`](https://docs.rs/interthread/latest/interthread/attr.example.html) that can expand the [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) macro, ensuring that users always have the opportunity to visualize and interact with the generated code. Which makes [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html)  100%  transparent macro . 
 
 
 For more details, check out `interthread` on 
