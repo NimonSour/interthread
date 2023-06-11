@@ -238,7 +238,7 @@
 //! 
 //!``` 
 //! 
-//! When using the `edit` argument in the [`actor`](./attr.actor.html) 
+//! When using the [`edit`](./attr.actor.html#edit) argument in the [`actor`](./attr.actor.html) 
 //! macro, such as 
 //! 
 //!```text
@@ -252,9 +252,9 @@
 //! 
 //! # live
 //! A struct `ActorName + Live`, which serves as an interface/handler 
-//! replicating the public method signures of the original Actor.
+//! replicating the public method signatures of the original Actor.
 //! 
-//! Invoking a method on a live instance, it triggers the eventual 
+//! Invoking a method on a live instance, it's triggering the eventual 
 //! invocation of the corresponding method within the actor. 
 //! 
 //! The `live` method `new` is creating : new channel, an instace of 
@@ -366,7 +366,7 @@ static MAIN: &'static str                   = "main";
 ///  
 /// The [`example`](./attr.example.html) macro serves as a 
 /// convenient tool for code transparency and exploration.
-/// By automatically generating an expanded code file,
+/// Automatically generating an expanded code file,
 /// it provides developers with a tangible representation of
 /// the code produced by the `interthread` macros. 
 /// 
@@ -448,8 +448,8 @@ static MAIN: &'static str                   = "main";
 /// parts of your project.
 ///
 ///  It provides two options for generating example code files: 
-///   - [`mod`](##mod) 
-///   - [`main`](##main) (default)
+///   - [`mod`](##mod)  (default)
+///   - [`main`](##main) 
 ///
 ///   ## mod 
 ///   The macro generates an example code file within the 
@@ -588,7 +588,11 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - `"inter"` (default)  
 /// - `"unbounded"` or `0` 
 /// - `8` ( [`usize`] buffer size)
-/// > **Note:** The default `"inter"` option is experimental and primarily intended for experimentation purposes, specifically with the `lib = "std"` setting. It is recommended to avoid using this option unless you need it.
+/// > **Note:** The default `"inter"` option is experimental 
+/// and primarily intended for experimentation purposes, 
+/// specifically with the `lib = "std"` setting. 
+/// It is recommended to avoid using this option 
+/// unless you need it.
 /// 
 /// The two macros
 /// ```text
@@ -598,7 +602,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// ```text
 /// #[actor(channel=0)]
 /// ```
-/// are identical and both specify an unbound channel.
+/// are identical and both specify an unbounded channel.
 /// 
 /// When specifying an [`usize`] value for the `channel` argument 
 /// in the [`actor`](./attr.actor.html) macro, such as 
@@ -612,10 +616,10 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// Using a bounded channel with a specific buffer size allows 
 /// you to control the memory usage and backpressure behavior 
 /// of the actor. When the buffer is full, any further attempts 
-/// to send messages will block until there is available space. 
+/// to send messages will block/suspend until there is available space. 
 /// This provides a natural form of backpressure, allowing the 
 /// sender to slow down or pause message production when the 
-/// buffer is near capacity
+/// buffer is near capacity.
 /// 
 /// # lib
 ///
@@ -645,7 +649,10 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// # edit
 ///
 /// The `edit` argument specifies the available editing options.
-/// When using this argument, the macro expansion will exclude the code related to `edit` options, allowing the user to manually implement and customize those parts according to their specific needs.
+/// When using this argument, the macro expansion will 
+/// **exclude** the code related to `edit` options, 
+/// allowing the user to manually implement and 
+/// customize those parts according to their specific needs.
 /// 
 /// - [`script`](index.html#script)
 /// - [`direct`](index.html#direct)
@@ -708,7 +715,11 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// # name
 /// 
-/// The `name` attribute allows developers to provide a custom name for `actor`, overriding the default naming conventions of the crate. This can be useful when there are naming conflicts or when a specific naming scheme is desired.  
+/// The `name` attribute allows developers to provide a 
+/// custom name for `actor`, overriding the default 
+/// naming conventions of the crate. This can be useful 
+/// when there are naming conflicts or when a specific 
+/// naming scheme is desired.  
 /// 
 /// - "" (default): No name specified
 ///
@@ -732,7 +743,10 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// # assoc
 /// 
-/// The `assoc` option indicates whether associated functions of the actor struct are included in generated code as instance methods, allowing them to be invoked on the generated struct itself. 
+/// The `assoc` option indicates whether **associated**  **functions**
+/// of the actor struct are included in generated code as 
+/// instance methods, allowing them to be invoked on 
+/// the generated struct itself. 
 /// 
 /// - true  (default)
 /// - false
@@ -740,7 +754,8 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///  ## Examples
 ///```
 ///pub struct Aa;
-///
+///  
+/// 
 ///#[actor(name="Bb")]
 ///impl Aa {
 ///
@@ -756,6 +771,13 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    let bb = BbLive::new();
 ///    assert_eq!(bb.is_even(84), Aa::is_even(84));
 ///}
+/// 
+/// A macro 
+/// ```text
+/// #[actor(name="Bb",assoc=false)]
+/// ```
+/// on the same object `Aa` will create a type `BbLive`
+/// without any methods defined.
 ///```
 
 
