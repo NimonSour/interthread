@@ -771,14 +771,14 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    let bb = BbLive::new();
 ///    assert_eq!(bb.is_even(84), Aa::is_even(84));
 ///}
-/// 
+/// ```
 /// A macro 
 /// ```text
 /// #[actor(name="Bb",assoc=false)]
 /// ```
 /// on the same object `Aa` will create a type `BbLive`
 /// without any methods defined.
-///```
+///
 
 
 
