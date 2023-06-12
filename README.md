@@ -62,7 +62,7 @@ they were directly working with the original object.
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.1"
+interthread = "0.1.4"
 oneshot     = "0.1.5" 
 ```
 
@@ -141,12 +141,12 @@ The same example can be run in
 and [smol](https://crates.io/cratessmol), 
 with the only difference being that the methods will 
 be marked as `async` and need to be `await`ed for 
-asynchronous execution."
+asynchronous execution.
 
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.1"
+interthread = "0.1.4"
 tokio       = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs

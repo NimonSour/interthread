@@ -380,15 +380,15 @@ impl Default for AAEdit {
 
 static AVAIL_ACTOR: &'static str = "
 #[interthread::actor( 
-  
+    
+    channel = \"inter\" *
+              \"unbounded\" || 0
+               8 
+
         lib = \"std\" *
               \"smol\"
               \"tokio\"
               \"async_std\"
-
-        channel = \"inter\" *
-                  \"unbounded\" || 0
-                   8 
 
         edit
         ( 
@@ -398,11 +398,14 @@ static AVAIL_ACTOR: &'static str = "
             live
             live::new
         ) 
-        assoc = true *
-        
+
         name = \"\" 
 
-)]
+        assoc = true *
+               false
+        
+    )
+]
 
 
 *  -  default 

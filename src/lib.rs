@@ -76,8 +76,16 @@
 //! 
 //! ### Examples
 //! 
+//! 
+//! Filename: Cargo.toml
+//! 
+//! ```text
+//! interthread = "0.1.4"
+//! oneshot     = "0.1.5" 
+//! ```
+//! 
+//! Filename: main.rs
 //!```
-//!
 //!pub struct MyActor {
 //!    value: i8,
 //!}
@@ -255,7 +263,7 @@
 //! replicating the public method signatures of the original Actor.
 //! 
 //! Invoking a method on a live instance, it's triggering the eventual 
-//! invocation of the corresponding method within the actor. 
+//! invocation of the corresponding method within the Actor. 
 //! 
 //! The `live` method `new` is creating : new channel, an instace of 
 //! the Actor,
@@ -264,14 +272,6 @@
 //! returns an instance of itself.
 //! 
 //! 
-//! Filename: Cargo.toml
-//! 
-//! ```text
-//! interthread = "0.1.1"
-//! oneshot     = "0.1.5" 
-//! ```
-//! 
-//! Filename: main.rs
 //! ```rust 
 //! 
 //!#[derive(Clone, Debug)]
@@ -315,7 +315,6 @@
 //!        recv.recv().expect("'Live::method.recv' Channel is closed")
 //!    }
 //!}
-//!
 //! 
 //! ```
 //! 
@@ -417,8 +416,8 @@ static MAIN: &'static str                   = "main";
 /// 
 /// Filename: main.rs 
 /// ```rust
-/// 
-/// #[interthread::example(file="src/my_file.rs")]
+/// use interthread::example;
+/// #[example(file="src/my_file.rs")]
 /// fn main(){
 /// }
 /// 
@@ -477,7 +476,7 @@ static MAIN: &'static str                   = "main";
 ///   This option is used when specifying the `main` argument 
 ///   in the `example` macro. It generates two files within 
 ///   the `examples/inter` directory: the expanded code file 
-///   and an additional `main.rs` file. For example:
+///   and an additional `main.rs` file. 
 ///
 ///   ```text
 ///   #[example(main(file="my_file.rs"))]
@@ -494,6 +493,28 @@ static MAIN: &'static str                   = "main";
 ///   The expanded code file will be located at 
 ///   `examples/inter/my_file.rs`, while the `main.rs` file 
 ///   serves as an entry point for running the example.
+/// 
+/// ## Configuration Options  
+///```text 
+/// 
+///#[interthread::example( 
+///   
+///    mod ✔
+///    main 
+///
+///    (   
+///        file = "path/to/file.rs" ❗️ 
+///
+///        expand(actor,group) ✔
+///    )
+/// )]
+/// 
+/// 
+/// default:    ✔
+/// required:   ❗️
+/// 
+/// 
+///```
 /// 
 /// # Arguments
 /// 
@@ -569,6 +590,39 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// In case if the initialization could potentially fail, 
 /// the method can be named `try_new` 
 /// and return `Option<Self>` or `Result<Self>`.
+/// 
+/// ## Configuration Options
+///```text 
+/// 
+/// #[interthread::actor( 
+///   
+///     channel = "inter"    ✔
+///          0 || "unbounded" 
+///               8 
+/// 
+///     lib     = std        ✔
+///               smol
+///               tokio
+///               async_std
+///     
+///     edit    (            ✘
+///               script
+///               direct
+///               play
+///               live
+///               live::new 
+///              )           
+///      
+///     name    = ""         ✘
+/// 
+///     assoc   = true       ✔
+///  
+/// )]
+/// 
+/// default:    ✔
+/// no default: ✘
+///
+///```
 ///  
 /// # Arguments
 ///  
@@ -632,6 +686,8 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///
 /// ## Examples
 /// ```
+/// use interthread::actor;
+/// 
 /// struct MyActor;
 /// 
 /// #[actor(channel=10, lib ="tokio")]
@@ -664,6 +720,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// ## Examples
 ///```
 ///use std::sync::mpsc;
+///use interthread::actor;
 /// 
 ///pub struct MyActor {
 ///    value: i8,
@@ -709,7 +766,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///}
 ///```
 ///
-/// > **Note:** The expanded `actor` can be viewed using [`interthread::example`](./attr.example.html) 
+/// > **Note:** The expanded `actor` can be viewed using [`example`](./attr.example.html) macro. 
 /// 
 /// 
 /// 
@@ -725,6 +782,8 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///
 /// ## Examples
 ///```
+///use interthread::actor;
+/// 
 ///pub struct MyActor;
 /// 
 ///#[actor(name="OtherActor")]
@@ -753,6 +812,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 ///  ## Examples
 ///```
+///use interthread::actor;
 ///pub struct Aa;
 ///  
 /// 
@@ -772,7 +832,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    assert_eq!(bb.is_even(84), Aa::is_even(84));
 ///}
 /// ```
-/// A macro 
+/// An [`actor`](./attr.actor.html) macro as
 /// ```text
 /// #[actor(name="Bb",assoc=false)]
 /// ```
