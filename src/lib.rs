@@ -85,7 +85,7 @@
 //! ```
 //! 
 //! Filename: main.rs
-//!```
+//!```rust
 //!pub struct MyActor {
 //!    value: i8,
 //!}
@@ -175,7 +175,7 @@
 //! the respective public methods of the Actor.
 //!  
 //! 
-//! ```
+//! ```rust
 //! 
 //!#[derive(Debug)]
 //!pub enum MyActorScript {
@@ -201,7 +201,7 @@
 //! the enum variants to the corresponding function calls.
 //! 
 //! 
-//! ```
+//! ```rust
 //!impl MyActorScript {
 //!    pub fn my_actor_direct(self, actor: &mut MyActor) {
 //!        match self {
@@ -233,7 +233,7 @@
 //! Also this function serves as the home for the Actor itself.
 //! 
 //! 
-//!```
+//!```rust
 //!pub fn my_actor_play(
 //!    receiver: std::sync::mpsc::Receiver<MyActorScript>, 
 //!    mut actor: MyActor) {
@@ -249,7 +249,7 @@
 //! When using the [`edit`](./attr.actor.html#edit) argument in the [`actor`](./attr.actor.html) 
 //! macro, such as 
 //! 
-//!```text
+//!```rust
 //! #[interthread::actor(channel=2, edit(play))]
 //!``` 
 //! 
@@ -399,17 +399,16 @@ static MAIN: &'static str                   = "main";
 /// 
 /// Filename: my_file.rs 
 /// ```rust
+/// use interthread::{actor,example};
 /// 
 /// pub struct Number;
 /// 
 /// // you can have "example" macro in the same file
-/// // #[interthread::example(file="src/my_file.rs")]
+/// // #[example(file="src/my_file.rs")]
 /// 
-/// #[interthread::actor(channel=5)]
+/// #[actor(channel=5)]
 /// impl Number {
-///     pub fn new(value: u32) -> Self {
-///         Self 
-///     }
+///     pub fn new(value: u32) -> Self {Self}
 /// }
 /// 
 /// ```
@@ -454,13 +453,13 @@ static MAIN: &'static str                   = "main";
 ///   The macro generates an example code file within the 
 ///   `examples/inter` directory. For example:
 ///
-///   ```text
+///   ```rust
 ///   #[example(file="my_file.rs")]
 ///   ```
 ///
 ///   This is equivalent to:
 ///
-///   ```text
+///   ```rust
 ///   #[example(mod(file="my_file.rs"))]
 ///   ```
 ///
@@ -478,7 +477,7 @@ static MAIN: &'static str                   = "main";
 ///   the `examples/inter` directory: the expanded code file 
 ///   and an additional `main.rs` file. 
 ///
-///   ```text
+///   ```rust
 ///   #[example(main(file="my_file.rs"))]
 ///   ```
 ///
@@ -546,7 +545,7 @@ static MAIN: &'static str                   = "main";
 /// [`actor`](./attr.actor.html) macro in the generated 
 /// example code, you can use the following attribute:
 /// 
-/// ```text
+/// ```rust
 /// #[example(file="my_file.rs",expand(actor))]
 /// ```
 /// This will generate an example code file that includes 
@@ -650,18 +649,18 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// unless you need it.
 /// 
 /// The two macros
-/// ```text
+/// ```rust
 /// #[actor(channel="unbounded")]
 /// ```
 /// and
-/// ```text
+/// ```rust
 /// #[actor(channel=0)]
 /// ```
 /// are identical and both specify an unbounded channel.
 /// 
 /// When specifying an [`usize`] value for the `channel` argument 
 /// in the [`actor`](./attr.actor.html) macro, such as 
-/// ```text
+/// ```rust
 /// #[actor(channel=4)]
 /// ```
 /// the actor will use a bounded channel with a buffer size of 4.
@@ -686,14 +685,14 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - `"async_std"`
 ///
 /// ## Examples
-/// ```
+/// ```rust
 /// use interthread::actor;
 /// 
 /// struct MyActor;
 /// 
 /// #[actor(channel=10, lib ="tokio")]
 /// impl MyActor{
-///     pub fn new() -> Self
+///     pub fn new() -> Self{Self}
 /// }
 /// #[tokio::main]
 /// async fn main(){
@@ -719,7 +718,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///
 /// 
 /// ## Examples
-///```
+///```rust
 ///use std::sync::mpsc;
 ///use interthread::actor;
 /// 
@@ -782,7 +781,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - "" (default): No name specified
 ///
 /// ## Examples
-///```
+///```rust
 ///use interthread::actor;
 /// 
 ///pub struct MyActor;
@@ -790,9 +789,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///#[actor(name="OtherActor")]
 ///impl MyActor {
 ///
-///   pub fn new() -> Self {
-///       Self{}
-///   }
+///   pub fn new() -> Self {Self}
 ///}
 ///fn main () {
 ///   let other_act = OtherActorLive::new();
@@ -812,7 +809,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - false
 /// 
 ///  ## Examples
-///```
+///```rust
 ///use interthread::actor;
 ///pub struct Aa;
 ///  
@@ -834,17 +831,12 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///}
 /// ```
 /// An [`actor`](./attr.actor.html) macro as
-/// ```text
+/// ```rust
 /// #[actor(name="Bb",assoc=false)]
 /// ```
 /// on the same object `Aa` will create a type `BbLive`
 /// without any methods defined.
 ///
-
-
-
-
-
 
 
 #[proc_macro_error::proc_macro_error]
