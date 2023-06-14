@@ -16,22 +16,22 @@ pub fn get_file( path: &std::path::PathBuf ) -> syn::File {
                 match syn::parse_file(&contents){
                     Ok(file)  => { return file; },
                     Err(_) => {
-                        let msg = format!("Internal Error. 'file::get_file' Could not parse file {:?}.", path.file_name().unwrap().to_string_lossy());
+                        let msg = format!("Internal Error. 'file::get_file'. Could not parse file {:?}!", path.file_name().unwrap().to_string_lossy());
                         proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
                     },
                 }
             },
             Err(_) => {
-                let msg = format!("Internal Error.'file::get_file' Could not read file.");
+                let msg = format!("Internal Error.'file::get_file'. Could not read file!");
                 proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
             }
         }
     }
-    let msg = format!("Internal Error. 'file::get_file' file {:?} does not exist.", path.file_name().unwrap().to_string_lossy());
+    let msg = format!("Internal Error.'file::get_file'. File {:?} does not exist!", path.file_name().unwrap().to_string_lossy());
     proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
 }
 
-pub fn expand_macros( path: &std::path::PathBuf  ,macs: &Vec<crate::attribute::AAExpand>) -> (syn::File, crate::attribute::AALib){
+pub fn expand_macros( path: &std::path::PathBuf, macs: &Vec<crate::attribute::AAExpand>) -> (syn::File, crate::attribute::AALib){
     let mut file    = get_file(path);
     let mut libr = crate::attribute::AALib::default();
     for mac in macs {
@@ -46,7 +46,7 @@ pub fn expand_macros( path: &std::path::PathBuf  ,macs: &Vec<crate::attribute::A
 }
 
 pub fn expand_macro( mut file: syn::File, mac: &crate::attribute::AAExpand  ) -> (syn::File, crate::attribute::AALib){ 
-    let mut lib = crate::attribute::AALib::default();
+    let mut lib            = crate::attribute::AALib::default();
     let mut use_macro   = crate::use_macro::UseMacro::new(mac.to_str());
     let mut use_example = crate::use_macro::UseMacro::new(crate::EXAMPLE);
 

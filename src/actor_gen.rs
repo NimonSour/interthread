@@ -9,7 +9,7 @@ use crate::method;
 pub fn impl_get_name(impl_block: &syn::ItemImpl) -> syn::Ident{
     match &*impl_block.self_ty {
         syn::Type::Path(tp) => tp.path.segments.first().unwrap().ident.clone(),
-        _ => proc_macro_error::abort!(impl_block,"Internal. Could not get item Impl's name."),
+        _ => proc_macro_error::abort!(impl_block,"Internal Error.'actor_gen::impl_get_name'. Could not get item Impl's name!"),
     }
 }
 pub struct ActorMacroGeneration{
@@ -66,7 +66,7 @@ The flowing are all possible method signatures.
     proc_macro_error::abort!(impl_block,msg;note=note)
     }
         
-        // Giving a new name if exists 
+        // Giving a new name if specified 
         let cust_name   = if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { name.clone() }; 
         
         let direct_async = actor_methods.iter().any(|x| x.is_async());
@@ -96,7 +96,7 @@ The flowing are all possible method signatures.
         match lib {
             crate::attribute::AALib::Std => {
                 if direct_async {
-                    let msg = format!("Actor {:?} has 'async' methods but the runtime is not specified.", name.to_string());
+                    let msg = format!("Actor {:?} has 'async' methods but the runtime(lib) is not specified.", name.to_string());
                     proc_macro_error::abort!( proc_macro2::Span::call_site(), msg; help=crate::attribute::AVAIL_LIB );
                 } else {
                     return false;
@@ -654,7 +654,8 @@ impl Channels {
             channel: &crate::attribute::AAChannel,
          type_ident: &syn::Ident, 
                             ) -> Self {
-
+        let live_send_error = quote::quote!{"'Live::method.send' Channel is closed!"};
+        let live_recv_error = quote::quote!{"'Live::method.recv' Channel is closed!"};
         let live_field_sender:   proc_macro2::TokenStream;
         let play_input_receiver: proc_macro2::TokenStream;
         let new_live_send_recv:  proc_macro2::TokenStream;
@@ -666,11 +667,11 @@ impl Channels {
             std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: oneshot::Sender<#out_type>, }); 
        
         let mut live_send_input: proc_macro2::TokenStream =
-            quote::quote!{let _ = self.sender.send(msg).expect("'Live::method.send' Channel is closed");};
+            quote::quote!{let _ = self.sender.send(msg).expect(#live_send_error);};
 
 
         let mut live_recv_output: proc_macro2::TokenStream = 
-            quote::quote!{recv.recv().expect("'Live::method.recv' Channel is closed")};
+            quote::quote!{recv.recv().expect(#live_recv_error)};
 
         match  channel {
 
@@ -694,7 +695,7 @@ impl Channels {
                         script_field_output = 
                         std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
                     
-                        live_recv_output = quote::quote!{ recv.await.expect("'Live::method.recv' Channel is closed")};
+                        live_recv_output = quote::quote!{ recv.await.expect(#live_recv_error)};
                     },
 
                     _ => {
@@ -702,7 +703,7 @@ impl Channels {
                         play_input_receiver = quote::quote!{ receiver: async_channel::Receiver<#type_ident>, };
                         new_live_send_recv  = quote::quote!{ let ( sender, receiver ) =  async_channel::unbounded(); }; 
                         live_send_input     = quote::quote!{ let _ = self.sender.send(msg).await;};
-                        live_recv_output    = quote::quote!{ recv.await.expect("'Live::method.recv' Channel is closed")};
+                        live_recv_output    = quote::quote!{ recv.await.expect(#live_recv_error)};
                     
                     },
                 }
@@ -724,7 +725,7 @@ impl Channels {
                         live_meth_send_recv = quote::quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
                         
                         script_field_output = std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
-                        live_recv_output    = quote::quote!{ recv.await.expect("'Live::method.recv' Channel is closed")};
+                        live_recv_output    = quote::quote!{ recv.await.expect(#live_recv_error)};
 
                         live_send_input = quote::quote!{let _ = self.sender.send(msg).await;};
                     },
@@ -733,7 +734,7 @@ impl Channels {
                         live_field_sender   = quote::quote!{ sender: async_channel::Sender<#type_ident>, };
                         play_input_receiver = quote::quote!{ receiver: async_channel::Receiver<#type_ident>, };
                         new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = async_channel::bounded(#val); };
-                        live_recv_output    = quote::quote!{ recv.await.expect("'Live::method.recv' Channel is closed")};
+                        live_recv_output    = quote::quote!{ recv.await.expect(#live_recv_error)};
                         
                         live_send_input = quote::quote!{let _ = self.sender.send(msg).await;};
                     },
@@ -757,7 +758,7 @@ impl Channels {
 
                 live_send_input     =  quote::quote!{
                     {
-                        let mut guard = self.queue.lock().expect("Failed to unwrap queue MutexGuard.");
+                        let mut guard = self.queue.lock().expect("'Live::method'.Failed to unwrap queue MutexGuard!");
             
                         guard.as_mut()
                         .map(|s| s.push(msg));
@@ -765,7 +766,7 @@ impl Channels {
                     self.condvar.notify_one();
                 };
 
-                live_recv_output     =  quote::quote!{recv.recv().expect("'Live::method.recv' Channel is closed")};
+                live_recv_output     =  quote::quote!{recv.recv().expect(#live_recv_error)};
             },
         }
 

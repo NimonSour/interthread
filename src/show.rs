@@ -4,14 +4,14 @@ use std::io::Write;
 
 fn example_remove( path: &std::path::PathBuf) -> Result<(),String>{
     if let Err(_) = std::fs::remove_dir_all(path){
-        format!(" Failed to remove directory - {:?}", path); 
+        format!("Internal Error.'show::example_remove'. Failed to remove directory - {:?}!", path); 
     }
     Ok(())
 }
 
 fn example_create( path: &std::path::PathBuf) -> Result<(),String>{
     if let Err(_) = std::fs::create_dir(path){
-        format!(" Failed to create directory - {:?}", path);
+        format!("Internal Error.'show::example_create'. Failed to create directory - {:?}!", path);
     }
     Ok(())
 }
@@ -40,7 +40,7 @@ fn example_check_get() -> Result<std::path::PathBuf,String> {
 
     }
     else {
-        return Err(format!("Error: 'CARGO_MANIFEST_DIR' - Not Present"));
+        return Err(format!("Internal Error.'show::example_check_get'. 'CARGO_MANIFEST_DIR' - Not Present"));
     }
 }
 
@@ -52,7 +52,7 @@ pub fn example_path( file: &std::path::PathBuf ) -> Result<std::path::PathBuf,St
         return Ok(path)
     }
     else {
-        return Err(format!("Internal Error. Function 'show::example_path' could not get file name."));
+        return Err(format!("Internal Error.'show::example_path'. Could not get file name!"));
     }
 
 }
@@ -109,7 +109,7 @@ pub fn example_show( file: syn::File, path: &std::path::PathBuf, lib: Option<cra
     }
 }
 
-fn be_main( path: &std::path::PathBuf ,lib: crate::attribute::AALib) ->  Option<syn::File> { //Option<( syn::File, std::path::PathBuf )>  {
+fn be_main( path: &std::path::PathBuf ,lib: crate::attribute::AALib) ->  Option<syn::File> { 
     
     if let Some(stem) = path.file_stem(){
         if let Some(stem) = stem.to_str(){
@@ -123,12 +123,12 @@ fn be_main( path: &std::path::PathBuf ,lib: crate::attribute::AALib) ->  Option<
 
         }
 
-        let msg = "Internal Error. Inside 'show::be_main'. Could not cast OsStr to Str";
+        let msg = "Internal Error.'show::be_main'. Could not cast OsStr to Str!";
         proc_macro_error::abort!(proc_macro2::Span::call_site(),msg);
 
     }
     
-    let msg = "Internal Error. Inside 'show::be_main'. Could not get 'file_stem' from provided path.";
+    let msg = "Internal Error.'show::be_main'. Could not get 'file_stem' from provided path!";
     proc_macro_error::abort!(proc_macro2::Span::call_site(),msg);
     
 }

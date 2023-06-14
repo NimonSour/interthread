@@ -173,7 +173,7 @@ impl ExampleAttributeArguments {
 
 //-----------------------  EXAMPLE EXPAND
 static AVAIL_EXPAND: &'static str = "
-'expand' takes a tuple of ident options.
+Argument 'expand' takes a tuple of ident options.
 
 Available ident options are: 
 

@@ -191,7 +191,7 @@ impl UseMacro {
             return p
         }
         else {
-            proc_macro_error::abort!( proc_macro2::Span::call_site(),"Internal Error. 'file::create_path' Could not parse path ."); 
+            proc_macro_error::abort!( proc_macro2::Span::call_site(),"Internal Error. 'file::create_path'. Could not parse the path!"); 
         }
     }
 

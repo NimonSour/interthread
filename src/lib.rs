@@ -574,8 +574,9 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
     } else {
         show::example_show(file, &eaa.get_file(), None ); 
     }
+
     let msg = format!("The file has been SUCCESSFULLY created !");
-    let note  = "The macro has successfully written to a file. To avoid potential issues and improve maintainability, it is recommended that you comment out the macro after its successful execution. To proceed, please comment out the macro and re-run the compilation.";
+    let note  = "To avoid potential issues and improve maintainability, it is recommended that you comment out the macro after its successful execution. To proceed, please comment out the macro and re-run the compilation.";
     
     proc_macro_error::abort!( proc_macro2::Span::call_site(),msg; note = note);
     
