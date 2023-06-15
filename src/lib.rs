@@ -575,7 +575,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
     }
 
     let msg = format!("The file has been SUCCESSFULLY created !");
-    let note  = "To avoid potential issues and improve maintainability, it is recommended that you comment out the macro after its successful execution. To proceed, please comment out the macro and re-run the compilation.";
+    let note  = "To avoid potential issues and improve maintainability, it is recommended to comment out the macro after its successful execution. To proceed, please comment out the macro and re-run the compilation.";
     
     proc_macro_error::abort!( proc_macro2::Span::call_site(),msg; note = note);
     
@@ -850,7 +850,7 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 
     if !attr_str.is_empty(){
 
-        let aaa_parser      = 
+        let aaa_parser  = 
         syn::meta::parser(|meta| paaa.parse(meta));
         syn::parse_macro_input!(attr with aaa_parser);
     }

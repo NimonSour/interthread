@@ -18,12 +18,14 @@ pub fn channels_import( lib: &crate::attribute::AALib ){
 
     match lib {
         crate::attribute::AALib::Tokio => (),
-        crate::attribute::AALib::Std   => {
-            crate::check::is_imported("oneshot");
+
+        crate::attribute::AALib::Std |
+        crate::attribute::AALib::AsyncStd  => {
+            is_imported("oneshot");
         },
-        _ => { 
-            crate::check::is_imported("async-channel");
-            crate::check::is_imported("oneshot");
+        crate::attribute::AALib::Smol => { 
+            is_imported("async-channel");
+            is_imported("oneshot");
         }
     }
 }

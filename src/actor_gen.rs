@@ -667,15 +667,15 @@ impl Channels {
             std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: oneshot::Sender<#out_type>, }); 
        
         let mut live_send_input: proc_macro2::TokenStream =
-            quote::quote!{let _ = self.sender.send(msg).expect(#live_send_error);};
+            quote::quote!{let _ = self.sender.send(msg).await;};
 
 
         let mut live_recv_output: proc_macro2::TokenStream = 
-            quote::quote!{recv.recv().expect(#live_recv_error)};
+            quote::quote!{ recv.await.expect(#live_recv_error)};
 
         match  channel {
 
-            crate::attribute::AAChannel::Unbounded      => {
+            crate::attribute::AAChannel::Unbounded    => {
 
                 match  lib { 
 
@@ -683,28 +683,29 @@ impl Channels {
                         live_field_sender   = quote::quote!{ sender: std::sync::mpsc::Sender<#type_ident>, };   
                         play_input_receiver = quote::quote!{ receiver: std::sync::mpsc::Receiver<#type_ident>, }; 
                         new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = std::sync::mpsc::channel(); };
+                        live_send_input     = quote::quote!{ let _ = self.sender.send(msg).expect(#live_send_error);};
+                        live_recv_output    = quote::quote!{ recv.recv().expect(#live_recv_error)};
                     },
 
                     crate::attribute::AALib::Tokio    => {
                         live_field_sender   = quote::quote!{ sender: tokio::sync::mpsc::UnboundedSender<#type_ident>, };
                         play_input_receiver = quote::quote!{ mut receiver: tokio::sync::mpsc::UnboundedReceiver<#type_ident>, }; 
                         new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = tokio::sync::mpsc::unbounded_channel(); }; 
-
                         live_meth_send_recv = quote::quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
-
-                        script_field_output = 
-                        std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
-                    
-                        live_recv_output = quote::quote!{ recv.await.expect(#live_recv_error)};
+                        script_field_output = std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
+                        live_send_input     = quote::quote!{ let _ = self.sender.send(msg).expect(#live_send_error);};
                     },
 
-                    _ => {
+                    crate::attribute::AALib::AsyncStd  => {
+                        live_field_sender   = quote::quote!{ sender: async_std::channel::Sender<#type_ident>, };
+                        play_input_receiver = quote::quote!{ receiver: async_std::channel::Receiver<#type_ident>, };
+                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = async_std::channel::unbounded(); };                    
+                    },
+
+                    crate::attribute::AALib::Smol      => {
                         live_field_sender   = quote::quote!{ sender: async_channel::Sender<#type_ident>, };
                         play_input_receiver = quote::quote!{ receiver: async_channel::Receiver<#type_ident>, };
                         new_live_send_recv  = quote::quote!{ let ( sender, receiver ) =  async_channel::unbounded(); }; 
-                        live_send_input     = quote::quote!{ let _ = self.sender.send(msg).await;};
-                        live_recv_output    = quote::quote!{ recv.await.expect(#live_recv_error)};
-                    
                     },
                 }
             },
@@ -716,27 +717,27 @@ impl Channels {
                         live_field_sender   = quote::quote!{ sender: std::sync::mpsc::SyncSender<#type_ident>, };
                         play_input_receiver = quote::quote!{ receiver: std::sync::mpsc::Receiver<#type_ident>, };
                         new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = std::sync::mpsc::sync_channel(#val); };
-
+                        live_send_input     = quote::quote!{ let _ = self.sender.send(msg).expect(#live_send_error);};
+                        live_recv_output    = quote::quote!{ recv.recv().expect(#live_recv_error)};
                     },
                     crate::attribute::AALib::Tokio    => {
                         live_field_sender   = quote::quote!{ sender: tokio::sync::mpsc::Sender<#type_ident>, };
                         play_input_receiver = quote::quote!{ mut receiver: tokio::sync::mpsc::Receiver<#type_ident>, };
                         new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = tokio::sync::mpsc::channel(#val); }; 
                         live_meth_send_recv = quote::quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
-                        
                         script_field_output = std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
-                        live_recv_output    = quote::quote!{ recv.await.expect(#live_recv_error)};
-
-                        live_send_input = quote::quote!{let _ = self.sender.send(msg).await;};
                     },
 
-                    _ => {
+                    crate::attribute::AALib::AsyncStd  => {
+                        live_field_sender   = quote::quote!{ sender: async_std::channel::Sender<#type_ident>, };
+                        play_input_receiver = quote::quote!{ receiver: async_std::channel::Receiver<#type_ident>, };
+                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = async_std::channel::bounded(#val); };
+                    },
+
+                    crate::attribute::AALib::Smol      => {
                         live_field_sender   = quote::quote!{ sender: async_channel::Sender<#type_ident>, };
                         play_input_receiver = quote::quote!{ receiver: async_channel::Receiver<#type_ident>, };
                         new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = async_channel::bounded(#val); };
-                        live_recv_output    = quote::quote!{ recv.await.expect(#live_recv_error)};
-                        
-                        live_send_input = quote::quote!{let _ = self.sender.send(msg).await;};
                     },
                 }
             },
