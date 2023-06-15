@@ -62,7 +62,7 @@ they were directly working with the original object.
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.4"
+interthread = "0.1.5"
 oneshot     = "0.1.5" 
 ```
 
@@ -146,7 +146,7 @@ asynchronous execution.
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.4"
+interthread = "0.1.5"
 tokio       = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -205,8 +205,9 @@ async fn main() {
 The crate also includes a powerful macro called [`example`](https://docs.rs/interthread/latest/interthread/attr.example.html) that can expand the [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) macro, ensuring that users always have the opportunity to visualize and interact with the generated code. Which makes [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html)  100%  transparent macro . 
 
 
-For more details, check out `interthread` on 
-[Docs.rs](https://docs.rs/interthread#sdpl).
+For more details, continue reading on
+[![Docs.rs](https://docs.rs/interthread/badge.svg)](https://docs.rs/interthread#sdpl)
 
-You've paid for 5 cores, don't code on one.
-
+Regularly check for new releases and upgrade to the latest version!
+Share with someone you care !
+Happy coding! 

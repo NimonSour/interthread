@@ -90,7 +90,10 @@ pub fn example_show( file: syn::File, path: &std::path::PathBuf, lib: Option<cra
     match example_path(path) {
 
         Ok( mut ex_path ) => {
-            let rltv_path = ex_path.clone().components().rev().take(3).collect::<Vec<_>>().into_iter().rev().collect::<std::path::PathBuf>();
+
+            let rltv_path = ex_path.clone().components().rev().take(3).collect::<Vec<_>>()
+                                            .into_iter().rev().collect::<std::path::PathBuf>();
+            
             if let Err(e) = write_file( file, &ex_path ){
                 proc_macro_error::abort!(proc_macro2::Span::call_site(),e);
             }
@@ -113,7 +116,7 @@ fn be_main( path: &std::path::PathBuf ,lib: crate::attribute::AALib) ->  Option<
     
     if let Some(stem) = path.file_stem(){
         if let Some(stem) = stem.to_str(){
-            if stem == crate::MAIN {
+            if stem == "main" {
                 return None;
             }
 
