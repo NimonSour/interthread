@@ -568,13 +568,13 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 
     let (file, lib)  = file::expand_macros(&eaa.get_file(),&eaa.expand);
 
-    if eaa.main { 
-        show::example_show(file, &eaa.get_file(), Some(lib));
+    let path = if eaa.main { 
+        show::example_show(file, &eaa.get_file(), Some(lib))
     } else {
-        show::example_show(file, &eaa.get_file(), None ); 
-    }
+        show::example_show(file, &eaa.get_file(), None ) 
+    };
 
-    let msg = format!("The file has been SUCCESSFULLY created !");
+    let msg = format!("The file has been SUCCESSFULLY created at {}",path.to_string_lossy());
     let note  = "To avoid potential issues and improve maintainability, it is recommended to comment out the macro after its successful execution. To proceed, please comment out the macro and re-run the compilation.";
     
     proc_macro_error::abort!( proc_macro2::Span::call_site(),msg; note = note);

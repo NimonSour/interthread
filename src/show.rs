@@ -83,25 +83,25 @@ fn write_file( file: syn::File, path: &std::path::PathBuf ) -> Result<(), std::i
     Ok(())
 }
 
-pub fn example_show( file: syn::File, path: &std::path::PathBuf, lib: Option<crate::attribute::AALib> ) {
+pub fn example_show( file: syn::File, path: &std::path::PathBuf, lib: Option<crate::attribute::AALib> ) -> std::path::PathBuf {
 
     let main_file = if lib.is_none() { None } else {  be_main(path, lib.unwrap()) };
 
     match example_path(path) {
 
         Ok( mut ex_path ) => {
-
+            let rltv_path = ex_path.clone().components().rev().take(3).collect::<Vec<_>>().into_iter().rev().collect::<std::path::PathBuf>();
             if let Err(e) = write_file( file, &ex_path ){
                 proc_macro_error::abort!(proc_macro2::Span::call_site(),e);
             }
             if let Some( main_file ) = main_file {
-                let file_name = crate::MAIN.to_string() + ".rs";
-                ex_path.set_file_name(file_name);
+                ex_path.set_file_name("main.rs");
 
                 if let Err(e) = write_file( main_file, &ex_path ){
                     proc_macro_error::abort!(proc_macro2::Span::call_site(),e);
                 }
             }
+            return rltv_path;
         },
         Err(e) => {
             proc_macro_error::abort!(proc_macro2::Span::call_site(),e);
