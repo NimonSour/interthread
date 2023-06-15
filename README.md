@@ -90,7 +90,9 @@ impl MyActor {
         self.value
     }
 }
- 
+
+// ↓ uncomment to see the generated code
+//#[interthread::example(file="src/main.rs")] 
 fn main() {
 
     let actor = MyActorLive::new(5);
@@ -131,7 +133,9 @@ allowing developers to rapidly prototype their application's
 core functionality. This fast sketching capability is
 particularly useful when exploring different design options, 
 experimenting with concurrency models, or implementing 
-proof-of-concept systems.
+proof-of-concept systems. Not to mention, the cases where 
+the importance of the program lies in the result of its work 
+rather than its execution.
 
 
 
@@ -206,7 +210,7 @@ The crate also includes a powerful macro called [`example`](https://docs.rs/inte
 
 
 For more details, continue reading on
-[![Docs.rs](https://docs.rs/interthread/badge.svg)](https://docs.rs/interthread#sdpl)
+[![Docs.rs](https://docs.rs/interthread/badge.svg)](https://docs.rs/interthread#sdpl-framework)
 
 Regularly check for new releases and upgrade to the latest version!
 Share with someone you care !
