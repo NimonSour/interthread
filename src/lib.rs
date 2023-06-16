@@ -162,7 +162,7 @@
 //! of the generated code.
 //! 
 //! Expanding the above example, uncomment the [`example`](./attr.example.html)
-//! placed above `main` function, got to `examples/inter/main.rs` in your 
+//! placed above `main` function, go to `examples/inter/main.rs` in your 
 //! root directory find `MyActor` along with additional SDPL parts :
 //! 
 //! # `script`
