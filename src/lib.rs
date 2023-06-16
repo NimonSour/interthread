@@ -9,7 +9,11 @@
 //! For a comprehensive understanding of the underlying
 //! concepts and implementation details of the Actor Model,  
 //! it's recommended to read the article  [Actors with Tokio](https://ryhl.io/blog/actors-with-tokio/)
-//!  by Alice Ryhl ( also known as _Darksonn_ ). 
+//! by Alice Ryhl ( also known as _Darksonn_ ) also a great 
+//! talk by the same author on the same subject if a more 
+//! interactive explanation is prefered 
+//! [Actors with Tokio – a lesson in ownership - Alice Ryhl](https://www.youtube.com/watch?v=fTXuGRP1ee4)
+//! (video).
 //! This article not only inspired the development of the 
 //! `interthread` crate but also serves as foundation 
 //! for the Actor Model implementation logic in it. 
@@ -79,10 +83,10 @@
 //! 
 //! Filename: Cargo.toml
 //! 
-//! ```text
-//! interthread = "0.1.5"
-//! oneshot     = "0.1.5" 
-//! ```
+//!```text
+//!interthread = "0.1.5"
+//!oneshot     = "0.1.5" 
+//!```
 //! 
 //! Filename: main.rs
 //!```rust
@@ -162,8 +166,8 @@
 //! of the generated code.
 //! 
 //! Expanding the above example, uncomment the [`example`](./attr.example.html)
-//! placed above `main` function, go to `examples/inter/main.rs` in your 
-//! root directory find `MyActor` along with additional SDPL parts :
+//! placed above the `main` function, go to `examples/inter/main.rs` in your 
+//! root directory and find `MyActor` along with additional SDPL parts :
 //! 
 //! # `script`
 //! 
@@ -207,24 +211,24 @@
 //! 
 //! ```rust
 //!impl MyActorScript {
-//!    pub fn my_actor_direct(self, actor: &mut MyActor) {
-//!        match self {
-//!            MyActorScript::Increment {} => {
-//!                actor.increment();
-//!            }
-//!            MyActorScript::AddNumber {
-//!                input: (num),
-//!                output: send,
-//!            } => {
-//!                send.send(actor.add_number(num))
-//!                    .expect("'direct.send' Channel closed");
-//!            }
-//!            MyActorScript::GetValue { output: send } => {
-//!                send.send(actor.get_value())
-//!                    .expect("'direct.send' Channel closed");
-//!            }
-//!        }
-//!    }
+//!   pub fn my_actor_direct(self, actor: &mut MyActor) {
+//!       match self {
+//!           MyActorScript::Increment {} => {
+//!               actor.increment();
+//!           }
+//!           MyActorScript::AddNumber {
+//!               input: (num),
+//!               output: send,
+//!           } => {
+//!               send.send(actor.add_number(num))
+//!                   .expect("'direct.send' Channel closed");
+//!           }
+//!           MyActorScript::GetValue { output: send } => {
+//!               send.send(actor.get_value())
+//!                   .expect("'direct.send' Channel closed");
+//!           }
+//!       }
+//!   }
 //!}
 //! 
 //! ```
@@ -254,7 +258,7 @@
 //! macro, such as 
 //! 
 //!```rust
-//! #[interthread::actor(channel=2, edit(play))]
+//!#[interthread::actor(channel=2, edit(play))]
 //!``` 
 //! 
 //! it allows for manual implementation of the `play` part, which 
@@ -273,7 +277,7 @@
 //! the Actor,
 //! spawning the `play` component in a separate 
 //! thread allowing for parallel execution,
-//! returns an instance of itself.
+//! returns an instance of `Self`.
 //! 
 //! 
 //! ```rust 
@@ -283,41 +287,41 @@
 //!    sender: std::sync::mpsc::SyncSender<MyActorScript>,
 //!}
 //!impl MyActorLive {
-//!    pub fn new(v: i8) -> Self {
-//!        let (sender, receiver) = std::sync::mpsc::sync_channel(2);
-//!        let actor = MyActor::new(v);
-//!        let actor_live = Self { sender };
-//!        std::thread::spawn(|| my_actor_play(receiver, actor));
-//!        actor_live
-//!    }
-//!    pub fn increment(&mut self) {
-//!        let msg = MyActorScript::Increment {};
-//!        let _ = self
-//!            .sender
-//!            .send(msg)
-//!            .expect("'Live::method.send' Channel is closed");
-//!    }
-//!    pub fn add_number(&mut self, num: i8) -> i8 {
-//!        let (send, recv) = oneshot::channel();
-//!        let msg = MyActorScript::AddNumber {
-//!            input: (num),
-//!            output: send,
-//!        };
-//!        let _ = self
-//!            .sender
-//!            .send(msg)
-//!            .expect("'Live::method.send' Channel is closed");
-//!        recv.recv().expect("'Live::method.recv' Channel is closed")
-//!    }
-//!    pub fn get_value(&self) -> i8 {
-//!        let (send, recv) = oneshot::channel();
-//!        let msg = MyActorScript::GetValue { output: send };
-//!        let _ = self
-//!            .sender
-//!            .send(msg)
-//!            .expect("'Live::method.send' Channel is closed");
-//!        recv.recv().expect("'Live::method.recv' Channel is closed")
-//!    }
+//!   pub fn new(v: i8) -> Self {
+//!       let (sender, receiver) = std::sync::mpsc::sync_channel(2);
+//!       let actor = MyActor::new(v);
+//!       let actor_live = Self { sender };
+//!       std::thread::spawn(|| my_actor_play(receiver, actor));
+//!       actor_live
+//!   }
+//!   pub fn increment(&mut self) {
+//!       let msg = MyActorScript::Increment {};
+//!       let _ = self
+//!           .sender
+//!           .send(msg)
+//!           .expect("'Live::method.send' Channel is closed");
+//!   }
+//!   pub fn add_number(&mut self, num: i8) -> i8 {
+//!       let (send, recv) = oneshot::channel();
+//!       let msg = MyActorScript::AddNumber {
+//!           input: (num),
+//!           output: send,
+//!       };
+//!       let _ = self
+//!           .sender
+//!           .send(msg)
+//!           .expect("'Live::method.send' Channel is closed");
+//!       recv.recv().expect("'Live::method.recv' Channel is closed")
+//!   }
+//!   pub fn get_value(&self) -> i8 {
+//!       let (send, recv) = oneshot::channel();
+//!       let msg = MyActorScript::GetValue { output: send };
+//!       let _ = self
+//!           .sender
+//!           .send(msg)
+//!           .expect("'Live::method.send' Channel is closed");
+//!       recv.recv().expect("'Live::method.recv' Channel is closed")
+//!   }
 //!}
 //! 
 //! ```
@@ -332,13 +336,13 @@
 //! the `Send` trait, allowing it to be safely moved 
 //! to another thread for execution. 
 //! 
-//!# Macro Implicit Dependencies
+//! # Macro Implicit Dependencies
 //!
-//!The [`actor`](./attr.actor.html) macro generates code
-//!that utilizes channels for communication. However, 
-//!the macro itself does not provide any channel implementations.
-//!Therefore, depending on the libraries used in your project, 
-//!you may need to import additional crates.
+//! The [`actor`](./attr.actor.html) macro generates code
+//! that utilizes channels for communication. However, 
+//! the macro itself does not provide any channel implementations.
+//! Therefore, depending on the libraries used in your project, 
+//! you may need to import additional crates.
 //!
 //!### Crate Compatibility
 //!<table>
@@ -436,101 +440,101 @@ static EXAMPLES: &'static str               = "examples";
 /// Consider a macro [`actor`](./attr.actor.html)  inside the project 
 /// in `src/my_file.rs`.
 /// 
-/// Filename: my_file.rs 
-/// ```rust
-/// use interthread::{actor,example};
-/// 
-/// pub struct Number;
-/// 
+///Filename: my_file.rs 
+///```rust
+///use interthread::{actor,example};
+///
+///pub struct Number;
+///
 /// // you can have "example" macro in the same file
 /// // #[example(file="src/my_file.rs")]
+///
+///#[actor(channel=5)]
+///impl Number {
+///    pub fn new(value: u32) -> Self {Self}
+///}
+///
+///```
 /// 
-/// #[actor(channel=5)]
-/// impl Number {
-///     pub fn new(value: u32) -> Self {Self}
-/// }
-/// 
-/// ```
-/// 
-/// Filename: main.rs 
-/// ```rust
-/// use interthread::example;
-/// #[example(file="src/my_file.rs")]
-/// fn main(){
-/// }
-/// 
-/// ```
+///Filename: main.rs 
+///```rust
+///use interthread::example;
+///#[example(file="src/my_file.rs")]
+///fn main(){
+///}
+///
+///```
 /// 
 /// The macro will create and write to `examples/inter/my_file.rs`
 /// the content of `src/my_file.rs` with the 
 /// [`actor`](./attr.actor.html) macro expanded.
 /// 
 /// 
-/// ```text
-/// my_project/
-/// ├── src/
-/// │  ├── my_file.rs      <---  macro "actor" 
-/// |  |
-/// │  └── main.rs         <---  macro "example" 
-/// |
-/// ├── examples/          
-///    ├── ...
-///    └── inter/      
-///       ├── my_file.rs   <--- expanded "src/my_file.rs"  
-/// ```
+///```text
+///my_project/
+///├── src/
+///│  ├── my_file.rs      <---  macro "actor" 
+///|  |
+///│  └── main.rs         <---  macro "example" 
+///|
+///├── examples/          
+///   ├── ...
+///   └── inter/      
+///      ├── my_file.rs   <--- expanded "src/my_file.rs"  
+///```
 ///
 /// [`example`](./attr.example.html) macro can be placed on any 
 /// item in any file within your `src` directory, providing 
 /// flexibility in generating example code for/from different 
 /// parts of your project.
 ///
-///  It provides two options for generating example code files: 
-///   - [`mod`](##mod)  (default)
-///   - [`main`](##main) 
+/// It provides two options for generating example code files: 
+///  - [`mod`](##mod)  (default)
+///  - [`main`](##main) 
 ///
-///   ## mod 
-///   The macro generates an example code file within the 
-///   `examples/inter` directory. For example:
+/// ## mod 
+/// The macro generates an example code file within the 
+/// `examples/inter` directory. For example:
 ///
-///   ```rust
-///   #[example(file="my_file.rs")]
-///   ```
+///```rust
+///#[example(file="my_file.rs")]
+///```
 ///
-///   This is equivalent to:
+/// This is equivalent to:
 ///
-///   ```rust
-///   #[example(mod(file="my_file.rs"))]
-///   ```
+///```rust
+///#[example(mod(file="my_file.rs"))]
+///```
 ///
-///   The generated example code file will be located at 
-///   `examples/inter/my_file.rs`.
+/// The generated example code file will be located at 
+/// `examples/inter/my_file.rs`.
 ///
-///   This option provides developers with an easy way to 
-///   view and analyze the generated code, facilitating code 
-///   inspection and potential code reuse.
+/// This option provides developers with an easy way to 
+/// view and analyze the generated code, facilitating code 
+/// inspection and potential code reuse.
 ///
-///   ## main 
+/// ## main 
 ///
-///   This option is used when specifying the `main` argument 
-///   in the `example` macro. It generates two files within 
-///   the `examples/inter` directory: the expanded code file 
-///   and an additional `main.rs` file. 
+/// This option is used when specifying the `main` argument 
+/// in the `example` macro. It generates two files within 
+/// the `examples/inter` directory: the expanded code file 
+/// and an additional `main.rs` file. 
 ///
-///   ```rust
-///   #[example(main(file="my_file.rs"))]
-///   ```
+///```rust
+///#[example(main(file="my_file.rs"))]
+///```
 ///
-///   This option is particularly useful for testing and 
-///   experimentation. It allows developers to quickly 
-///   run and interact with the generated code by executing:
+/// This option is particularly useful for testing and 
+/// experimentation. It allows developers to quickly 
+/// run and interact with the generated code by executing:
 ///
-///   ```terminal
-///   $ cargo run --example inter
-///   ```
+///```terminal
+///$ cargo run --example inter
+///```
 ///
-///   The expanded code file will be located at 
-///   `examples/inter/my_file.rs`, while the `main.rs` file 
-///   serves as an entry point for running the example.
+/// The expanded code file will be located at 
+/// `examples/inter/my_file.rs`, while the `main.rs` file 
+/// serves as an entry point for running the example.
 /// 
 /// ## Configuration Options  
 ///```text 
@@ -723,21 +727,21 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - `"tokio"`
 /// - `"async_std"`
 ///
-/// ## Examples
-/// ```rust
-/// use interthread::actor;
-/// 
-/// struct MyActor;
-/// 
-/// #[actor(channel=10, lib ="tokio")]
-/// impl MyActor{
-///     pub fn new() -> Self{Self}
-/// }
-/// #[tokio::main]
-/// async fn main(){
-///     let my_act = MyActorLive::new();
-/// }
-/// ```
+///## Examples
+///```rust
+///use interthread::actor;
+///
+///struct MyActor;
+///
+///#[actor(channel=10, lib ="tokio")]
+///impl MyActor{
+///    pub fn new() -> Self{Self}
+///}
+///#[tokio::main]
+///async fn main(){
+///    let my_act = MyActorLive::new();
+///}
+///```
 /// 
 /// 
 /// 
@@ -766,7 +770,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    value: i8,
 ///}
 //
-///#[actor(channel=2, edit(play))]
+/// #[actor(channel=2, edit(play))]
 ///impl MyActor {
 ///
 ///    pub fn new( value: i8 ) -> Self {
