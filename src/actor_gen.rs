@@ -36,43 +36,20 @@ impl ActorMacroGeneration {
         let name = impl_get_name(&impl_block);
 
         let (actor_methods, met_new) =
-         method::get_methods( &name,impl_block.clone(),aaa.assoc );
+        method::get_methods( &name,impl_block.clone(),aaa.assoc );
         
         if met_new.is_none() {
-            let msg = format!(
-"Actor object must implement a public method named 'new' which returns Self
-or {:?}  or 'try_new' if it returns a 'Result' or 'Option' respectively.", name.to_string());
-            
-            let note = format!("
-The flowing are all possible method signatures.
 
-- returning Type
+            let msg = format!("Can not find public  method `new` or `try_new` for {:?} object.",name.to_string());
+            let (note,help) = crate::error::met_new_note_help(&name);
 
-    pub fn new (arg, ...) -> Self
-    pub fn new (arg, ...) -> {:?} 
-
-- returning Option <Type>  
-    
-    pub fn try_new(arg, ...) -> Option<Self>
-    pub fn try_new(arg, ...) -> Option<{:?}>
-
-- returning Result <Type>  
-
-    pub fn try_new(arg, ...) -> Result<Self,...>
-    pub fn try_new(arg, ...) -> Result<{:?},...>
-
-",name.to_string(),name.to_string(),name.to_string() );
-
-    proc_macro_error::abort!(impl_block,msg;note=note)
+        proc_macro_error::abort!(impl_block,msg;note=note;help=help);
     }
         
         // Giving a new name if specified 
         let cust_name   = if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { name.clone() }; 
-        
         let direct_async = actor_methods.iter().any(|x| x.is_async());
-
         let play_async   = Self::is_play_async( direct_async, &aaa.lib, &name);
-
         let channels = Channels::new( &aaa.lib, &aaa.channel, &name::script(&cust_name));
        
         Self {
@@ -97,7 +74,7 @@ The flowing are all possible method signatures.
             crate::attribute::AALib::Std => {
                 if direct_async {
                     let msg = format!("Actor {:?} has 'async' methods but the runtime(lib) is not specified.", name.to_string());
-                    proc_macro_error::abort!( proc_macro2::Span::call_site(), msg; help=crate::attribute::AVAIL_LIB );
+                    proc_macro_error::abort!( proc_macro2::Span::call_site(), msg; help=crate::error::AVAIL_LIB );
                 } else {
                     return false;
                 }
@@ -165,7 +142,7 @@ The flowing are all possible method signatures.
             match method {
 
                 method::ActorMethod::Io   { stat, ident, arguments, output,.. } => {
-                    let (args_ident,args_type) = method::args_ident_type(&arguments);
+                    let (args_ident,args_type) = method::arguments_ident_type(&arguments);
                     
                     if stat {
                         self.live_static_method(ident, sig, args_ident)
@@ -217,7 +194,7 @@ The flowing are all possible method signatures.
 
                 method::ActorMethod::I    { ident, arguments ,..} => {
                     
-                    let (args_ident,args_type) = method::args_ident_type(&arguments);
+                    let (args_ident,args_type) = method::arguments_ident_type(&arguments);
                     
 
 
@@ -258,7 +235,7 @@ The flowing are all possible method signatures.
 
                 },
                 method::ActorMethod::O    {stat, ident, output ,..} => {
-                    let (args_ident,_) = method::args_ident_type(&vec![]);
+                    let (args_ident,_) = method::arguments_ident_type(&vec![]);
 
                     if stat {
                         self.live_static_method(ident, sig, args_ident)
@@ -499,24 +476,26 @@ The flowing are all possible method signatures.
 
     fn gen_struct_live_method_new(&mut self) -> proc_macro2::TokenStream { 
 
-        let name                         = self.name.clone();
-        let play_name                    = name::play(&self.cust_name);
-        let new_sig                  = self.met_new.new_sig.clone();
-        let (args_ident, _ )       = method::args_ident_type(&self.met_new.get_arguments());
+        let name                         = &self.name;//.clone();
+        let play_name                     = name::play(&self.cust_name);
+        let new_sig                  = &self.met_new.new_sig;//.clone();
+        let (args_ident, _ )        = method::arguments_ident_type(&self.met_new.get_arguments());
 
         let send_recv_channel     = &self.channels.new_live_send_recv;
-
         let func_new_name                = new_sig.ident.clone();
         // add a '?' to the end of 'actor' declaration 
-        let unwrapped              =  if self.met_new.res_opt.is_none(){ quote::quote!{}} else { quote::quote!{?}};
+        let unwrapped              = self.met_new.unwrap_sign(); // if self.met_new.res_opt.is_none(){ quote::quote!{}} else { quote::quote!{?}};
 
-        let return_statement =  match self.met_new.res_opt {
+        // let return_statement =  match self.met_new.res_opt {
 
-            Some(true)  =>  quote::quote!{ Ok ( actor_live )},
-            Some(false) =>  quote::quote!{ Some( actor_live )},
-            None        =>  quote::quote!{ actor_live },
+        //     Some(true)  =>  quote::quote!{ Ok ( actor_live )},
+        //     Some(false) =>  quote::quote!{ Some( actor_live )},
+        //     None        =>  quote::quote!{ actor_live },
             
-        };
+        // };
+
+        let live_var = quote::format_ident!("actor_live");
+        let return_statement = self.met_new.live_ret_statement(&live_var);
 
         let (init_actor, play_args) =
         match  self.aaa.channel {
@@ -536,7 +515,7 @@ The flowing are all possible method signatures.
             pub #new_sig {
                 #send_recv_channel
                 let actor = #name:: #func_new_name #args_ident #unwrapped;
-                let actor_live = #init_actor;
+                let #live_var = #init_actor;
                 #spawn
                 #return_statement
             }
@@ -654,8 +633,8 @@ impl Channels {
             channel: &crate::attribute::AAChannel,
          type_ident: &syn::Ident, 
                             ) -> Self {
-        let live_send_error = quote::quote!{"'Live::method.send' Channel is closed!"};
-        let live_recv_error = quote::quote!{"'Live::method.recv' Channel is closed!"};
+        let live_send_error = quote::quote!{"'Live::method.send'. Channel is closed!"};
+        let live_recv_error = quote::quote!{"'Live::method.recv'. Channel is closed!"};
         let live_field_sender:   proc_macro2::TokenStream;
         let play_input_receiver: proc_macro2::TokenStream;
         let new_live_send_recv:  proc_macro2::TokenStream;

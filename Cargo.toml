@@ -1,6 +1,6 @@
 [package]
 name = "interthread"
-version = "0.1.5"
+version = "0.1.6"
 edition = "2021"
 description = "Auto implementation of the Actor Model"
 license = "MIT OR Apache-2.0"

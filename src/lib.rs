@@ -84,7 +84,7 @@
 //! Filename: Cargo.toml
 //! 
 //!```text
-//!interthread = "0.1.5"
+//!interthread = "0.1.6"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -111,7 +111,7 @@
 //!        self.value
 //!    }
 //!}
-//! // ↓ uncomment to see the generated code
+//! // uncomment to see the generated code
 //! //#[interthread::example(file="src/main.rs")]  
 //!fn main() {
 //!
@@ -393,6 +393,7 @@ mod actor_gen;
 mod name;
 mod method;
 mod check;
+mod error;
 
 
 static INTERTHREAD: &'static str            = "interthread";
@@ -627,12 +628,30 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
  
 /// ## Evolves a regular object into an actor
 /// 
-/// The macro is placed upon an implement block of an object,
+/// The macro is placed upon an implement block of an object
+///  (`struct` or `enum`),
 /// which has a public method named `new` returning  `Self`.
 ///
 /// In case if the initialization could potentially fail, 
 /// the method can be named `try_new` 
 /// and return `Option<Self>` or `Result<Self>`.
+/// 
+/// The macro will copy method signatures from all 
+/// public methods that do not consume the receiver, excluding 
+/// methods like `pub fn bla(self, val: u8) -> ()` where `self` 
+/// is consumed. Please ensure that the 
+/// receiver is defined as `&self` or `&mut self`. 
+/// 
+/// It will 
+/// also include all associated functions that return a type. 
+/// To change this behavior and exclude all associated functions, 
+/// regardless of their return type, you can set the [`assoc`](#assoc) 
+/// argument of the macro to `false`.
+/// 
+/// If only a subset of methods is required to be 
+/// accessible across threads, split the `impl` block 
+/// into two parts. By applying the macro to a specific block, 
+/// the macro will only consider the methods within that block.
 /// 
 /// ## Configuration Options
 ///```text 

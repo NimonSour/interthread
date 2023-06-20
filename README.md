@@ -62,7 +62,7 @@ they were directly working with the original object.
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.5"
+interthread = "0.1.6"
 oneshot     = "0.1.5" 
 ```
 
@@ -91,7 +91,7 @@ impl MyActor {
     }
 }
 
-// ↓ uncomment to see the generated code
+// uncomment to see the generated code
 //#[interthread::example(file="src/main.rs")] 
 fn main() {
 
@@ -150,7 +150,7 @@ asynchronous execution.
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.5"
+interthread = "0.1.6"
 tokio       = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -213,5 +213,5 @@ For more details, continue reading on
 [![Docs.rs](https://docs.rs/interthread/badge.svg)](https://docs.rs/interthread#sdpl-framework)
 
 Regularly check for new releases and upgrade to the latest version!
-Share with someone you care !
+Share with someone you care about!
 Happy coding! 

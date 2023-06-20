@@ -13,45 +13,7 @@ fn to_usize(value: syn::LitInt) -> usize {
          .unwrap_or_else(|_| proc_macro_error::abort!(value,msg))   
 } 
 
-
-pub fn unknown_attr_arg( aa: &str, ident: &syn::Ident ){
-    
-    let msg = format!("Unknown option  -  {:?} for '{}' ", ident.to_string(),aa,);
-
-    match aa.to_string() {
-
-        val if val == "actor".to_string()   => proc_macro_error::abort!(ident, msg ;help = AVAIL_ACTOR  ),                   
-        val if val == "expand".to_string()  => proc_macro_error::abort!(ident, msg ;help = AVAIL_EXPAND ),
-        val if val == "example".to_string() => proc_macro_error::abort!(ident, msg ;help = AVAIL_EXAMPLE),
-        val if val == "edit".to_string()    => proc_macro_error::abort!(ident, msg ;help = AVAIL_EDIT   ),
-        _ => (),
-    }
-}
-
-pub fn error_name_type(n: syn::Ident, t: String ) -> String {
-
-    return format!("Expected a  < {} >  value for attribute argument '{}'.", t, n.to_string() );
-}
-
-
 //-----------------------  EXAMPLE 
-static AVAIL_EXAMPLE: &'static str = "
-
-#[interthread::example( 
-   
-    mod *
-    main 
-
-    (   
-        file = \"path/to/file.rs\" 
-
-        expand(actor,group) *
-    )
-)]
-
-
-*  -  default       
-";
 #[derive(Debug, Eq, PartialEq)]
 pub struct ExampleAttributeArguments {
 
@@ -123,13 +85,13 @@ impl ExampleAttributeArguments {
                     else {
                         let arg  = meta.path.get_ident().unwrap();
                         let msg  = format!("Unknown 'expand' option  -  {:?} .", arg.to_string());
-                        proc_macro_error::abort!(arg, msg; help=AVAIL_EXPAND);
+                        proc_macro_error::abort!(arg, msg; help=crate::error::AVAIL_EXPAND);
                     }
                 });
             }
             else {
                 let ident  = meta.path.get_ident().unwrap();
-                unknown_attr_arg("example", ident);
+                crate::error::unknown_attr_arg("example", ident);
                 Ok(())
             }
         };
@@ -172,24 +134,6 @@ impl ExampleAttributeArguments {
 }
 
 //-----------------------  EXAMPLE EXPAND
-static AVAIL_EXPAND: &'static str = "
-Argument 'expand' takes a tuple of ident options.
-
-Available ident options are: 
-
-                        actor 
-                        group 
-
-Examples of expected usage:
-
-    expand(actor), 
-    expand(group), 
-*   expand(actor,group) 
-
-
-* - default 
-";
-
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum AAExpand {
     Actor,
@@ -209,17 +153,7 @@ impl AAExpand{
 
 
 //-----------------------  ACTOR LIB
-pub static AVAIL_LIB:&'static str = "
-\navailable 'lib' options:
 
-*   \"std\"
-    \"smol\"
-    \"tokio\"
-    \"async_std\"
-
-
-*  -  default
-";
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum AALib {
     Std,
@@ -240,7 +174,7 @@ impl AALib {
             val if val == "async_std".to_string() =>   AALib::AsyncStd,
             val => {
                 let msg = format!("Unknown option  -  {:?} for 'channel' ", val);
-                proc_macro_error::abort!( s, msg; help=AVAIL_LIB );   
+                proc_macro_error::abort!( s, msg; help=crate::error::AVAIL_LIB );   
             } 
         }
     }
@@ -253,18 +187,6 @@ impl Default for AALib {
 }
 
 //-----------------------  ACTOR CHANNEL 
-static AVAIL_CHANNEL: &'static str ="
-\navailable 'channel' options:
-
-   Option             Type
-
-*  \"inter\"          str
-   0 | \"unbounded\"  str|int
-   8                  int
-
-
-*  -  default
-";
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub enum AAChannel {
@@ -288,7 +210,7 @@ impl AAChannel {
                     val if val == "inter".to_string()       => return AAChannel::Inter,
                     val => {
                         let msg = format!("Unknown option  -  {:?} for 'channel' ", val);
-                        proc_macro_error::abort!( s, msg; help=AVAIL_CHANNEL );
+                        proc_macro_error::abort!( s, msg; help=crate::error::AVAIL_CHANNEL );
                     },
                 }
             },
@@ -315,17 +237,6 @@ impl Default for AAChannel {
 }
 
 //-----------------------  ACTOR EDIT 
-static AVAIL_EDIT: &'static str = "
-\navailable 'edit' options:
-         
-     Options        Description 
-         
-    'script'    'enum ActorScript'            
-    'direct'    'impl ActorScript::direct()'  
-    'play'      'fn actor_play'               
-    'live'      'struct ActorLive' 
-    'live::new' 'struct ActorLive::new'
-";
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct AAEdit {
@@ -348,16 +259,16 @@ impl AAEdit {
             else if path.is_ident("direct")  {self.direct = Some(path.clone())}
             else if path.is_ident("play")    {self.play   = Some(path.clone())}
             else if path.is_ident("live")    {self.live   = Some(path.clone())}
-            else {  proc_macro_error::abort!(path, msg ;help = AVAIL_EDIT) }
+            else {  proc_macro_error::abort!(path, msg ;help = crate::error::AVAIL_EDIT) }
 
         } else {
 
-            let live     = quote::format_ident!("{}","live");
-            let new      = quote::format_ident!("{}","new");
+            let live     = quote::format_ident!("live");
+            let new      = quote::format_ident!("new");
             let live_new  = crate::use_macro::UseMacro::create_path(Some(live),new);
            
             if live_new.eq(path) { self.live_new = Some(path.clone()) }
-            else {  proc_macro_error::abort!(path, msg ;help = AVAIL_EDIT) }
+            else {  proc_macro_error::abort!(path, msg ;help = crate::error::AVAIL_EDIT) }
         }
     }
 }
@@ -377,40 +288,6 @@ impl Default for AAEdit {
 
 
 //-----------------------  ACTOR  
-
-static AVAIL_ACTOR: &'static str = "
-#[interthread::actor( 
-    
-    channel = \"inter\" *
-              \"unbounded\" || 0
-               8 
-
-        lib = \"std\" *
-              \"smol\"
-              \"tokio\"
-              \"async_std\"
-
-        edit
-        ( 
-            script
-            direct
-            play
-            live
-            live::new
-        ) 
-
-        name = \"\" 
-
-        assoc = true *
-               false
-        
-    )
-]
-
-
-*  -  default 
-";
-
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct ActorAttributeArguments {
@@ -515,7 +392,7 @@ impl ParseActorAttributeArguments {
                         } 
                         return Ok(());
                     },
-                    v => proc_macro_error::abort!(v, error_name_type( ident.clone(), "str".into()); help=AVAIL_ACTOR ),
+                    v => proc_macro_error::abort!(v, crate::error::error_name_type( ident.clone(), "str".into()); help=crate::error::AVAIL_ACTOR ),
                 }
             }
 
@@ -530,7 +407,7 @@ impl ParseActorAttributeArguments {
                         self.lib.1 = AALib::from(&val);
                         return Ok(());
                     },
-                    v => proc_macro_error::abort!(v, error_name_type( ident.clone(), "str".into()),; help=AVAIL_ACTOR ),
+                    v => proc_macro_error::abort!(v, crate::error::error_name_type( ident.clone(), "str".into()),; help=crate::error::AVAIL_ACTOR ),
                 }
             }
 
@@ -545,7 +422,7 @@ impl ParseActorAttributeArguments {
                         self.assoc.1 = val.value();
                         return Ok(());
                     },
-                    v => proc_macro_error::abort!(v, error_name_type( ident.clone(), "bool".into()); help=AVAIL_ACTOR ),
+                    v => proc_macro_error::abort!(v, crate::error::error_name_type( ident.clone(), "bool".into()); help=crate::error::AVAIL_ACTOR ),
                 }
             }
 
@@ -565,7 +442,7 @@ impl ParseActorAttributeArguments {
 
                         self.channel.1 = AAChannel::from(Either::L(val));
                     },
-                    v => proc_macro_error::abort!(v, error_name_type( ident.clone(), "int | str".into()),; help=AVAIL_ACTOR ),
+                    v => proc_macro_error::abort!(v, crate::error::error_name_type( ident.clone(), "int | str".into()),; help=crate::error::AVAIL_ACTOR ),
                 }
                 return Ok(());
             }
@@ -574,7 +451,7 @@ impl ParseActorAttributeArguments {
             else if meta.path.is_ident("edit"){
                 
                 if meta.input.clone().to_string().is_empty() {
-                    proc_macro_error::abort!(ident,"Enter an option for 'edit' or remove it. ";help=AVAIL_EDIT );
+                    proc_macro_error::abort!(ident,"Enter an option for 'edit' or remove it. ";help=crate::error::AVAIL_EDIT );
                 }
                 match meta.parse_nested_meta(|meta| {  
 
@@ -587,13 +464,13 @@ impl ParseActorAttributeArguments {
                     },
                     Err(e) => {
 
-                        proc_macro_error::abort!(e.span(),e.to_string() ;help=AVAIL_ACTOR )
+                        proc_macro_error::abort!(e.span(),e.to_string() ;help=crate::error::AVAIL_ACTOR )
                     }
                 }
             }
             // UNKNOWN ARGUMENT
             else {
-                unknown_attr_arg("actor",ident )
+                crate::error::unknown_attr_arg("actor",ident )
             }
         }
         Ok(())

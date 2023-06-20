@@ -2,10 +2,10 @@
 
 #[derive(Debug,Clone)]
 pub enum ActorMethod {
-    Io  { method: syn::ImplItemFn, stat: bool, ident: syn::Ident, arguments: Vec<syn::FnArg>, output: Box<syn::Type> },   
-    I   { method: syn::ImplItemFn, ident: syn::Ident, arguments: Vec<syn::FnArg> },    
-    O   { method: syn::ImplItemFn, stat: bool, ident: syn::Ident, output: Box<syn::Type> },    
-    None{ method: syn::ImplItemFn, ident: syn::Ident }, 
+    Io  { sig: syn::Signature, ident: syn::Ident, stat: bool,  arguments: Vec<syn::FnArg>, output: Box<syn::Type> },   
+    I   { sig: syn::Signature, ident: syn::Ident,              arguments: Vec<syn::FnArg>                         },    
+    O   { sig: syn::Signature, ident: syn::Ident, stat: bool,                              output: Box<syn::Type> },    
+    None{ sig: syn::Signature, ident: syn::Ident                                                                  }, 
 }
 
 impl ActorMethod {
@@ -13,21 +13,22 @@ impl ActorMethod {
     pub fn get_sig_and_field_name(&self) -> (syn::Signature, syn::Ident) {
         let (sig,name) = match self {
 
-            Self::Io   { method, ident, ..} => (method.sig.clone(),ident) ,
-            Self::I    { method, ident, ..} => (method.sig.clone(),ident) ,
-            Self::O    { method, ident, ..} => (method.sig.clone(),ident) ,
-            Self::None { method, ident, ..} => (method.sig.clone(),ident) ,
+            Self::Io   { sig, ident, ..} => (sig.clone(),ident),
+            Self::I    { sig, ident, ..} => (sig.clone(),ident),
+            Self::O    { sig, ident, ..} => (sig.clone(),ident),
+            Self::None { sig, ident, ..} => (sig.clone(),ident),
         };
         (sig, crate::name::script_field(name))
     }
 
     pub fn is_async(&self) -> bool {
+
         if let Some(_)= match self {
 
-            Self::Io   { method,..} => method.sig.asyncness ,
-            Self::I    { method,..} => method.sig.asyncness ,
-            Self::O    { method,..} => method.sig.asyncness ,
-            Self::None { method,..} => method.sig.asyncness ,
+            Self::Io   { sig,..} => sig.asyncness,
+            Self::I    { sig,..} => sig.asyncness,
+            Self::O    { sig,..} => sig.asyncness,
+            Self::None { sig,..} => sig.asyncness,
         }{
             return true;
         };
@@ -39,7 +40,8 @@ impl ActorMethod {
  
 #[derive(Debug,Clone)]
 pub struct ActorMethodNew {
-    pub method:            syn::ImplItemFn,
+
+    pub sig:                syn::Signature,
     pub new_sig:            syn::Signature,
     pub res_opt:              Option<bool>,
     pub ident:                  syn::Ident,
@@ -54,11 +56,11 @@ impl ActorMethodNew {
         
         match met {
 
-            ActorMethod::Io   { method,ident,arguments,output,.. } =>  {
-                return  Some(ActorMethodNew{method,ident,arguments: Some(arguments), output, new_sig, res_opt });
+            ActorMethod::Io   { sig,ident,arguments,output,.. } =>  {
+                return  Some(ActorMethodNew{ sig,ident,arguments: Some(arguments), output, new_sig, res_opt });
             },
-            ActorMethod::O    { method,ident,output,..} =>  {
-                return  Some(ActorMethodNew{method,ident,arguments: None, output, new_sig, res_opt });
+            ActorMethod::O    { sig,ident,output,..} =>  {
+                return  Some(ActorMethodNew{ sig,ident,arguments: None, output, new_sig, res_opt });
             } 
             _   =>  return  None,
         };
@@ -70,113 +72,139 @@ impl ActorMethodNew {
         }
         vec![]
     }
+
+    pub fn  live_ret_statement(&self,  live_var: &syn::Ident ) -> proc_macro2::TokenStream {
+       
+        match self.res_opt {
+            Some(true)  =>  quote::quote!{ Ok ( #live_var )},
+            Some(false) =>  quote::quote!{ Some( #live_var )},
+            None        =>  quote::quote!{ #live_var },
+        }
+    }
+
+    pub fn unwrap_sign(&self) -> proc_macro2::TokenStream {
+        if self.res_opt.is_none(){ quote::quote!{}} else { quote::quote!{?}}
+    }
+        
 }
 
- 
- 
-fn str_to_return_type( s: String) -> Option<syn::ReturnType> {
+pub fn replace<T, O, N>(ty: &T, old: &O, new: &N) -> T
+where
+    T: syn::parse::Parse + quote::ToTokens,
+    O: ToString + ?Sized,
+    N: ToString + ?Sized,
+{
+    let str_ret_type = quote::quote! {#ty}.to_string();
+    let new_str_ret_type = str_ret_type.replace(&old.to_string(), &new.to_string());
 
-    if let Ok(return_type)  = syn::parse_str::<syn::Type>(&s){
-        let return_type_quote = quote::quote! {
-            -> #return_type
-        };
-        if let Ok(re_ty) = syn::parse2::<syn::ReturnType>(return_type_quote.into()){
-            return Some(re_ty);
-        };
-        return None;
-    };
-    None
+    if let Ok(ty) = syn::parse_str::<T>(&new_str_ret_type) {
+        return ty;
+    }
+
+    let msg = format!("Internal Error. 'method::replace'. Could not parse &str to provided type!");
+    proc_macro_error::abort!(proc_macro2::Span::call_site(), msg);
 }
 
-fn is_self_return(name: &syn::Ident, sig: &syn::Signature) -> Option<(syn::Signature,Option<bool>)> {
 
-    let self_ident   = quote::format_ident!("{}","Self");
-    let option_ident = quote::format_ident!("{}","Option");
-    let result_ident = quote::format_ident!("{}","Result");
+pub fn new_sig( sig: &syn::Signature, name: &syn::Ident) -> syn::Signature {
+    let mut signature = replace(sig, "Self",name);
+    signature.output  = replace(&sig.output,name,"Self");
+    signature
+}
+
+
+fn check_self_return(name: &syn::Ident, sig: &syn::Signature) -> (syn::Signature,Option<bool>) {
+
+    let option_ident = quote::format_ident!("Option");
+    let result_ident = quote::format_ident!("Result");
     
-    let mut signature = sig.clone();
     match &sig.output {
         syn::ReturnType::Type(_,ty_path) => {
             match ty_path.as_ref(){ 
                 syn::Type::Path( p ) => {
 
-                    let return_ident = p.path.segments.first().unwrap().ident.clone();
-                    let mut name_self  = false;
-                    let mut res_opt :Option<bool> = None;
-
-                    if  self_ident.eq(&return_ident) { 
-                        return Some((signature, res_opt)) ;
+                    if  p.path.is_ident("Self") { 
+                        return (new_sig(sig,name), None);
                     } 
 
-                    else if (*name).eq(&return_ident) {
-                        let output = str_to_return_type(self_ident.to_string())?;
-                        signature.output       = output;
-                        return Some((signature, res_opt)) ;
+                    else if p.path.is_ident(name) {
+                        return (new_sig(sig,name), None);
                     }
 
-                    else if  option_ident.eq(&return_ident) {
+                    let segment = &mut p.path.segments.last().unwrap();
+                    let mut res_opt : Option<bool> = None;
+                    
+                    if  option_ident.eq(&segment.ident) {
                         res_opt = Some(false);
                     }
 
-                    else if result_ident.eq(&return_ident) {
+                    else if result_ident.eq(&segment.ident) {
                         res_opt = Some(true);
                     }
-                    match p.path.segments.first().unwrap().arguments.clone(){
 
-                        syn::PathArguments::AngleBracketed(mut gen_arg) =>{
+                    if res_opt.is_some(){
 
-                            for arg in gen_arg.args.iter_mut(){
+                        match &segment.arguments {
 
-                                match arg {
-                                    syn::GenericArgument::Type( t ) =>{
-                                        match t {
-                                            syn::Type::Path( pp ) => {
+                            syn::PathArguments::AngleBracketed(gen_arg) => {
+                                if let Some(arg)  = gen_arg.args.first(){
 
-                                                for ret_path_seg in pp.path.segments.iter_mut(){
+                                    match arg {   
+                                        syn::GenericArgument::Type( ty ) => {
+                                            match ty {
+                                                syn::Type::Path( typ ) => {
 
-                                                    let path_seg_ident =  ret_path_seg.ident.clone();
-
-                                                    if self_ident.eq(&path_seg_ident) {
-                                                        name_self = true;
+                                                    if typ.path.is_ident("Self"){
+                                                        return (new_sig(sig,name), res_opt);
                                                     }
-                                                    else if (*name).eq(&path_seg_ident) {
-                                                        ret_path_seg.ident = self_ident.clone();
-                                                        name_self = true;
+
+                                                    else if typ.path.is_ident(name){
+                                                        return (new_sig(sig,name), res_opt);
                                                     }
-                                                }
-                                            },
-                                            _ => return None,
-                                        }
-                                    },
-                                    _ => return None,
+
+                                                    let (msg,note,help) = crate::error::met_new_not_instance(sig, name, quote::quote!{#typ},res_opt);
+                                                    proc_macro_error::abort!(typ,msg;note=note;help=help); 
+                                                },
+                                                bit => {
+                                                    let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#segment},res_opt);
+                                                    proc_macro_error::abort!(bit,msg;note=note;help=help); 
+                                                },
+                                            }
+                                        },
+                                        bit => {
+                                            let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#segment},res_opt);
+                                            proc_macro_error::abort!(bit,msg;note=note;help=help); 
+                                        },
+                                    }
                                 }
-                            }
-                            if res_opt.is_some() {
-
-                                if name_self {
-
-                                    let s = quote::quote!{ #return_ident #gen_arg }.to_string();
-                                    let output = str_to_return_type(s)?;
-                                    signature.output = output;
-
-                                    return Some( (signature, res_opt) );
-                                }
-                                return None;
-                            }
-                            return None;
-                        },
-                        _ => return None,
+                                let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#segment},res_opt);
+                                proc_macro_error::abort!(segment.arguments,msg;note=note;help=help); 
+                            },
+                            bit => {
+                                let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#segment},res_opt);
+                                proc_macro_error::abort!(bit,msg;note=note;help=help);
+                            },
+                        }
                     }
+                    let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#p},None);
+                    proc_macro_error::abort!(p,msg;note=note;help=help);
                 },
-                _ => return None,
+                bit => {
+                    let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#bit},None);
+                    proc_macro_error::abort!(bit,msg;note=note;help=help);
+                },
             }
         },
-        _ => return None,
+        
+        bit => { 
+            let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#bit},None);
+            proc_macro_error::abort!(bit,msg;note=note;help=help);
+        },
     }
 }
 
-fn is_return( met: &syn::ImplItemFn ) -> bool {
-    match met.sig.output {
+fn is_return( sig: &syn::Signature ) -> bool {
+    match sig.output {
         syn::ReturnType::Default => return false,
         syn::ReturnType::Type(_, _) => return true,
     }
@@ -198,13 +226,17 @@ fn is_self_refer (signature: &syn::Signature ) -> bool{
     false
 }
 
+pub fn explicit( sig: &syn::Signature, name: &syn::Ident ) -> syn::Signature{
+    replace( sig, "Self", name )
+}
+
 // needs an argument for static methods
 pub fn get_methods( name: &syn::Ident, item_impl: syn::ItemImpl, stat:bool ) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
 
     let mut loc                   = vec![];
     let mut method_new      = None;
-    let ident_new                            = quote::format_ident!("{}","new");
-    let ident_try_new                        = quote::format_ident!("{}","try_new");
+    let ident_new                            = quote::format_ident!("new");
+    let ident_try_new                        = quote::format_ident!("try_new");
 
     for i in item_impl.items {
         match i {
@@ -214,20 +246,23 @@ pub fn get_methods( name: &syn::Ident, item_impl: syn::ItemImpl, stat:bool ) -> 
                     syn::Visibility::Public(_) => {
 
                         if is_self_refer(&m.sig){
-                            loc.push(sieve(m.clone(),Some(false)));
+                            loc.push(sieve(explicit(&m.sig,name),Some(false)));
 
                         } else {
+
                             // check if there is a function "new" or "try_new"
                             if m.sig.ident.eq(&ident_new) || m.sig.ident.eq(&ident_try_new){
-                                if let Some(new_sig_ret) = is_self_return(name,&m.sig){
-                                    let method = sieve(m.clone(),Some(true));
-                                    method_new = ActorMethodNew::try_new( method, new_sig_ret.0, new_sig_ret.1 );
-                                }
+
+                                // if let Some(new_sig_ret) = is_self_return(name,&mut m.sig.clone()){
+                                let(new_sig,res_opt) = check_self_return(name,&mut m.sig.clone());
+                                let method = sieve(m.sig.clone(),Some(true));
+                                method_new = ActorMethodNew::try_new( method, new_sig, res_opt ); 
                             } 
+
                             else {
                                 if stat {
-                                    if is_return(&m){
-                                        loc.push(sieve(m.clone(),Some(true)));
+                                    if is_return(&m.sig){
+                                        loc.push(sieve(explicit(&m.sig,name),Some(true)));
                                     }
                                 }
                             }
@@ -242,10 +277,10 @@ pub fn get_methods( name: &syn::Ident, item_impl: syn::ItemImpl, stat:bool ) -> 
     (loc, method_new)
 }
 
-pub fn sieve( method: syn::ImplItemFn, stat: Option<bool> ) -> ActorMethod {
+pub fn sieve( sig: syn::Signature, stat: Option<bool> ) -> ActorMethod {
 
-    let stat = if stat.is_some(){ stat.unwrap() } else { is_self_refer(&method.sig) };
-    let (ident,arguments,output) = ident_arguments_output(&method);
+    let stat = if stat.is_some(){ stat.unwrap() } else { is_self_refer(&sig) };
+    let (ident,arguments,output) = ident_arguments_output(&sig);
 
     let arg_bool = { arguments.iter()
         .any( |a| match a { syn::FnArg::Typed(_) => true, _ => false}) };
@@ -256,29 +291,29 @@ pub fn sieve( method: syn::ImplItemFn, stat: Option<bool> ) -> ActorMethod {
         syn::ReturnType::Type(_,output) => { 
 
             if arg_bool {
-                return ActorMethod::Io{ method, stat, ident, arguments, output };
+                return ActorMethod::Io{ sig, stat, ident, arguments, output };
             } else {
-                return ActorMethod::O{ method, stat, ident, output };
+                return ActorMethod::O{ sig, stat, ident, output };
             }
         },
         syn::ReturnType::Default => {
 
             if arg_bool {
-                return ActorMethod::I{ method, ident, arguments };
+                return ActorMethod::I{ sig, ident, arguments };
             } else {
-                return ActorMethod::None{ method, ident };
+                return ActorMethod::None{ sig, ident };
             }
         },
     }
 }
- 
-pub fn ident_arguments_output( method: &syn::ImplItemFn ) -> (syn::Ident,Vec<syn::FnArg>,syn::ReturnType) {
+
+pub fn ident_arguments_output( sig: &syn::Signature  ) -> (syn::Ident,Vec<syn::FnArg>,syn::ReturnType) {
     let punct_to_vec = 
     |p: syn::punctuated::Punctuated<syn::FnArg,syn::token::Comma>| -> Vec<syn::FnArg> { p.into_iter().collect::<Vec<_>>() };
 
-    let ident          = method.sig.ident.clone();
-    let arguments = punct_to_vec( method.sig.inputs.clone());
-    let output    = method.sig.output.clone();
+    let ident          = sig.ident.clone();
+    let arguments = punct_to_vec( sig.inputs.clone());
+    let output    = sig.output.clone();
 
     (ident, arguments, output)
 }
@@ -289,36 +324,31 @@ pub fn change_signature_refer( signature: &mut syn::Signature ) {
     signature.inputs.insert(0,slf);
 }
 
+pub fn args_to_ident_type(args: &Vec<syn::FnArg>) -> (Vec<syn::Ident>, Vec<Box<syn::Type>>){
 
-pub fn args_ident_type( args: &Vec<syn::FnArg> ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) { 
+    let mut idents = Vec::new();
+    let mut types  = Vec::new();
 
-    let argument_idents = |arguments: &Vec<syn::FnArg>|{
-        arguments
-        .into_iter()
-        .filter_map(|arg| match arg {
-            syn::FnArg::Typed(arg) => { match *arg.pat.clone() {
-                syn::Pat::Ident(pat_id) => Some(pat_id.ident),
-                                                _ => None,
+    for i in args  { 
+        match i { 
+            syn::FnArg::Typed(arg) => { 
+                if let Some(id) = match *arg.pat.clone() {
+                    syn::Pat::Ident(pat_id) => Some(pat_id.ident.clone()),
+                    _ => None,
+                }{
+                    idents.push(id);
+                    types.push(arg.ty.clone());
                 }
             },
-            _ => None,
-        })
+            _ => (),
+        }
+    }
+    (idents,types)    
+}
 
-        .collect::<Vec<_>>()
-    };
+pub fn arguments_ident_type( args: &Vec<syn::FnArg> ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) { 
 
-
-    let argument_types = |arguments: &Vec<syn::FnArg>|{
-        arguments
-        .into_iter()
-        .filter_map(|arg| match arg {
-            syn::FnArg::Typed(arg) => Some(arg.ty.clone()),
-                                           _ => None,
-        }).collect::<Vec<_>>()
-    };
-
-    let idents      = argument_idents(args);
-    let types   = argument_types(args);
+    let (idents,types) = args_to_ident_type(args); 
     let args_ident =  quote::quote!{ (#(#idents),*)};
     let args_type  =  quote::quote!{ (#(#types),*) };
     ( args_ident, args_type )

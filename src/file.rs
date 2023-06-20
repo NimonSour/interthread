@@ -1,5 +1,5 @@
 
-fn code_to_file(code: proc_macro2::TokenStream ) -> syn::File {
+pub fn code_to_file(code: proc_macro2::TokenStream ) -> syn::File {
     match  syn::parse::<syn::File>(code.into() ){
         Ok( file ) => {return file},
         Err(e) => {
@@ -175,4 +175,8 @@ pub fn main_file( mod_name: String, lib: crate::attribute::AALib ) -> syn::File 
     code_to_file( code )
 
 }
+
+
+
+
 
