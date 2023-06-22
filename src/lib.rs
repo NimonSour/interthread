@@ -211,24 +211,24 @@
 //! 
 //! ```rust
 //!impl MyActorScript {
-//!   pub fn my_actor_direct(self, actor: &mut MyActor) {
-//!       match self {
-//!           MyActorScript::Increment {} => {
-//!               actor.increment();
-//!           }
-//!           MyActorScript::AddNumber {
-//!               input: (num),
-//!               output: send,
-//!           } => {
-//!               send.send(actor.add_number(num))
-//!                   .expect("'direct.send' Channel closed");
-//!           }
-//!           MyActorScript::GetValue { output: send } => {
-//!               send.send(actor.get_value())
-//!                   .expect("'direct.send' Channel closed");
-//!           }
-//!       }
-//!   }
+//!    pub fn my_actor_direct(self, actor: &mut MyActor) {
+//!        match self {
+//!            MyActorScript::Increment {} => {
+//!                actor.increment();
+//!            }
+//!            MyActorScript::AddNumber {
+//!                input: (num),
+//!                output: send,
+//!            } => {
+//!                send.send(actor.add_number(num))
+//!                    .expect("'my_actor_direct.send'. Channel closed");
+//!            }
+//!            MyActorScript::GetValue { output: send } => {
+//!                send.send(actor.get_value())
+//!                    .expect("'my_actor_direct.send'. Channel closed");
+//!            }
+//!        }
+//!    }
 //!}
 //! 
 //! ```
@@ -249,9 +249,8 @@
 //!    while let Ok(msg) = receiver.recv() {
 //!        msg.my_actor_direct(&mut actor);
 //!    }
-//!    eprintln!("{} end of life ...", "MyActor");
+//!    eprintln!("MyActor end of life ...");
 //!}
-//! 
 //!``` 
 //! 
 //! When using the [`edit`](./attr.actor.html#edit) argument in the [`actor`](./attr.actor.html) 
@@ -282,46 +281,44 @@
 //! 
 //! ```rust 
 //! 
-//!#[derive(Clone, Debug)]
-//!pub struct MyActorLive {
-//!    sender: std::sync::mpsc::SyncSender<MyActorScript>,
-//!}
 //!impl MyActorLive {
-//!   pub fn new(v: i8) -> Self {
-//!       let (sender, receiver) = std::sync::mpsc::sync_channel(2);
-//!       let actor = MyActor::new(v);
-//!       let actor_live = Self { sender };
-//!       std::thread::spawn(|| my_actor_play(receiver, actor));
-//!       actor_live
-//!   }
-//!   pub fn increment(&mut self) {
-//!       let msg = MyActorScript::Increment {};
-//!       let _ = self
-//!           .sender
-//!           .send(msg)
-//!           .expect("'Live::method.send' Channel is closed");
-//!   }
-//!   pub fn add_number(&mut self, num: i8) -> i8 {
-//!       let (send, recv) = oneshot::channel();
-//!       let msg = MyActorScript::AddNumber {
-//!           input: (num),
-//!           output: send,
-//!       };
-//!       let _ = self
-//!           .sender
-//!           .send(msg)
-//!           .expect("'Live::method.send' Channel is closed");
-//!       recv.recv().expect("'Live::method.recv' Channel is closed")
-//!   }
-//!   pub fn get_value(&self) -> i8 {
-//!       let (send, recv) = oneshot::channel();
-//!       let msg = MyActorScript::GetValue { output: send };
-//!       let _ = self
-//!           .sender
-//!           .send(msg)
-//!           .expect("'Live::method.send' Channel is closed");
-//!       recv.recv().expect("'Live::method.recv' Channel is closed")
-//!   }
+//!    pub fn new(v: i8) -> Self {
+//!        let (sender, receiver) = std::sync::mpsc::sync_channel(2);
+//!        let actor = MyActor::new(v);
+//!        let actor_live = Self { sender };
+//!        std::thread::spawn(|| my_actor_play(receiver, actor));
+//!        actor_live
+//!    }
+//!    pub fn increment(&mut self) {
+//!        let msg = MyActorScript::Increment {};
+//!        let _ = self
+//!            .sender
+//!            .send(msg)
+//!            .expect("'MyActorLive::method.send'. Channel is closed!");
+//!    }
+//!    pub fn add_number(&mut self, num: i8) -> i8 {
+//!        let (send, recv) = oneshot::channel();
+//!        let msg = MyActorScript::AddNumber {
+//!            input: (num),
+//!            output: send,
+//!        };
+//!        let _ = self
+//!            .sender
+//!            .send(msg)
+//!            .expect("'MyActorLive::method.send'. Channel is closed!");
+//!        recv.recv()
+//!            .expect("'MyActorLive::method.recv'. Channel is closed!")
+//!    }
+//!    pub fn get_value(&self) -> i8 {
+//!        let (send, recv) = oneshot::channel();
+//!        let msg = MyActorScript::GetValue { output: send };
+//!        let _ = self
+//!            .sender
+//!            .send(msg)
+//!            .expect("'MyActorLive::method.send'. Channel is closed!");
+//!        recv.recv()
+//!            .expect("'MyActorLive::method.recv'. Channel is closed!")
+//!    }
 //!}
 //! 
 //! ```
@@ -810,7 +807,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///        /* do something */
 ///        msg.my_actor_direct(&mut actor);
 ///    }
-///    eprintln!("{} the end ", "MyActor");
+///    eprintln!(" the end ");
 ///}
 ///
 ///

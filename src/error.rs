@@ -3,7 +3,8 @@ pub fn met_new_note_help(name: &syn::Ident) -> (String, String)  {
 
     let note = format!(
         "The object {name:?} must implement a public method named 'new' \
-        that returns Self or {name}. If the function may fail to return an instance of {name}, name it 'try_new' \
+        that returns Self or {name}. If the function may fail to return \
+        an instance of {name}, name it 'try_new' \
         and return a 'Result<{name}>' or 'Option<{name}'. 
         It is recommended to follow the standard Rust naming \
         convention and use 'try_new', but it is not mandatory.\n"
@@ -222,3 +223,38 @@ pub static AVAIL_ACTOR: &'static str = "
 
 *  -  default 
 ";
+
+
+
+pub fn live_send_recv(cust_name: &syn::Ident, ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream){
+
+    let live_name  = &crate::name::live(cust_name);
+    let send_msg = format!("'{live_name}::method.send'. Channel is closed!");
+    let recv_msg = format!("'{live_name}::method.recv'. Channel is closed!");
+    (quote::quote!{#send_msg},quote::quote!{#recv_msg})
+}
+
+pub fn live_guard(cust_name: &syn::Ident) -> proc_macro2::TokenStream {
+    let live_name  = &crate::name::live(cust_name);
+    let msg        = format!("'{live_name}::method'. Failed to unwrap MutexGuard!");
+    quote::quote!{#msg}
+}
+
+pub fn play_guard(cust_name: &syn::Ident) -> proc_macro2::TokenStream {
+    let play_name  = &crate::name::play(cust_name);
+    let msg        = format!("'{play_name}::queuing'. Failed to unwrap MutexGuard!");
+    quote::quote!{#msg}
+}
+
+pub fn end_of_life(name: &syn::Ident) -> proc_macro2::TokenStream {
+    let msg    = format!("{} end of life ...",&name.to_string());
+    quote::quote!{
+        eprintln!(#msg);
+    }
+}
+
+pub fn direct_send(cust_name: &syn::Ident) -> proc_macro2::TokenStream {
+    let direct_name  = &crate::name::direct(cust_name);
+    let msg = format!("'{direct_name}.send'. Channel closed");
+    quote::quote!{#msg}
+}
