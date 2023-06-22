@@ -27,7 +27,6 @@ pub enum Pet {
 
 
 #[interthread::actor(channel=2)]
-
 impl Pet {
 
     pub fn new( pet: Self) -> Self {
@@ -61,7 +60,7 @@ fn main() {
     
     let handle_a = std::thread::spawn( move || {
         println!("Thread A - {}",pet_a.speak());
-        // swap the the pet 
+        // swap the the pet and return it  
         pet_a.swap(Pet::Cat(Cat("Kiki".to_string())))
     });
 

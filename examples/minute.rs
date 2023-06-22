@@ -6,7 +6,7 @@ impl MyActor {
 
     pub fn new() -> Self {Self}
 
-    pub async fn do_sleep(&self, n:u8) {
+    pub async fn sleep(&self, n:u8) {
         tokio::spawn(async move{
             sleep(Duration::from_secs(1)).await;
             println!("Task {} awake now!",n);
@@ -21,13 +21,14 @@ async fn main(){
 
     for i in 0..60 {
 
-        let act_clone = actor.clone();
+        let act_a = actor.clone();
 
         let _ = tokio::spawn(async move {
-            act_clone.do_sleep(i).await;
+            act_a.sleep(i).await;
         });
     }
-    // see how long it takes to commplete all the tasks
+    // check how long
+    // will take to sleep a minute
     sleep(Duration::from_secs_f64(1.01)).await;
 }
 
@@ -102,4 +103,4 @@ Task 55 awake now!
 /*
 Task 57 awake now!
 Task 0 awake now!
- */
+*/

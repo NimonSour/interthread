@@ -475,7 +475,6 @@ impl ActorMacroGeneration {
         let live_var                 = quote::format_ident!("actor_live");
         let send_recv_channel = &self.channels.new_live_send_recv;
         let func_new_name           = &new_sig.ident;
-        // add a '?' to the end of 'actor' declaration 
         let unwrapped          = self.met_new.unwrap_sign();
         let return_statement   = self.met_new.live_ret_statement(&live_var);
 

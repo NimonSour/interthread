@@ -84,7 +84,7 @@
 //! Filename: Cargo.toml
 //! 
 //!```text
-//!interthread = "0.1.6"
+//!interthread = "0.1.7"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -778,14 +778,14 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// ## Examples
 ///```rust
-/// 
+///
 ///use std::sync::mpsc;
 ///use interthread::actor;
 /// 
 ///pub struct MyActor {
 ///    value: i8,
 ///}
-//
+/// // we will edit `play` function
 /// #[actor(channel=2, edit(play))]
 ///impl MyActor {
 ///
@@ -798,14 +798,24 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    }
 ///}
 ///
-/// // manually create "play" function 
+///// manually create "play" function 
+///// use `example` macro to copy paste
+///// `play`'s body 
 ///pub fn my_actor_play( 
 ///     receiver: mpsc::Receiver<MyActorScript>,
 ///    mut actor: MyActor) {
-///     
+///    // set a custom variable 
+///    let mut call_counter = 0;
 ///    while let Ok(msg) = receiver.recv() {
-///        /* do something */
+///        // do something 
+///        // like 
+///        println!("Value of call_counter = {}",call_counter);
+///
+///        // `direct` as usual 
 ///        msg.my_actor_direct(&mut actor);
+///
+///        // increment the counter as well
+///        call_counter += 1;
 ///    }
 ///    eprintln!(" the end ");
 ///}
@@ -813,22 +823,230 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///
 ///fn main() {
 ///
-///    let my_act = MyActorLive::new(0);
-///    let mut my_act_clone = my_act.clone();
-///
-///    let handle = std::thread::spawn(move || -> i8{
-///        my_act_clone.increment()
-///    });
+///    let my_act       = MyActorLive::new(0);
+///    let mut act_a = my_act.clone();
 ///    
-///    let value = handle.join().unwrap();
 ///
+///    let handle_a = std::thread::spawn(move || -> i8{
+///        act_a.increment()
+///    });
+///
+///    let value = handle_a.join().unwrap();
+///    
 ///    assert_eq!(value, 1);
+///
+///    // and it will print the value of 
+///    // call_counter
 ///}
 ///```
 ///
 /// > **Note:** The expanded `actor` can be viewed using [`example`](./attr.example.html) macro. 
 /// 
 /// 
+/// Now, let's explore a scenario where we want to manipulate or 
+/// even return a type from the [`play`](index.html#play) 
+/// component by invoking a method on the [`live`](index.html#live) 
+/// component. We can easily modify the generated code to 
+/// enable this functionality.
+/// 
+/// ## Examples
+///```rust
+///use std::sync::mpsc;
+///use interthread::actor;
+/// 
+///pub struct MyActor {
+///    value: i8,
+///}
+/// #[actor(channel=2, edit(play))]
+///impl MyActor {
+///
+///    pub fn new( value: i8 ) -> Self {
+///        Self{value}
+///    }
+///    pub fn increment(&mut self) -> i8{
+///        self.value += 1;
+///        self.value
+///    }
+///    // it's safe to hack the macro in this way
+///    // having `&self` as receiver along  with
+///    // other things creates a `Script` variant  
+///    // We'll catch it in `play` function
+///    pub fn play_get_counter(&self)-> Option<u32>{
+///        None
+///    }
+///
+///}
+///
+///// manually create "play" function 
+///// use `example` macro to copy paste
+///// `play`'s body
+///pub fn my_actor_play( 
+///     receiver: mpsc::Receiver<MyActorScript>,
+///    mut actor: MyActor) {
+///    // set a custom variable 
+///    let mut call_counter = 0;
+///
+///    while let Ok(msg) = receiver.recv() {
+///
+///        // match incoming msgs
+///        // for `play_get_counter` variant
+///        match msg {
+///            // you don't have to remember the 
+///            // the name of the `Script` variant 
+///            // your text editor does it for you
+///            // so just choose the variant
+///            MyActorScript::PlayGetCounter { output  } =>
+///            { let _ = output.send(Some(call_counter));},
+///            
+///            // else as usual 
+///            _ => { msg.my_actor_direct(&mut actor); }
+///        }
+///        call_counter += 1;
+///    }
+///    eprintln!("the end");
+///}
+///
+///
+///fn main() {
+///
+///    let my_act = MyActorLive::new(0);
+///    let mut act_a = my_act.clone();
+///    let mut act_b = my_act.clone();
+///
+///    let handle_a = std::thread::spawn(move || {
+///        act_a.increment();
+///    });
+///    let handle_b = std::thread::spawn(move || {
+///        act_b.increment();
+///    });
+///    
+///    let _ = handle_a.join();
+///    let _ = handle_b.join();
+///
+///
+///    let handle_c = std::thread::spawn(move || {
+///
+///        // as usual we invoke a method on `live` instance
+///        // which has the same name as on the Actor object
+///        // but 
+///        if let Some(counter) = my_act.play_get_counter(){
+///
+///            println!("This call never riched the `Actor`, 
+///            it returns the value of total calls from the 
+///            `play` function ,call_counter = {:?}",counter);
+///
+///            assert_eq!(counter, 2);
+///        }
+///    });
+///    let _ = handle_c.join();
+///
+///}
+///```
+/// Let's take a moment to rearrange our example. 
+/// 
+/// 
+/// ## Examples
+///```rust
+///use std::sync::mpsc;
+///use interthread::actor;
+/// 
+///pub struct MyActor {
+///    value: i8,
+///}
+/// #[actor(channel=2, edit(play))]
+///impl MyActor {
+///
+///    pub fn new( value: i8 ) -> Self {
+///        Self{value}
+///    }
+///    pub fn increment(&mut self) -> i8{
+///        self.value += 1;
+///        self.value
+///    }
+///    pub fn play_get_counter(&self)-> Option<u32>{
+///        None
+///    }
+///
+///}
+///
+///
+///// incapsulate the matching block
+///// inside `Script` impl block
+///// where the `direct`ing is happening
+///// to keep our `play` function nice
+///// and tidy 
+///impl MyActorScript {
+///    pub fn custom_direct(self,
+///           actor: &mut MyActor, 
+///           counter: &u32 ){
+///
+///        // the same mathing block 
+///        // as in above example    
+///        match self {
+///            MyActorScript::PlayGetCounter { output  } =>
+///            { let _ = output.send(Some(counter.clone()));},
+///            
+///            // else as usual 
+///            msg => { msg.my_actor_direct(actor); }
+///        }
+///    } 
+///}
+///
+///// manually create "play" function 
+///// use `example` macro to copy paste
+///// `play`'s body
+///pub fn my_actor_play( 
+///     receiver: mpsc::Receiver<MyActorScript>,
+///    mut actor: MyActor) {
+///    // set a custom variable 
+///    let mut call_counter = 0;
+///    
+///    // nice and tidy while loop ready
+///    // for more wild things to happen
+///    while let Ok(msg) = receiver.recv() {
+///        
+///        // this is the invocation
+///        // of MyActorScript.custom_direct()
+///        msg.custom_direct(&mut actor, &call_counter);
+///
+///        call_counter += 1;
+///    }
+///    eprintln!("the end");
+///}
+///
+///
+///fn main() {
+///
+///    let my_act = MyActorLive::new(0);
+///    let mut act_a = my_act.clone();
+///    let mut act_b = my_act.clone();
+///
+///    let handle_a = std::thread::spawn(move || {
+///        act_a.increment();
+///    });
+///    let handle_b = std::thread::spawn(move || {
+///        act_b.increment();
+///    });
+///    
+///    let _ = handle_a.join();
+///    let _ = handle_b.join();
+///
+///
+///    let handle_c = std::thread::spawn(move || {
+///
+///        if let Some(counter) = my_act.play_get_counter(){
+///
+///            println!("This call never riched the `Actor`, 
+///            it returns the value of total calls from the 
+///            `play` function ,call_counter = {:?}",counter);
+///
+///            assert_eq!(counter, 2);
+///        }
+///    });
+///    let _ = handle_c.join();
+///
+///}
+///```
 /// 
 /// # name
 /// 
