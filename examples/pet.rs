@@ -25,7 +25,6 @@ pub enum Pet {
     Cat(Cat),
 }
 
-
 #[interthread::actor(channel=2)]
 impl Pet {
 

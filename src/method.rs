@@ -94,11 +94,14 @@ where
     O: ToString + ?Sized,
     N: ToString + ?Sized,
 {
-    let str_type = quote::quote! {#ty}.to_string();
-    let old = format!(" {} ", old.to_string() );
-    let new_str_type = str_type.replace(&old, &new.to_string());
+    let mut type_str = quote::quote! {#ty}.to_string();
+    type_str = type_str.replace( ")"," )");
+    type_str = type_str.replace( "(","( ");
+    type_str = format!(" {type_str} ");
+    let old = format!(" {} ", old.to_string());
+    let str_type = type_str.replace(&old, &new.to_string());
 
-    if let Ok(ty) = syn::parse_str::<T>(&new_str_type) {
+    if let Ok(ty) = syn::parse_str::<T>(&str_type) {
         return ty;
     }
 
@@ -107,9 +110,8 @@ where
 }
 
 
-pub fn new_sig( sig: &syn::Signature, name: &syn::Ident) -> syn::Signature {
+pub fn get_new_sig( sig: &syn::Signature, name: &syn::Ident) -> syn::Signature {
     let mut signature = replace(sig, "Self",name);
-    // let name = format!(" {} ", name.to_string());
     signature.output  = replace(&sig.output,&name,"Self");
     signature
 }
@@ -126,11 +128,11 @@ fn check_self_return(name: &syn::Ident, sig: &syn::Signature) -> (syn::Signature
                 syn::Type::Path( p ) => {
 
                     if  p.path.is_ident("Self") { 
-                        return (new_sig(sig,name), None);
+                        return (get_new_sig(sig,name), None);
                     } 
 
                     else if p.path.is_ident(name) {
-                        return (new_sig(sig,name), None);
+                        return (get_new_sig(sig,name), None);
                     }
 
                     let segment = &mut p.path.segments.last().unwrap();
@@ -157,11 +159,11 @@ fn check_self_return(name: &syn::Ident, sig: &syn::Signature) -> (syn::Signature
                                                 syn::Type::Path( typ ) => {
 
                                                     if typ.path.is_ident("Self"){
-                                                        return (new_sig(sig,name), res_opt);
+                                                        return (get_new_sig(sig,name), res_opt);
                                                     }
 
                                                     else if typ.path.is_ident(name){
-                                                        return (new_sig(sig,name), res_opt);
+                                                        return (get_new_sig(sig,name), res_opt);
                                                     }
 
                                                     let (msg,note,help) = crate::error::met_new_not_instance(sig, name, quote::quote!{#typ},res_opt);
