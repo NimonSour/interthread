@@ -84,7 +84,7 @@
 //! Filename: Cargo.toml
 //! 
 //!```text
-//!interthread = "0.1.7"
+//!interthread = "0.1.8"
 //!oneshot     = "0.1.5" 
 //!```
 //! 

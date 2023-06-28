@@ -62,7 +62,7 @@ they were directly working with the original object.
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.7"
+interthread = "0.1.8"
 oneshot     = "0.1.5" 
 ```
 
@@ -150,7 +150,7 @@ asynchronous execution.
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.7"
+interthread = "0.1.8"
 tokio       = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -214,7 +214,7 @@ The [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) ma
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.7"
+interthread = "0.1.8"
 oneshot     = "0.1.5" 
 ```
 
@@ -247,7 +247,11 @@ pub enum Pet {
 
 #[interthread::actor(channel=2)]
 impl Pet {
-
+    // Of course, not in this case, but if 
+    // the types used with `Pet` have different
+    // parameters for the `new` method, 
+    // simply pass a ready `Self` type.
+    // Remember, the `new` method is a requirement!
     pub fn new( pet: Self) -> Self {
         pet
     }
@@ -315,7 +319,7 @@ improved performance and streamlined development processes.
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.7"
+interthread = "0.1.8"
 tokio       = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -439,7 +443,7 @@ easy is to customize and modify various aspects of the code generation process.
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.7"
+interthread = "0.1.8"
 oneshot     = "0.1.5" 
 ```
 
@@ -544,9 +548,15 @@ fn main() {
 ```
 The provided example serves as a glimpse into the capabilities of the actor macro, which significantly reduces the amount of boilerplate code required for interthread actors. While the example may not be immediately comprehensible, it demonstrates how the macro automates the generation of essential code, granting developers the freedom to modify and manipulate specific parts as needed. This abstraction shields users from the complexity of the underlying implementation, allowing them to focus on their desired functionality.
 
-For more details, continue reading on
+For more details, please continue reading on
 [![Docs.rs](https://docs.rs/interthread/badge.svg)](https://docs.rs/interthread#sdpl-framework)
 
-Regularly check for new releases and upgrade to the latest version!
-Share with someone you care about!
+If you like this project, please consider making a small  contribution. 
+
+Your support helps ensure its continued development
+<a href="https://www.buymeacoffee.com/6fm9wrhmk7V" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me A Coffee" style="height: 30px !important;width: 108px !important;" ></a>
+
+Join `interthread` on GitHub for discussions! [![GitHub](https://img.shields.io/badge/GitHub-%2312100E.svg?&style=plastic&logo=GitHub&logoColor=white)](https://github.com/NimonSour/interthread/discussions/1)
+
+Please check regularly for new releases and upgrade to the latest version!
 Happy coding! 
