@@ -1,4 +1,4 @@
-
+ 
 
 #[derive(Debug,Clone)]
 pub enum ActorMethod {
@@ -94,10 +94,11 @@ where
     O: ToString + ?Sized,
     N: ToString + ?Sized,
 {
-    let str_ret_type = quote::quote! {#ty}.to_string();
-    let new_str_ret_type = str_ret_type.replace(&old.to_string(), &new.to_string());
+    let str_type = quote::quote! {#ty}.to_string();
+    let old = format!(" {} ", old.to_string() );
+    let new_str_type = str_type.replace(&old, &new.to_string());
 
-    if let Ok(ty) = syn::parse_str::<T>(&new_str_ret_type) {
+    if let Ok(ty) = syn::parse_str::<T>(&new_str_type) {
         return ty;
     }
 
@@ -108,7 +109,8 @@ where
 
 pub fn new_sig( sig: &syn::Signature, name: &syn::Ident) -> syn::Signature {
     let mut signature = replace(sig, "Self",name);
-    signature.output  = replace(&sig.output,name,"Self");
+    // let name = format!(" {} ", name.to_string());
+    signature.output  = replace(&sig.output,&name,"Self");
     signature
 }
 
@@ -253,7 +255,6 @@ pub fn get_methods( name: &syn::Ident, item_impl: syn::ItemImpl, stat:bool ) -> 
                             // check if there is a function "new" or "try_new"
                             if m.sig.ident.eq(&ident_new) || m.sig.ident.eq(&ident_try_new){
 
-                                // if let Some(new_sig_ret) = is_self_return(name,&mut m.sig.clone()){
                                 let(new_sig,res_opt) = check_self_return(name,&mut m.sig.clone());
                                 let method = sieve(m.sig.clone(),Some(true));
                                 method_new = ActorMethodNew::try_new( method, new_sig, res_opt ); 
