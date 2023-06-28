@@ -207,25 +207,25 @@ fn actor_smol_unbounded() {
 }
 
 
-// #[test]
-// fn self_word_in_arg_type() {
-//     #[derive(Debug,Clone,PartialEq, Eq)]
-//     pub struct ActorSelf(i8);
-//     #[life(channel=3)]
-//     impl ActorSelf {
-//         pub fn new() -> Self{Self(0)}
-//         pub fn input(&mut self, v:i8){self.0 = v}
-//         pub fn output(&self)->i8{self.0}
-//         pub fn in_out(&self,v:ActorSelf)->ActorSelf{v}
-//         pub fn add(&mut self, v:i8) -> i8{self.0 += v;self.0}
-//     }
-//     let a = ActorSelf::new();
-//     let mut live = ActorSelfLive::new();
-//     live.input(3); 
-//     assert_eq!( live.output(),  3); 
-//     assert_eq!( live.in_out(a.clone()), a); 
-//     assert_eq!( live.add(5),    8); 
-// }
+#[test]
+fn self_word_in_arg_type() {
+    #[derive(Debug,Clone,PartialEq, Eq)]
+    pub struct ActorSelf(i8);
+    #[life(channel=3)]
+    impl ActorSelf {
+        pub fn new() -> Self{Self(0)}
+        pub fn input(&mut self, v:i8){self.0 = v}
+        pub fn output(&self)->i8{self.0}
+        pub fn in_out(&self,v:ActorSelf)->ActorSelf{v}
+        pub fn add(&mut self, v:i8) -> i8{self.0 += v;self.0}
+    }
+    let a = ActorSelf::new();
+    let mut live = ActorSelfLive::new();
+    live.input(3); 
+    assert_eq!( live.output(),  3); 
+    assert_eq!( live.in_out(a.clone()), a); 
+    assert_eq!( live.add(5),    8); 
+}
 
 
 
