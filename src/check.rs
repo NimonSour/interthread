@@ -1,4 +1,4 @@
-
+use crate::attribute::AALib;
 
 pub fn is_imported( name: &str ){
 
@@ -14,16 +14,16 @@ pub fn is_imported( name: &str ){
     }
 }
 
-pub fn channels_import( lib: &crate::attribute::AALib ){ 
+pub fn channels_import( lib: &AALib ){ 
 
     match lib {
-        crate::attribute::AALib::Tokio => (),
+        AALib::Tokio => (),
 
-        crate::attribute::AALib::Std |
-        crate::attribute::AALib::AsyncStd  => {
+        AALib::Std |
+        AALib::AsyncStd  => {
             is_imported("oneshot");
         },
-        crate::attribute::AALib::Smol => { 
+        AALib::Smol => { 
             is_imported("async-channel");
             is_imported("oneshot");
         }

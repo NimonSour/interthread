@@ -1,29 +1,33 @@
-
-use crate::attribute::ActorAttributeArguments;
+use crate::attribute::{ActorAttributeArguments,AALib,AAChannel};
 use crate::name;
 use crate::method;
 use crate::error;
 
+use proc_macro_error::{abort};
+use syn::{Ident,ItemImpl,Signature,Type,Token};
+use quote::{quote,format_ident};
+use proc_macro2::{Span,TokenStream};
 
 
 
-pub fn impl_get_name(impl_block: &syn::ItemImpl) -> syn::Ident{
+
+pub fn impl_get_name(impl_block: &ItemImpl) -> Ident{
     match &*impl_block.self_ty {
-        syn::Type::Path(tp) => tp.path.segments.first().unwrap().ident.clone(),
-        _ => proc_macro_error::abort!(impl_block,"Internal Error.'actor_gen::impl_get_name'. Could not get item Impl's name!"),
+        Type::Path(tp) => tp.path.segments.first().unwrap().ident.clone(),
+        _ => abort!(impl_block,"Internal Error.'actor_gen::impl_get_name'. Could not get item Impl's name!"),
     }
 }
 pub struct ActorMacroGeneration{
         
-    name:                             syn::Ident,
-    cust_name:                        syn::Ident,
-    impl_block:                    syn::ItemImpl,
+    name:                             Ident,
+    cust_name:                        Ident,
+    impl_block:                    ItemImpl,
     aaa:                 ActorAttributeArguments,
     met_new:              method::ActorMethodNew, 
     actor_methods:      Vec<method::ActorMethod>,
-    direct_arms:   Vec<proc_macro2::TokenStream>,
-    live_methods:  Vec<proc_macro2::TokenStream>,
-    script_fields: Vec<proc_macro2::TokenStream>,
+    direct_arms:   Vec<TokenStream>,
+    live_methods:  Vec<TokenStream>,
+    script_fields: Vec<TokenStream>,
     direct_async:                           bool,
     play_async:                             bool,
     channels:                           Channels,
@@ -32,7 +36,7 @@ pub struct ActorMacroGeneration{
 
 impl ActorMacroGeneration {
 
-    pub fn new( aaa: ActorAttributeArguments, impl_block: syn::ItemImpl ) -> Self {
+    pub fn new( aaa: ActorAttributeArguments, impl_block: ItemImpl ) -> Self {
 
         let name = impl_get_name(&impl_block);
 
@@ -44,7 +48,7 @@ impl ActorMacroGeneration {
             let msg = format!("Can not find public  method `new` or `try_new` for {:?} object.",name.to_string());
             let (note,help) = error::met_new_note_help(&name);
 
-        proc_macro_error::abort!(impl_block,msg;note=note;help=help);
+        abort!(impl_block,msg;note=note;help=help);
     }
         
         // Giving a new name if specified 
@@ -69,13 +73,13 @@ impl ActorMacroGeneration {
         }
     }
 
-    pub fn is_play_async( direct_async: bool, lib: &crate::attribute::AALib, name: &syn::Ident ) -> bool {
+    pub fn is_play_async( direct_async: bool, lib: &AALib, name: &Ident ) -> bool {
 
         match lib {
-            crate::attribute::AALib::Std => {
+            AALib::Std => {
                 if direct_async {
                     let msg = format!("Actor {:?} has 'async' methods but the runtime(lib) is not specified.", name.to_string());
-                    proc_macro_error::abort!( proc_macro2::Span::call_site(), msg; help=crate::error::AVAIL_LIB );
+                    abort!( Span::call_site(), msg; help=crate::error::AVAIL_LIB );
                 } else {
                     return false;
                 }
@@ -86,12 +90,12 @@ impl ActorMacroGeneration {
         }
     }
 
-    fn live_static_method(&mut self,  name: syn::Ident, mut sig: syn::Signature, args: proc_macro2::TokenStream ) {
+    fn live_static_method(&mut self,  name: Ident, mut sig: Signature, args: TokenStream ) {
         
         method::change_signature_refer(&mut sig);
         let await_call = Self::await_token(sig.asyncness.is_some());
         let actor_name = &self.name;
-        let gen_method = quote::quote! {
+        let gen_method = quote! {
 
             pub #sig {
                 #actor_name::#name #args #await_call
@@ -100,29 +104,29 @@ impl ActorMacroGeneration {
         self.live_methods.push(gen_method );
     }
 
-    fn await_token( b: bool ) -> proc_macro2::TokenStream{
+    fn await_token( b: bool ) -> TokenStream{
         if b { 
-            quote::quote!{.await} 
+            quote!{.await} 
         } else {
-            quote::quote!{}
+            quote!{}
         }
     }
     
-    fn async_token( b: bool ) -> proc_macro2::TokenStream{
+    fn async_token( b: bool ) -> TokenStream{
         if b { 
-            quote::quote!{async} 
+            quote!{async} 
         } else {
-            quote::quote!{}
+            quote!{}
         }
     }
 
-    pub fn send_in_recv_out(&self, sig: &mut syn::Signature ) -> (&proc_macro2::TokenStream, &proc_macro2::TokenStream)  {
+    pub fn send_in_recv_out(&self, sig: &mut Signature ) -> (&TokenStream, &TokenStream)  {
         
         match self.aaa.lib {
 
-            crate::attribute::AALib::Std => (),
+            AALib::Std => (),
             _ => {
-                sig.asyncness = Some(syn::Token![async](proc_macro2::Span::call_site()));
+                sig.asyncness = Some(Token![async](Span::call_site()));
             }
         }
 
@@ -152,10 +156,10 @@ impl ActorMacroGeneration {
                     else {
                         
                         // Direct Arm
-                        let arm_match        = quote::quote! { 
+                        let arm_match        = quote! { 
                             #script_field_name { input: #args_ident,  output: send }
                         };
-                        let direct_arm       = quote::quote! {
+                        let direct_arm       = quote! {
                             #script_name::#arm_match => {send.send( actor.#ident #args_ident #await_call ).expect(#error_send);}
                         };
                         self.direct_arms.push(direct_arm);
@@ -166,7 +170,7 @@ impl ActorMacroGeneration {
                         let instant_channel = &self.channels.live_meth_send_recv;
                         let (send_input,recv_output) = self.send_in_recv_out(&mut sig);
                        
-                        let live_method      = quote::quote! {
+                        let live_method      = quote! {
 
                             pub #sig {
                                 #instant_channel
@@ -183,7 +187,7 @@ impl ActorMacroGeneration {
                         // Script Field Struct
                         let output_type      = (&*self.channels.script_field_output)(output);
 
-                        let script_field = quote::quote! {
+                        let script_field = quote! {
                             #script_field_name {
                                 input: #args_type,
                                 #output_type
@@ -201,11 +205,11 @@ impl ActorMacroGeneration {
 
 
                     // Direct Arm
-                    let arm_match = quote::quote!{ 
+                    let arm_match = quote!{ 
                         #script_field_name{ input: #args_ident }
                     };
         
-                    let direct_arm = quote::quote!{
+                    let direct_arm = quote!{
                         #script_name::#arm_match => {actor.#ident #args_ident #await_call;},
                     };
                     self.direct_arms.push(direct_arm);
@@ -216,7 +220,7 @@ impl ActorMacroGeneration {
                     // Live Method
                     let (send_input,_) = self.send_in_recv_out(&mut sig);
 
-                    let live_method = quote::quote!{
+                    let live_method = quote!{
         
                         pub #sig {
                             let msg = #script_name::#arm_match ;
@@ -228,7 +232,7 @@ impl ActorMacroGeneration {
 
 
                     // Script Field Struct
-                    let script_field = quote::quote!{
+                    let script_field = quote!{
                         #script_field_name {
                             input: #args_type,
                         }
@@ -247,11 +251,11 @@ impl ActorMacroGeneration {
 
 
                         // Direct Arm
-                        let arm_match = quote::quote!{ 
+                        let arm_match = quote!{ 
                             #script_field_name{  output: send }
                         };
             
-                        let direct_arm = quote::quote!{
+                        let direct_arm = quote!{
                             #script_name::#arm_match => {send.send(actor.#ident #args_ident #await_call).expect(#error_send);}
                         };
                         self.direct_arms.push(direct_arm);
@@ -262,7 +266,7 @@ impl ActorMacroGeneration {
                         let instant_channel = &self.channels.live_meth_send_recv;
                         let (send_input,recv_output) = self.send_in_recv_out(&mut sig);
 
-                        let live_method = quote::quote!{
+                        let live_method = quote!{
                         
                             pub #sig {
                                 #instant_channel
@@ -278,7 +282,7 @@ impl ActorMacroGeneration {
                         // Script Field Struct
                         let output_type      = (&*self.channels.script_field_output)(output);
 
-                        let script_field = quote::quote!{
+                        let script_field = quote!{
                             #script_field_name {
                                 #output_type
                             }
@@ -291,11 +295,11 @@ impl ActorMacroGeneration {
 
 
                     // Direct Arm
-                    let arm_match = quote::quote!{ 
+                    let arm_match = quote!{ 
                         #script_field_name {} 
                     };
         
-                    let direct_arm = quote::quote!{
+                    let direct_arm = quote!{
                         #script_name::#arm_match => {actor.#ident () #await_call;},
                     };
                     self.direct_arms.push(direct_arm);
@@ -305,7 +309,7 @@ impl ActorMacroGeneration {
                     // Live Method
                     let (send_input,_) = self.send_in_recv_out(&mut sig);
 
-                    let live_method = quote::quote!{
+                    let live_method = quote!{
                     
                         pub #sig {
                             let msg = #script_name::#arm_match ;
@@ -317,7 +321,7 @@ impl ActorMacroGeneration {
 
 
                     // Script Field Struct
-                    let script_field = quote::quote!{
+                    let script_field = quote!{
                         
                         #script_field_name {}
                     };
@@ -327,30 +331,30 @@ impl ActorMacroGeneration {
         } 
     }
 
-    fn live_new_spawn(&self, play: proc_macro2::TokenStream ) -> proc_macro2::TokenStream {
+    fn live_new_spawn(&self, play: TokenStream ) -> TokenStream {
         match self.aaa.lib {
-            crate::attribute::AALib::Std         => {
-                quote::quote!{ std::thread::spawn(|| { #play });}
+            AALib::Std      => {
+                quote!{ std::thread::spawn(|| { #play });}
             },
-            crate::attribute::AALib::Smol        => {
-                quote::quote!{ smol::spawn( #play ).detach();} 
+            AALib::Smol     => {
+                quote!{ smol::spawn( #play ).detach();} 
             },
-            crate::attribute::AALib::Tokio       => {
-                quote::quote!{ tokio::spawn(#play);}
+            AALib::Tokio    => {
+                quote!{ tokio::spawn(#play);}
             },
-            crate::attribute::AALib::AsyncStd    => {
-                quote::quote!{ async_std::task::spawn(#play);}
+            AALib::AsyncStd => {
+                quote!{ async_std::task::spawn(#play);}
             },
         }
     }
 
 
-    fn gen_script(&mut self) -> proc_macro2::TokenStream {
+    fn gen_script(&mut self) -> TokenStream {
 
         let script_name        = name::script(&self.cust_name);
         let fields = &self.script_fields;
 
-        quote::quote! {
+        quote! {
             #[derive(Debug)]
             pub enum #script_name {
                 #(#fields),*
@@ -360,7 +364,7 @@ impl ActorMacroGeneration {
 
 
     // DIRECT
-    fn gen_impl_direct(&self) -> proc_macro2::TokenStream {
+    fn gen_impl_direct(&self) -> TokenStream {
 
         let name            = &self.name;
         let arms = &self.direct_arms;
@@ -368,7 +372,7 @@ impl ActorMacroGeneration {
         let script_name     = name::script(&self.cust_name);
         let direct_name     = name::direct(&self.cust_name);
         let decl_async= Self::async_token(self.direct_async);
-        quote::quote!{
+        quote!{
             impl #script_name {
                 pub #decl_async fn #direct_name (self, actor: &mut #name ) {
                     match self {
@@ -380,7 +384,7 @@ impl ActorMacroGeneration {
     }
 
     // PLAY
-    fn gen_func_play(&mut self) -> proc_macro2::TokenStream {
+    fn gen_func_play(&mut self) -> TokenStream {
 
         let name              = &self.name;
         let play_name          = name::play(&self.cust_name);
@@ -396,11 +400,11 @@ impl ActorMacroGeneration {
 
         match self.aaa.channel {
 
-            crate::attribute::AAChannel::Unbounded |
-            crate::attribute::AAChannel::Buffer(_) => match self.aaa.lib {
+            AAChannel::Unbounded |
+            AAChannel::Buffer(_) => match self.aaa.lib {
 
-                crate::attribute::AALib::Std => {
-                    quote::quote! {
+                AALib::Std => {
+                    quote! {
         
                         pub fn #play_name ( #recv_channel mut actor: #name ) {
                             while let Ok(msg) = receiver.recv(){
@@ -411,8 +415,8 @@ impl ActorMacroGeneration {
                     }
                 },
 
-                crate::attribute::AALib::Tokio => {
-                    quote::quote! {
+                AALib::Tokio => {
+                    quote! {
         
                         pub #async_decl fn #play_name ( #recv_channel mut actor: #name ) {
                             while let Some(msg) = receiver.recv().await{
@@ -424,7 +428,7 @@ impl ActorMacroGeneration {
                 },
 
                 _ => { 
-                    quote::quote! {
+                    quote! {
     
                         pub #async_decl fn #play_name ( #recv_channel mut actor: #name ) {
                             while let Ok(msg) = receiver.recv().await {
@@ -437,9 +441,9 @@ impl ActorMacroGeneration {
                 },
             },
 
-            crate::attribute::AAChannel::Inter => {
+            AAChannel::Inter => {
                 let error_msg = error::play_guard(&self.name);
-                quote::quote!{
+                quote!{
                     pub #async_decl fn #play_name ( #recv_channel mut actor: #name ) {
 
                         let queuing = || -> Option<Vec< #script_name >> {
@@ -466,13 +470,13 @@ impl ActorMacroGeneration {
         }
     }
 
-    fn gen_struct_live_method_new(&mut self) -> proc_macro2::TokenStream { 
+    fn gen_struct_live_method_new(&mut self) -> TokenStream { 
 
         let name                    = &self.name;
         let play_name                = name::play(&self.cust_name);
         let new_sig             = &self.met_new.new_sig;
         let (args_ident, _ )   = method::arguments_ident_type(&self.met_new.get_arguments());
-        let live_var                 = quote::format_ident!("actor_live");
+        let live_var                 = format_ident!("actor_live");
         let send_recv_channel = &self.channels.new_live_send_recv;
         let func_new_name           = &new_sig.ident;
         let unwrapped          = self.met_new.unwrap_sign();
@@ -480,18 +484,18 @@ impl ActorMacroGeneration {
 
         let (init_actor, play_args) =
         match  self.aaa.channel {
-            crate::attribute::AAChannel::Inter => {
-                ( quote::quote!{ Self{ queue: queue.clone(), condvar: condvar.clone() } }, quote::quote!{ queue, condvar, actor  } )
+            AAChannel::Inter => {
+                ( quote!{ Self{ queue: queue.clone(), condvar: condvar.clone() } }, quote!{ queue, condvar, actor  } )
             },
             _  => {
-                ( quote::quote!{ Self{ sender} }, quote::quote!{ receiver, actor } )
+                ( quote!{ Self{ sender} }, quote!{ receiver, actor } )
             },
         };
 
-        let play_call =  quote::quote!{ #play_name(#play_args) }; 
+        let play_call =  quote!{ #play_name(#play_args) }; 
         let spawn     =  self.live_new_spawn(play_call);
 
-        quote::quote!{
+        quote!{
 
             pub #new_sig {
                 #send_recv_channel
@@ -503,13 +507,13 @@ impl ActorMacroGeneration {
         }
     }
     
-    fn gen_live_impl_drop(&self) ->  proc_macro2::TokenStream{
+    fn gen_live_impl_drop(&self) ->  TokenStream{
         let live_name  = name::live(&self.cust_name);
 
         match self.aaa.channel{
 
-            crate::attribute::AAChannel::Inter =>{ 
-                quote::quote!{
+            AAChannel::Inter =>{ 
+                quote!{
                     impl Drop for #live_name{
                         fn drop(&mut self){
                             self.condvar.notify_one();
@@ -517,23 +521,23 @@ impl ActorMacroGeneration {
                     }
                 }
             },
-            _ => quote::quote!{},
+            _ => quote!{},
         }
     }
 
     // generate handlestruct
-    fn gen_struct_live(&mut self) -> proc_macro2::TokenStream {
+    fn gen_struct_live(&mut self) -> TokenStream {
 
         let live_name           = name::live(&self.cust_name);
         let send_channel  = self.channels.live_field_sender.clone(); 
         let fn_new_self   = 
         if  self.aaa.edit.live_new.is_none() {
             self.gen_struct_live_method_new()
-        } else { quote::quote!{}};
+        } else { quote!{}};
         let methods = &self.live_methods; 
         let impl_drop     = self.gen_live_impl_drop();
    
-        quote::quote!{
+        quote!{
             #[derive(Clone,Debug)]
             pub struct #live_name {
                 #send_channel
@@ -550,7 +554,7 @@ impl ActorMacroGeneration {
     }
 
     // this method will generate SDPL parts
-    pub fn generate(&mut self) -> proc_macro2::TokenStream {
+    pub fn generate(&mut self) -> TokenStream {
 
          
         
@@ -561,19 +565,19 @@ impl ActorMacroGeneration {
         let actor       = self.impl_block.clone();
 
         // SCRIPT 
-        let script   = if  self.aaa.edit.script.is_none() {self.gen_script()} else { quote::quote!{}};
+        let script   = if  self.aaa.edit.script.is_none() {self.gen_script()} else { quote!{}};
 
         // DIRECT
-        let direct   = if  self.aaa.edit.direct.is_none() {self.gen_impl_direct()} else { quote::quote!{}};
+        let direct   = if  self.aaa.edit.direct.is_none() {self.gen_impl_direct()} else { quote!{}};
 
         // PLAY 
-        let play     = if  self.aaa.edit.play.is_none() {self.gen_func_play()} else { quote::quote!{}};
+        let play     = if  self.aaa.edit.play.is_none() {self.gen_func_play()} else { quote!{}};
 
         // LIVE
-        let live     = if  self.aaa.edit.live.is_none() {self.gen_struct_live()} else { quote::quote!{}};
+        let live     = if  self.aaa.edit.live.is_none() {self.gen_struct_live()} else { quote!{}};
 
 
-        let res = quote::quote! {
+        let res = quote! {
 
             #actor
 
@@ -597,128 +601,128 @@ impl ActorMacroGeneration {
 
 struct Channels {
 
-    live_field_sender:   proc_macro2::TokenStream,
-    play_input_receiver: proc_macro2::TokenStream,
-    new_live_send_recv:  proc_macro2::TokenStream,
-    live_meth_send_recv: proc_macro2::TokenStream,
+    live_field_sender:   TokenStream,
+    play_input_receiver: TokenStream,
+    new_live_send_recv:  TokenStream,
+    live_meth_send_recv: TokenStream,
 
-    script_field_output: std::boxed::Box<dyn Fn(Box<syn::Type>) -> proc_macro2::TokenStream>,
+    script_field_output: std::boxed::Box<dyn Fn(Box<Type>) -> TokenStream>,
 
-    live_send_input:     proc_macro2::TokenStream,
-    live_recv_output:    proc_macro2::TokenStream,
+    live_send_input:     TokenStream,
+    live_recv_output:    TokenStream,
 }
 
 impl Channels {
 
-    pub fn new( lib: &crate::attribute::AALib,
-            channel: &crate::attribute::AAChannel,
-          cust_name: &syn::Ident, 
+    pub fn new( lib: &AALib,
+            channel: &AAChannel,
+          cust_name: &Ident, 
                             ) -> Self {
-        let live_field_sender:   proc_macro2::TokenStream;
-        let play_input_receiver: proc_macro2::TokenStream;
-        let new_live_send_recv:  proc_macro2::TokenStream;
+        let live_field_sender:   TokenStream;
+        let play_input_receiver: TokenStream;
+        let new_live_send_recv:  TokenStream;
                                 
         let type_ident = &name::script(cust_name);
         let (error_live_send,error_live_recv) = error::live_send_recv(cust_name);
         
         let mut live_meth_send_recv = 
-            quote::quote!{ let ( send, recv ) = oneshot::channel(); };
+            quote!{ let ( send, recv ) = oneshot::channel(); };
 
-        let mut script_field_output: std::boxed::Box<dyn Fn(Box<syn::Type>) -> proc_macro2::TokenStream> =
-            std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: oneshot::Sender<#out_type>, }); 
+        let mut script_field_output: std::boxed::Box<dyn Fn(Box<Type>) -> TokenStream> =
+            std::boxed::Box::new(|out_type: std::boxed::Box<Type>|quote!{ output: oneshot::Sender<#out_type>, }); 
        
-        let mut live_send_input: proc_macro2::TokenStream =
-            quote::quote!{let _ = self.sender.send(msg).await;};
+        let mut live_send_input: TokenStream =
+            quote!{let _ = self.sender.send(msg).await;};
 
 
-        let mut live_recv_output: proc_macro2::TokenStream = 
-            quote::quote!{ recv.await.expect(#error_live_recv)};
+        let mut live_recv_output: TokenStream = 
+            quote!{ recv.await.expect(#error_live_recv)};
 
         match  channel {
 
-            crate::attribute::AAChannel::Unbounded    => {
+            AAChannel::Unbounded    => {
 
                 match  lib { 
 
-                    crate::attribute::AALib::Std      => {
-                        live_field_sender   = quote::quote!{ sender: std::sync::mpsc::Sender<#type_ident>, };   
-                        play_input_receiver = quote::quote!{ receiver: std::sync::mpsc::Receiver<#type_ident>, }; 
-                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = std::sync::mpsc::channel(); };
-                        live_send_input     = quote::quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
-                        live_recv_output    = quote::quote!{ recv.recv().expect(#error_live_recv)};
+                    AALib::Std      => {
+                        live_field_sender   = quote!{ sender: std::sync::mpsc::Sender<#type_ident>, };   
+                        play_input_receiver = quote!{ receiver: std::sync::mpsc::Receiver<#type_ident>, }; 
+                        new_live_send_recv  = quote!{ let ( sender, receiver ) = std::sync::mpsc::channel(); };
+                        live_send_input     = quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
+                        live_recv_output    = quote!{ recv.recv().expect(#error_live_recv)};
                     },
 
-                    crate::attribute::AALib::Tokio    => {
-                        live_field_sender   = quote::quote!{ sender: tokio::sync::mpsc::UnboundedSender<#type_ident>, };
-                        play_input_receiver = quote::quote!{ mut receiver: tokio::sync::mpsc::UnboundedReceiver<#type_ident>, }; 
-                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = tokio::sync::mpsc::unbounded_channel(); }; 
-                        live_meth_send_recv = quote::quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
-                        script_field_output = std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
-                        live_send_input     = quote::quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
+                    AALib::Tokio    => {
+                        live_field_sender   = quote!{ sender: tokio::sync::mpsc::UnboundedSender<#type_ident>, };
+                        play_input_receiver = quote!{ mut receiver: tokio::sync::mpsc::UnboundedReceiver<#type_ident>, }; 
+                        new_live_send_recv  = quote!{ let ( sender, receiver ) = tokio::sync::mpsc::unbounded_channel(); }; 
+                        live_meth_send_recv = quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
+                        script_field_output = std::boxed::Box::new(|out_type: std::boxed::Box<Type>|quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
+                        live_send_input     = quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
                     },
 
-                    crate::attribute::AALib::AsyncStd  => {
-                        live_field_sender   = quote::quote!{ sender: async_std::channel::Sender<#type_ident>, };
-                        play_input_receiver = quote::quote!{ receiver: async_std::channel::Receiver<#type_ident>, };
-                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = async_std::channel::unbounded(); };                    
+                    AALib::AsyncStd  => {
+                        live_field_sender   = quote!{ sender: async_std::channel::Sender<#type_ident>, };
+                        play_input_receiver = quote!{ receiver: async_std::channel::Receiver<#type_ident>, };
+                        new_live_send_recv  = quote!{ let ( sender, receiver ) = async_std::channel::unbounded(); };                    
                     },
 
-                    crate::attribute::AALib::Smol      => {
-                        live_field_sender   = quote::quote!{ sender: async_channel::Sender<#type_ident>, };
-                        play_input_receiver = quote::quote!{ receiver: async_channel::Receiver<#type_ident>, };
-                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) =  async_channel::unbounded(); }; 
+                    AALib::Smol      => {
+                        live_field_sender   = quote!{ sender: async_channel::Sender<#type_ident>, };
+                        play_input_receiver = quote!{ receiver: async_channel::Receiver<#type_ident>, };
+                        new_live_send_recv  = quote!{ let ( sender, receiver ) =  async_channel::unbounded(); }; 
                     },
                 }
             },
-            crate::attribute::AAChannel::Buffer(val)    => {
+            AAChannel::Buffer(val)    => {
 
                 match  lib { 
 
-                    crate::attribute::AALib::Std      => {
-                        live_field_sender   = quote::quote!{ sender: std::sync::mpsc::SyncSender<#type_ident>, };
-                        play_input_receiver = quote::quote!{ receiver: std::sync::mpsc::Receiver<#type_ident>, };
-                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = std::sync::mpsc::sync_channel(#val); };
-                        live_send_input     = quote::quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
-                        live_recv_output    = quote::quote!{ recv.recv().expect(#error_live_recv)};
+                    AALib::Std      => {
+                        live_field_sender   = quote!{ sender: std::sync::mpsc::SyncSender<#type_ident>, };
+                        play_input_receiver = quote!{ receiver: std::sync::mpsc::Receiver<#type_ident>, };
+                        new_live_send_recv  = quote!{ let ( sender, receiver ) = std::sync::mpsc::sync_channel(#val); };
+                        live_send_input     = quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
+                        live_recv_output    = quote!{ recv.recv().expect(#error_live_recv)};
                     },
-                    crate::attribute::AALib::Tokio    => {
-                        live_field_sender   = quote::quote!{ sender: tokio::sync::mpsc::Sender<#type_ident>, };
-                        play_input_receiver = quote::quote!{ mut receiver: tokio::sync::mpsc::Receiver<#type_ident>, };
-                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = tokio::sync::mpsc::channel(#val); }; 
-                        live_meth_send_recv = quote::quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
-                        script_field_output = std::boxed::Box::new(|out_type: std::boxed::Box<syn::Type>|quote::quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
-                    },
-
-                    crate::attribute::AALib::AsyncStd  => {
-                        live_field_sender   = quote::quote!{ sender: async_std::channel::Sender<#type_ident>, };
-                        play_input_receiver = quote::quote!{ receiver: async_std::channel::Receiver<#type_ident>, };
-                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = async_std::channel::bounded(#val); };
+                    AALib::Tokio    => {
+                        live_field_sender   = quote!{ sender: tokio::sync::mpsc::Sender<#type_ident>, };
+                        play_input_receiver = quote!{ mut receiver: tokio::sync::mpsc::Receiver<#type_ident>, };
+                        new_live_send_recv  = quote!{ let ( sender, receiver ) = tokio::sync::mpsc::channel(#val); }; 
+                        live_meth_send_recv = quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
+                        script_field_output = std::boxed::Box::new(|out_type: std::boxed::Box<Type>|quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
                     },
 
-                    crate::attribute::AALib::Smol      => {
-                        live_field_sender   = quote::quote!{ sender: async_channel::Sender<#type_ident>, };
-                        play_input_receiver = quote::quote!{ receiver: async_channel::Receiver<#type_ident>, };
-                        new_live_send_recv  = quote::quote!{ let ( sender, receiver ) = async_channel::bounded(#val); };
+                    AALib::AsyncStd  => {
+                        live_field_sender   = quote!{ sender: async_std::channel::Sender<#type_ident>, };
+                        play_input_receiver = quote!{ receiver: async_std::channel::Receiver<#type_ident>, };
+                        new_live_send_recv  = quote!{ let ( sender, receiver ) = async_std::channel::bounded(#val); };
+                    },
+
+                    AALib::Smol      => {
+                        live_field_sender   = quote!{ sender: async_channel::Sender<#type_ident>, };
+                        play_input_receiver = quote!{ receiver: async_channel::Receiver<#type_ident>, };
+                        new_live_send_recv  = quote!{ let ( sender, receiver ) = async_channel::bounded(#val); };
                     },
                 }
             },
-            crate::attribute::AAChannel::Inter  => {
+            AAChannel::Inter  => {
 
-                live_field_sender   = quote::quote!{ 
+                live_field_sender   = quote!{ 
                     queue: std::sync::Arc<std::sync::Mutex<Option<Vec<#type_ident>>>>,
                     condvar:                       std::sync::Arc<std::sync::Condvar>,
                 };
-                play_input_receiver = quote::quote!{ 
+                play_input_receiver = quote!{ 
                     queue: std::sync::Arc<std::sync::Mutex<Option<Vec<#type_ident>>>>,
                     condvar:                       std::sync::Arc<std::sync::Condvar>,
                 };
-                new_live_send_recv  = quote::quote!{ 
+                new_live_send_recv  = quote!{ 
                     let queue       = std::sync::Arc::new(std::sync::Mutex::new(Some(vec![])));
                     let condvar     = std::sync::Arc::new(std::sync::Condvar::new());
                 };
 
                 let error_msg = error::live_guard(cust_name);
-                live_send_input     =  quote::quote!{
+                live_send_input     =  quote!{
                     {
                         let mut guard = self.queue.lock().expect(#error_msg);
             
@@ -728,7 +732,7 @@ impl Channels {
                     self.condvar.notify_one();
                 };
 
-                live_recv_output     =  quote::quote!{recv.recv().expect(#error_live_recv)};
+                live_recv_output     =  quote!{recv.recv().expect(#error_live_recv)};
             },
         }
 

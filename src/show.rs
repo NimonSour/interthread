@@ -1,3 +1,4 @@
+use crate::attribute;
 
 use std::fs::OpenOptions;
 use std::io::Write;
@@ -83,7 +84,7 @@ fn write_file( file: syn::File, path: &std::path::PathBuf ) -> Result<(), std::i
     Ok(())
 }
 
-pub fn example_show( file: syn::File, path: &std::path::PathBuf, lib: Option<crate::attribute::AALib> ) -> std::path::PathBuf {
+pub fn example_show( file: syn::File, path: &std::path::PathBuf, lib: Option<attribute::AALib> ) -> std::path::PathBuf {
 
     let main_file = if lib.is_none() { None } else {  be_main(path, lib.unwrap()) };
 
@@ -112,7 +113,7 @@ pub fn example_show( file: syn::File, path: &std::path::PathBuf, lib: Option<cra
     }
 }
 
-fn be_main( path: &std::path::PathBuf ,lib: crate::attribute::AALib) ->  Option<syn::File> { 
+fn be_main( path: &std::path::PathBuf ,lib: attribute::AALib) ->  Option<syn::File> { 
     
     if let Some(stem) = path.file_stem(){
         if let Some(stem) = stem.to_str(){

@@ -1,4 +1,6 @@
- 
+use crate::error::{self, met_new_found};
+use proc_macro_error::abort;
+use quote::{quote,format_ident};
 
 #[derive(Debug,Clone)]
 pub enum ActorMethod {
@@ -76,14 +78,14 @@ impl ActorMethodNew {
     pub fn  live_ret_statement(&self,  live_var: &syn::Ident ) -> proc_macro2::TokenStream {
        
         match self.res_opt {
-            Some(true)  =>  quote::quote!{ Ok ( #live_var )},
-            Some(false) =>  quote::quote!{ Some( #live_var )},
-            None        =>  quote::quote!{ #live_var },
+            Some(true)  =>  quote!{ Ok ( #live_var )},
+            Some(false) =>  quote!{ Some( #live_var )},
+            None        =>  quote!{ #live_var },
         }
     }
 
     pub fn unwrap_sign(&self) -> proc_macro2::TokenStream {
-        if self.res_opt.is_none(){ quote::quote!{}} else { quote::quote!{?}}
+        if self.res_opt.is_none(){ quote!{}} else { quote!{?}}
     }
         
 }
@@ -94,7 +96,7 @@ where
     O: ToString + ?Sized,
     N: ToString + ?Sized,
 {
-    let mut type_str = quote::quote! {#ty}.to_string();
+    let mut type_str = quote! {#ty}.to_string();
     type_str = type_str.replace( ")"," )");
     type_str = type_str.replace( "(","( ");
     type_str = format!(" {type_str} ");
@@ -106,7 +108,7 @@ where
     }
 
     let msg = format!("Internal Error. 'method::replace'. Could not parse &str to provided type!");
-    proc_macro_error::abort!(proc_macro2::Span::call_site(), msg);
+    abort!(proc_macro2::Span::call_site(), msg);
 }
 
 
@@ -119,8 +121,8 @@ pub fn get_new_sig( sig: &syn::Signature, name: &syn::Ident) -> syn::Signature {
 
 fn check_self_return(name: &syn::Ident, sig: &syn::Signature) -> (syn::Signature,Option<bool>) {
 
-    let option_ident = quote::format_ident!("Option");
-    let result_ident = quote::format_ident!("Result");
+    let option_ident = format_ident!("Option");
+    let result_ident = format_ident!("Result");
     
     match &sig.output {
         syn::ReturnType::Type(_,ty_path) => {
@@ -166,43 +168,43 @@ fn check_self_return(name: &syn::Ident, sig: &syn::Signature) -> (syn::Signature
                                                         return (get_new_sig(sig,name), res_opt);
                                                     }
 
-                                                    let (msg,note,help) = crate::error::met_new_not_instance(sig, name, quote::quote!{#typ},res_opt);
-                                                    proc_macro_error::abort!(typ,msg;note=note;help=help); 
+                                                    let (msg,note,help) = error::met_new_not_instance(sig, name, quote!{#typ},res_opt);
+                                                    abort!(typ,msg;note=note;help=help); 
                                                 },
                                                 bit => {
-                                                    let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#segment},res_opt);
-                                                    proc_macro_error::abort!(bit,msg;note=note;help=help); 
+                                                    let (msg,note,help) = met_new_found(sig, name, quote!{#segment},res_opt);
+                                                    abort!(bit,msg;note=note;help=help); 
                                                 },
                                             }
                                         },
                                         bit => {
-                                            let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#segment},res_opt);
-                                            proc_macro_error::abort!(bit,msg;note=note;help=help); 
+                                            let (msg,note,help) = met_new_found(sig, name, quote!{#segment},res_opt);
+                                            abort!(bit,msg;note=note;help=help); 
                                         },
                                     }
                                 }
-                                let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#segment},res_opt);
-                                proc_macro_error::abort!(segment.arguments,msg;note=note;help=help); 
+                                let (msg,note,help) = met_new_found(sig, name, quote!{#segment},res_opt);
+                                abort!(segment.arguments,msg;note=note;help=help); 
                             },
                             bit => {
-                                let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#segment},res_opt);
-                                proc_macro_error::abort!(bit,msg;note=note;help=help);
+                                let (msg,note,help) = met_new_found(sig, name, quote!{#segment},res_opt);
+                                abort!(bit,msg;note=note;help=help);
                             },
                         }
                     }
-                    let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#p},None);
-                    proc_macro_error::abort!(p,msg;note=note;help=help);
+                    let (msg,note,help) = met_new_found(sig, name, quote!{#p},None);
+                    abort!(p,msg;note=note;help=help);
                 },
                 bit => {
-                    let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#bit},None);
-                    proc_macro_error::abort!(bit,msg;note=note;help=help);
+                    let (msg,note,help) = met_new_found(sig, name, quote!{#bit},None);
+                    abort!(bit,msg;note=note;help=help);
                 },
             }
         },
         
         bit => { 
-            let (msg,note,help) = crate::error::met_new_found(sig, name, quote::quote!{#bit},None);
-            proc_macro_error::abort!(bit,msg;note=note;help=help);
+            let (msg,note,help) = met_new_found(sig, name, quote!{#bit},None);
+            abort!(bit,msg;note=note;help=help);
         },
     }
 }
@@ -239,8 +241,8 @@ pub fn get_methods( name: &syn::Ident, item_impl: syn::ItemImpl, stat:bool ) -> 
 
     let mut loc                   = vec![];
     let mut method_new      = None;
-    let ident_new                            = quote::format_ident!("new");
-    let ident_try_new                        = quote::format_ident!("try_new");
+    let ident_new                            = format_ident!("new");
+    let ident_try_new                        = format_ident!("try_new");
 
     for i in item_impl.items {
         match i {
@@ -322,7 +324,7 @@ pub fn ident_arguments_output( sig: &syn::Signature  ) -> (syn::Ident,Vec<syn::F
 }
  
 pub fn change_signature_refer( signature: &mut syn::Signature ) {
-    let recv: syn::Receiver = syn::parse2(quote::quote!{ &self }).unwrap();
+    let recv: syn::Receiver = syn::parse2(quote!{ &self }).unwrap();
     let slf = syn::FnArg::Receiver(recv);
     signature.inputs.insert(0,slf);
 }
@@ -352,8 +354,8 @@ pub fn args_to_ident_type(args: &Vec<syn::FnArg>) -> (Vec<syn::Ident>, Vec<Box<s
 pub fn arguments_ident_type( args: &Vec<syn::FnArg> ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream) { 
 
     let (idents,types) = args_to_ident_type(args); 
-    let args_ident =  quote::quote!{ (#(#idents),*)};
-    let args_type  =  quote::quote!{ (#(#types),*) };
+    let args_ident =  quote!{ (#(#idents),*)};
+    let args_type  =  quote!{ (#(#types),*) };
     ( args_ident, args_type )
 }
 

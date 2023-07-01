@@ -1,4 +1,8 @@
 
+use proc_macro_error::abort;
+use proc_macro2::Span;
+
+use quote::{quote,format_ident};
 pub struct UseMacro {
 
     mod_name:  syn::Ident,
@@ -13,8 +17,8 @@ impl UseMacro {
 
     pub fn new( mac_name: &str ) -> Self {
 
-        let mod_name  = quote::format_ident!("{}",crate::INTERTHREAD);
-        let mac_name  = quote::format_ident!("{}",mac_name); 
+        let mod_name  = format_ident!("{}",crate::INTERTHREAD);
+        let mac_name  = format_ident!("{}",mac_name); 
         
         let mac_path   = Self::create_path(Some(mod_name.clone()), mac_name.clone());
         
@@ -181,17 +185,17 @@ impl UseMacro {
 
         let tokens = if mod_name.is_some() { 
             let mod_name = mod_name.unwrap();
-            quote::quote! { #mod_name :: #mac_name }
+            quote! { #mod_name :: #mac_name }
         }
         else {
-            quote::quote! { #mac_name }
+            quote! { #mac_name }
         };
     
         if let Ok(p) = syn::parse2(tokens.into()){
             return p
         }
         else {
-            proc_macro_error::abort!( proc_macro2::Span::call_site(),"Internal Error. 'file::create_path'. Could not parse the path!"); 
+            abort!( Span::call_site(),"Internal Error. 'file::create_path'. Could not parse the path!"); 
         }
     }
 

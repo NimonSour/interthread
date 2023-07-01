@@ -1,3 +1,9 @@
+use crate::error;
+use crate::use_macro;
+
+use proc_macro2::Span;
+use proc_macro_error::abort;
+use quote::{quote,format_ident};
 
 
 #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -10,7 +16,7 @@ fn to_usize(value: syn::LitInt) -> usize {
         
     let msg  = format!("Expected a positive integer 1..{:?}.", usize::MAX );
     value.base10_parse::<usize>()
-         .unwrap_or_else(|_| proc_macro_error::abort!(value,msg))   
+         .unwrap_or_else(|_| abort!(value,msg))   
 } 
 
 //-----------------------  EXAMPLE 
@@ -57,7 +63,7 @@ impl ExampleAttributeArguments {
                             return Ok(());
                         }
                         else {
-                            proc_macro_error::abort!(val, format!("Path - {:?} does not exists.",val.value())); 
+                            abort!(val, format!("Path - {:?} does not exists.",val.value())); 
                         } 
                     },
                     _ => {
@@ -85,13 +91,13 @@ impl ExampleAttributeArguments {
                     else {
                         let arg  = meta.path.get_ident().unwrap();
                         let msg  = format!("Unknown 'expand' option  -  {:?} .", arg.to_string());
-                        proc_macro_error::abort!(arg, msg; help=crate::error::AVAIL_EXPAND);
+                        abort!(arg, msg; help=error::AVAIL_EXPAND);
                     }
                 });
             }
             else {
                 let ident  = meta.path.get_ident().unwrap();
-                crate::error::unknown_attr_arg("example", ident);
+                error::unknown_attr_arg("example", ident);
                 Ok(())
             }
         };
@@ -121,7 +127,7 @@ impl ExampleAttributeArguments {
 
         if  self.file.is_none() {
             let msg = "Expected a 'file' argument with a path to a file.  file=\"path\\to\\file.rs\"";
-            proc_macro_error::abort!(proc_macro2::Span::call_site(), msg )
+            abort!(Span::call_site(), msg )
         }
         Ok(())
     }
@@ -174,7 +180,7 @@ impl AALib {
             val if val == "async_std".to_string() =>   AALib::AsyncStd,
             val => {
                 let msg = format!("Unknown option  -  {:?} for 'channel' ", val);
-                proc_macro_error::abort!( s, msg; help=crate::error::AVAIL_LIB );   
+                abort!( s, msg; help=error::AVAIL_LIB );   
             } 
         }
     }
@@ -210,7 +216,7 @@ impl AAChannel {
                     val if val == "inter".to_string()       => return AAChannel::Inter,
                     val => {
                         let msg = format!("Unknown option  -  {:?} for 'channel' ", val);
-                        proc_macro_error::abort!( s, msg; help=crate::error::AVAIL_CHANNEL );
+                        abort!( s, msg; help=error::AVAIL_CHANNEL );
                     },
                 }
             },
@@ -251,7 +257,7 @@ pub struct AAEdit {
 impl AAEdit {
 
     fn parse(&mut self, path: &syn::Path ){
-        let msg = format!("Unknown option  -  {:?} for 'edit' ", quote::quote!{#path}.to_string());
+        let msg = format!("Unknown option  -  {:?} for 'edit' ", quote!{#path}.to_string());
 
         if path.segments.len() == 1 {
 
@@ -259,16 +265,16 @@ impl AAEdit {
             else if path.is_ident("direct")  {self.direct = Some(path.clone())}
             else if path.is_ident("play")    {self.play   = Some(path.clone())}
             else if path.is_ident("live")    {self.live   = Some(path.clone())}
-            else {  proc_macro_error::abort!(path, msg ;help = crate::error::AVAIL_EDIT) }
+            else {  abort!(path, msg ;help = error::AVAIL_EDIT) }
 
         } else {
 
-            let live     = quote::format_ident!("live");
-            let new      = quote::format_ident!("new");
-            let live_new  = crate::use_macro::UseMacro::create_path(Some(live),new);
+            let live     = format_ident!("live");
+            let new      = format_ident!("new");
+            let live_new  = use_macro::UseMacro::create_path(Some(live),new);
            
             if live_new.eq(path) { self.live_new = Some(path.clone()) }
-            else {  proc_macro_error::abort!(path, msg ;help = crate::error::AVAIL_EDIT) }
+            else {  abort!(path, msg ;help = error::AVAIL_EDIT) }
         }
     }
 }
@@ -385,14 +391,14 @@ impl ParseActorAttributeArguments {
                         let str_name = val.value();
 
                         if str_name == "".to_string() {
-                            proc_macro_error::abort!(ident,"Attribute field 'name' is empty. Enter a name.") 
+                            abort!(ident,"Attribute field 'name' is empty. Enter a name.") 
                         }
                         else {
-                            self.name.1 = Some(quote::format_ident!("{}",val.value()));
+                            self.name.1 = Some(format_ident!("{}",val.value()));
                         } 
                         return Ok(());
                     },
-                    v => proc_macro_error::abort!(v, crate::error::error_name_type( ident.clone(), "str".into()); help=crate::error::AVAIL_ACTOR ),
+                    v => abort!(v, error::error_name_type( ident.clone(), "str".into()); help=error::AVAIL_ACTOR ),
                 }
             }
 
@@ -407,7 +413,7 @@ impl ParseActorAttributeArguments {
                         self.lib.1 = AALib::from(&val);
                         return Ok(());
                     },
-                    v => proc_macro_error::abort!(v, crate::error::error_name_type( ident.clone(), "str".into()),; help=crate::error::AVAIL_ACTOR ),
+                    v => abort!(v, error::error_name_type( ident.clone(), "str".into()),; help=error::AVAIL_ACTOR ),
                 }
             }
 
@@ -422,7 +428,7 @@ impl ParseActorAttributeArguments {
                         self.assoc.1 = val.value();
                         return Ok(());
                     },
-                    v => proc_macro_error::abort!(v, crate::error::error_name_type( ident.clone(), "bool".into()); help=crate::error::AVAIL_ACTOR ),
+                    v => abort!(v, error::error_name_type( ident.clone(), "bool".into()); help=error::AVAIL_ACTOR ),
                 }
             }
 
@@ -442,7 +448,7 @@ impl ParseActorAttributeArguments {
 
                         self.channel.1 = AAChannel::from(Either::L(val));
                     },
-                    v => proc_macro_error::abort!(v, crate::error::error_name_type( ident.clone(), "int | str".into()),; help=crate::error::AVAIL_ACTOR ),
+                    v => abort!(v, error::error_name_type( ident.clone(), "int | str".into()),; help=error::AVAIL_ACTOR ),
                 }
                 return Ok(());
             }
@@ -451,7 +457,7 @@ impl ParseActorAttributeArguments {
             else if meta.path.is_ident("edit"){
                 
                 if meta.input.clone().to_string().is_empty() {
-                    proc_macro_error::abort!(ident,"Enter an option for 'edit' or remove it. ";help=crate::error::AVAIL_EDIT );
+                    abort!(ident,"Enter an option for 'edit' or remove it. ";help=error::AVAIL_EDIT );
                 }
                 match meta.parse_nested_meta(|meta| {  
 
@@ -464,13 +470,13 @@ impl ParseActorAttributeArguments {
                     },
                     Err(e) => {
 
-                        proc_macro_error::abort!(e.span(),e.to_string() ;help=crate::error::AVAIL_ACTOR )
+                        abort!(e.span(),e.to_string() ;help=error::AVAIL_ACTOR )
                     }
                 }
             }
             // UNKNOWN ARGUMENT
             else {
-                crate::error::unknown_attr_arg("actor",ident )
+                error::unknown_attr_arg("actor",ident )
             }
         }
         Ok(())

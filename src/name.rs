@@ -1,24 +1,26 @@
 
+use quote::format_ident;
+
 
 pub fn script(name: &syn::Ident) -> syn::Ident{
     let new_name = name.to_string() + "Script";
-    quote::format_ident!("{}",new_name)
+    format_ident!("{}",new_name)
 }
 pub fn script_field(name: &syn::Ident) -> syn::Ident{
     let new_name = fn_to_struct(&name.to_string());
-    quote::format_ident!("{}",new_name)
+    format_ident!("{}",new_name)
 }
 pub fn direct(name: &syn::Ident) -> syn::Ident{
     let new_name = struct_to_fn(&name.to_string()) + "_direct";
-    quote::format_ident!("{}",new_name)
+    format_ident!("{}",new_name)
 }
 pub fn play(name: &syn::Ident) -> syn::Ident{
     let new_name = struct_to_fn(&name.to_string()) + "_play";
-    quote::format_ident!("{}",new_name)
+    format_ident!("{}",new_name)
 }
 pub fn live(name: &syn::Ident) -> syn::Ident{
     let new_name = name.to_string() + "Live";
-    quote::format_ident!("{}",new_name)
+    format_ident!("{}",new_name)
 }
 
 

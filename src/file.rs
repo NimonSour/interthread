@@ -1,9 +1,15 @@
+use crate::attribute::{AALib,AAExpand,ParseActorAttributeArguments};
+use crate::use_macro::UseMacro;
+use crate::actor_gen;
+
+use proc_macro_error::abort;
+use proc_macro2::Span;
 
 pub fn code_to_file(code: proc_macro2::TokenStream ) -> syn::File {
     match  syn::parse::<syn::File>(code.into() ){
         Ok( file ) => {return file},
         Err(e) => {
-            proc_macro_error::abort!( proc_macro2::Span::call_site() ,e );
+            abort!( Span::call_site() ,e );
         },
     }
 }
@@ -17,27 +23,27 @@ pub fn get_file( path: &std::path::PathBuf ) -> syn::File {
                     Ok(file)  => { return file; },
                     Err(_) => {
                         let msg = format!("Internal Error. 'file::get_file'. Could not parse file {:?}!", path.file_name().unwrap().to_string_lossy());
-                        proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
+                        abort!( Span::call_site(),msg );
                     },
                 }
             },
             Err(_) => {
                 let msg = format!("Internal Error.'file::get_file'. Could not read file!");
-                proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
+                abort!( Span::call_site(),msg );
             }
         }
     }
     let msg = format!("Internal Error.'file::get_file'. File {:?} does not exist!", path.file_name().unwrap().to_string_lossy());
-    proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
+    abort!( Span::call_site(),msg );
 }
 
-pub fn expand_macros( path: &std::path::PathBuf, macs: &Vec<crate::attribute::AAExpand>) -> (syn::File, crate::attribute::AALib){
+pub fn expand_macros( path: &std::path::PathBuf, macs: &Vec<AAExpand>) -> (syn::File, AALib){
     let mut file    = get_file(path);
-    let mut libr = crate::attribute::AALib::default();
+    let mut libr = AALib::default();
     for mac in macs {
         let(fil,lib) = expand_macro(file,mac);
         file = fil;
-        if crate::attribute::AALib::default()!= lib{
+        if AALib::default()!= lib{
             libr = lib;
         }
         
@@ -45,10 +51,10 @@ pub fn expand_macros( path: &std::path::PathBuf, macs: &Vec<crate::attribute::AA
     (file,libr)
 }
 
-pub fn expand_macro( mut file: syn::File, mac: &crate::attribute::AAExpand  ) -> (syn::File, crate::attribute::AALib){ 
-    let mut lib            = crate::attribute::AALib::default();
-    let mut use_macro   = crate::use_macro::UseMacro::new(mac.to_str());
-    let mut use_example = crate::use_macro::UseMacro::new(crate::EXAMPLE);
+pub fn expand_macro( mut file: syn::File, mac: &AAExpand  ) -> (syn::File, AALib){ 
+    let mut lib            = AALib::default();
+    let mut use_macro   = UseMacro::new(mac.to_str());
+    let mut use_example = UseMacro::new(crate::EXAMPLE);
 
     let mut new_items_file: Vec<Vec<syn::Item>> = Vec::new();
 
@@ -63,7 +69,7 @@ pub fn expand_macro( mut file: syn::File, mac: &crate::attribute::AAExpand  ) ->
                     for attr in &impl_block.attrs.clone() {
                         if use_macro.is(attr){
                            
-                            let mut paaa = crate::attribute::ParseActorAttributeArguments::default();
+                            let mut paaa = ParseActorAttributeArguments::default();
                             
                             let _ = attr.clone().parse_nested_meta(|meta| paaa.parse(meta));
                             let aaa = paaa.get_arguments();
@@ -75,7 +81,7 @@ pub fn expand_macro( mut file: syn::File, mac: &crate::attribute::AAExpand  ) ->
                             
                             //generate macro
                             let mut inter_actor = 
-                            crate::actor_gen::ActorMacroGeneration::new( aaa, impl_block.clone() );
+                            actor_gen::ActorMacroGeneration::new( aaa, impl_block.clone() );
 
                             let code = inter_actor.generate();
                             let f = code_to_file(code);
@@ -125,12 +131,12 @@ pub fn expand_macro( mut file: syn::File, mac: &crate::attribute::AAExpand  ) ->
 
 }
 
-pub fn main_file( mod_name: String, lib: crate::attribute::AALib ) -> syn::File {
+pub fn main_file( mod_name: String, lib: AALib ) -> syn::File {
 
     let mod_name = quote::format_ident!("{}",mod_name);
 
     let code = match lib {
-        crate::attribute::AALib::Std => { 
+        AALib::Std => { 
             quote::quote!{
                 mod #mod_name;
                 
@@ -139,7 +145,7 @@ pub fn main_file( mod_name: String, lib: crate::attribute::AALib ) -> syn::File 
                 }
             }
         },
-        crate::attribute::AALib::Tokio => {
+        AALib::Tokio => {
             quote::quote!{
                 mod #mod_name;
 
@@ -149,7 +155,7 @@ pub fn main_file( mod_name: String, lib: crate::attribute::AALib ) -> syn::File 
                 }
             }
         },
-        crate::attribute::AALib::AsyncStd => { 
+        AALib::AsyncStd => { 
             quote::quote!{
                 mod #mod_name;
                 
@@ -159,7 +165,7 @@ pub fn main_file( mod_name: String, lib: crate::attribute::AALib ) -> syn::File 
                 }
             }
         },
-        crate::attribute::AALib::Smol => {
+        AALib::Smol => {
             quote::quote!{
                 mod #mod_name;
     

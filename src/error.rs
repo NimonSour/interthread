@@ -1,3 +1,8 @@
+use crate::name;
+use quote::quote;
+use proc_macro_error::abort;
+use proc_macro2::TokenStream;
+
 pub fn met_new_note_help(name: &syn::Ident) -> (String, String)  {
     let name = name.to_string();
 
@@ -39,7 +44,7 @@ pub fn met_new_note_help(name: &syn::Ident) -> (String, String)  {
 }
 
 
-pub fn met_new_found(sig: &syn::Signature, name: &syn::Ident, bit: proc_macro2::TokenStream, res_opt: Option<bool>) -> (String,String,String){
+pub fn met_new_found(sig: &syn::Signature, name: &syn::Ident, bit: TokenStream, res_opt: Option<bool>) -> (String,String,String){
     let sig_name     = sig.ident.to_string();
     let act_name     = name.to_string();
     let mut bit_str  = bit.to_string();
@@ -76,7 +81,7 @@ pub fn met_new_found(sig: &syn::Signature, name: &syn::Ident, bit: proc_macro2::
     (msg,note,help)
 }
 
-pub fn met_new_not_instance(sig: &syn::Signature, name: &syn::Ident, bit: proc_macro2::TokenStream, res_opt: Option<bool>) -> (String,String,String){
+pub fn met_new_not_instance(sig: &syn::Signature, name: &syn::Ident, bit: TokenStream, res_opt: Option<bool>) -> (String,String,String){
     let sig_name     = sig.ident.to_string();
     let act_name     = name.to_string();
     let bit_str  = bit.to_string();
@@ -104,10 +109,10 @@ pub fn unknown_attr_arg( aa: &str, ident: &syn::Ident ){
 
     match aa.to_string() {
 
-        val if val == "actor".to_string()   => proc_macro_error::abort!(ident, msg ;help = AVAIL_ACTOR  ),                   
-        val if val == "expand".to_string()  => proc_macro_error::abort!(ident, msg ;help = AVAIL_EXPAND ),
-        val if val == "example".to_string() => proc_macro_error::abort!(ident, msg ;help = AVAIL_EXAMPLE),
-        val if val == "edit".to_string()    => proc_macro_error::abort!(ident, msg ;help = AVAIL_EDIT   ),
+        val if val == "actor".to_string()   => abort!(ident, msg ;help = AVAIL_ACTOR  ),                   
+        val if val == "expand".to_string()  => abort!(ident, msg ;help = AVAIL_EXPAND ),
+        val if val == "example".to_string() => abort!(ident, msg ;help = AVAIL_EXAMPLE),
+        val if val == "edit".to_string()    => abort!(ident, msg ;help = AVAIL_EDIT   ),
         _ => (),
     }
 }
@@ -226,35 +231,35 @@ pub static AVAIL_ACTOR: &'static str = "
 
 
 
-pub fn live_send_recv(cust_name: &syn::Ident, ) -> (proc_macro2::TokenStream, proc_macro2::TokenStream){
+pub fn live_send_recv(cust_name: &syn::Ident, ) -> (TokenStream, TokenStream){
 
-    let live_name  = &crate::name::live(cust_name);
+    let live_name  = &name::live(cust_name);
     let send_msg = format!("'{live_name}::method.send'. Channel is closed!");
     let recv_msg = format!("'{live_name}::method.recv'. Channel is closed!");
-    (quote::quote!{#send_msg},quote::quote!{#recv_msg})
+    (quote!{#send_msg},quote!{#recv_msg})
 }
 
-pub fn live_guard(cust_name: &syn::Ident) -> proc_macro2::TokenStream {
-    let live_name  = &crate::name::live(cust_name);
+pub fn live_guard(cust_name: &syn::Ident) -> TokenStream {
+    let live_name  = &name::live(cust_name);
     let msg        = format!("'{live_name}::method'. Failed to unwrap MutexGuard!");
-    quote::quote!{#msg}
+    quote!{#msg}
 }
 
-pub fn play_guard(cust_name: &syn::Ident) -> proc_macro2::TokenStream {
-    let play_name  = &crate::name::play(cust_name);
+pub fn play_guard(cust_name: &syn::Ident) -> TokenStream {
+    let play_name  = &name::play(cust_name);
     let msg        = format!("'{play_name}::queuing'. Failed to unwrap MutexGuard!");
-    quote::quote!{#msg}
+    quote!{#msg}
 }
 
-pub fn end_of_life(name: &syn::Ident) -> proc_macro2::TokenStream {
+pub fn end_of_life(name: &syn::Ident) -> TokenStream {
     let msg    = format!("{} end of life ...",&name.to_string());
-    quote::quote!{
+    quote!{
         eprintln!(#msg);
     }
 }
 
-pub fn direct_send(cust_name: &syn::Ident) -> proc_macro2::TokenStream {
-    let direct_name  = &crate::name::direct(cust_name);
+pub fn direct_send(cust_name: &syn::Ident) -> TokenStream {
+    let direct_name  = &name::direct(cust_name);
     let msg = format!("'{direct_name}.send'. Channel closed");
-    quote::quote!{#msg}
+    quote!{#msg}
 }

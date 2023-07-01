@@ -62,7 +62,8 @@ they were directly working with the original object.
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.8"
+[dependencies]
+interthread = "0.1.9"
 oneshot     = "0.1.5" 
 ```
 
@@ -147,10 +148,12 @@ with the only difference being that the methods will
 be marked as `async` and need to be `await`ed for 
 asynchronous execution.
 
+### Examples
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.8"
+[dependencies]
+interthread = "0.1.9"
 tokio       = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -210,11 +213,12 @@ async fn main() {
 
 The [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) macro is applied to an impl block, allowing it to be used with both structs and enums to create actor implementations.
 
-
+### Examples
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.8"
+[dependencies]
+interthread = "0.1.9"
 oneshot     = "0.1.5" 
 ```
 
@@ -247,11 +251,11 @@ pub enum Pet {
 
 #[interthread::actor(channel=2)]
 impl Pet {
-    // Of course, not in this case, but if 
+    // not in this case, but if 
     // the types used with `Pet` have different
     // parameters for the `new` method, 
-    // simply pass a ready `Self` type.
-    // Remember, the `new` method is a requirement!
+    // simply pass a ready `Self` type
+    // like this
     pub fn new( pet: Self) -> Self {
         pet
     }
@@ -315,11 +319,12 @@ explore more and more advanced techniques and unlock the full potential of
 parallel and concurrent programming, paving the way for 
 improved performance and streamlined development processes.
 
-
+### Examples
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.8"
+[dependencies]
+interthread = "0.1.9"
 tokio       = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -382,6 +387,8 @@ The above example demonstrates a more advanced usage of the [`actor`](https://do
 
 To modify the state we'll need to use some additional types  "shared state types" or "thread-safe types".
 
+### Examples
+
 ```rust
 
 use tokio::time::{sleep,Duration};
@@ -440,10 +447,13 @@ Total tasks - 60
 The following example serves as a demonstration of the  flexibility provided by the [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) macro. It showcases how 
 easy is to customize and modify various aspects of the code generation process. 
 
+### Examples
+
 Filename: Cargo.toml
 
 ```text
-interthread = "0.1.8"
+[dependencies]
+interthread = "0.1.9"
 oneshot     = "0.1.5" 
 ```
 
@@ -457,7 +467,7 @@ pub struct MyActor {
     value: i8,
 }
 
-// note we use here the `edit` argument
+// we use here the `edit` argument
 // indicating the part of code 
 // we want to change
 #[actor(channel=2, edit(play))]
@@ -559,4 +569,5 @@ Your support helps ensure its continued development
 Join `interthread` on GitHub for discussions! [![GitHub](https://img.shields.io/badge/GitHub-%2312100E.svg?&style=plastic&logo=GitHub&logoColor=white)](https://github.com/NimonSour/interthread/discussions/1)
 
 Please check regularly for new releases and upgrade to the latest version!
+
 Happy coding! 
