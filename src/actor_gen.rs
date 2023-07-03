@@ -348,6 +348,62 @@ impl ActorMacroGeneration {
         }
     }
 
+    fn gen_impl_debut(&self) -> TokenStream {
+        let script_name = name::script(&self.cust_name);
+        if self.aaa.id {
+            quote!{
+                impl #script_name {
+
+                    pub fn debut() -> std::sync::Arc<std::time::SystemTime>{
+                        static FLAG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+                        loop {
+                            let current = FLAG.load(std::sync::atomic::Ordering::SeqCst);
+                            let time = std::sync::Arc::new(std::time::SystemTime::now());
+                            if let Ok(_) = FLAG.compare_exchange(
+                                current,
+                                !current,
+                                std::sync::atomic::Ordering::SeqCst,
+                                std::sync::atomic::Ordering::Relaxed,
+                            ){ return time }
+                        }
+                    }
+                }
+            }
+        }
+        else {
+            quote!{}
+        }
+    }
+
+    fn gen_impl_eq_ord(&self) -> TokenStream {
+        let live_name = name::live(&self.cust_name);
+        if self.aaa.id {
+            quote!{
+                impl PartialEq for #live_name {
+                    fn eq(&self, other: &Self) -> bool {
+                        *self.debut == *other.debut
+                    }
+                }
+                
+                impl Eq for #live_name {}
+                
+                impl PartialOrd for #live_name {
+                    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+                        other.debut.partial_cmp(&self.debut)
+                    }
+                }
+                
+                impl Ord for #live_name {
+                    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+                        other.debut.cmp(&self.debut)
+                    }
+                }
+            }
+        }
+        else {
+            quote!{}
+        }
+    }
 
     fn gen_script(&mut self) -> TokenStream {
 
@@ -474,6 +530,7 @@ impl ActorMacroGeneration {
 
         let name                    = &self.name;
         let play_name                = name::play(&self.cust_name);
+        let script_name              = name::script(&self.cust_name);
         let new_sig             = &self.met_new.new_sig;
         let (args_ident, _ )   = method::arguments_ident_type(&self.met_new.get_arguments());
         let live_var                 = format_ident!("actor_live");
@@ -482,24 +539,30 @@ impl ActorMacroGeneration {
         let unwrapped          = self.met_new.unwrap_sign();
         let return_statement   = self.met_new.live_ret_statement(&live_var);
 
-        let (init_actor, play_args) =
-        match  self.aaa.channel {
-            AAChannel::Inter => {
-                ( quote!{ Self{ queue: queue.clone(), condvar: condvar.clone() } }, quote!{ queue, condvar, actor  } )
-            },
-            _  => {
-                ( quote!{ Self{ sender} }, quote!{ receiver, actor } )
-            },
+        let (init_actor, play_args) = {
+            let id_debut = if self.aaa.id {quote!{ ,debut,name}} else {quote!{}};
+            match  self.aaa.channel {
+                AAChannel::Inter => {
+                    ( quote!{ Self{ queue: queue.clone(), condvar: condvar.clone() #id_debut } }, quote!{ queue, condvar, actor  } )
+                },
+                _  => {
+                    ( quote!{ Self{ sender #id_debut } }, quote!{ receiver, actor } )
+                },
+            }
         };
 
         let play_call =  quote!{ #play_name(#play_args) }; 
         let spawn     =  self.live_new_spawn(play_call);
+        let id_debut  =  if self.aaa.id {quote!{let debut =  #script_name ::debut();}} else { quote!{}};
+        let id_name   =  if self.aaa.id {quote!{let name = String::from("");}} else { quote!{}};
 
         quote!{
 
             pub #new_sig {
                 #send_recv_channel
                 let actor = #name:: #func_new_name #args_ident #unwrapped;
+                #id_debut
+                #id_name
                 let #live_var = #init_actor;
                 #spawn
                 #return_statement
@@ -536,11 +599,15 @@ impl ActorMacroGeneration {
         } else { quote!{}};
         let methods = &self.live_methods; 
         let impl_drop     = self.gen_live_impl_drop();
-   
+        
+        let id_debut = if self.aaa.id { quote!{ pub debut: std::sync::Arc<std::time::SystemTime>,}} else { quote!{}};
+        let id_name = if self.aaa.id { quote!{pub name: String,}} else { quote!{}};
         quote!{
             #[derive(Clone,Debug)]
             pub struct #live_name {
                 #send_channel
+                #id_debut
+                #id_name
             }
 
             impl #live_name  {
@@ -560,7 +627,9 @@ impl ActorMacroGeneration {
         
         // populate
         self.gen_tokio_actor_model_bits();
-
+        let impl_debut = self.gen_impl_debut();
+        let id_impl_traits = self.gen_impl_eq_ord();
+       
         // ACTOR
         let actor       = self.impl_block.clone();
 
@@ -575,19 +644,20 @@ impl ActorMacroGeneration {
 
         // LIVE
         let live     = if  self.aaa.edit.live.is_none() {self.gen_struct_live()} else { quote!{}};
-
+        
 
         let res = quote! {
 
             #actor
 
             #script
-
+                #impl_debut
             #direct
 
             #play
 
             #live
+                #id_impl_traits
         };
 
         res
@@ -748,5 +818,7 @@ impl Channels {
         }
     }
 }
+
+
 
 

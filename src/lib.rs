@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "0.1.9"
+//!interthread = "0.2.0"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -565,11 +565,12 @@ static EXAMPLES: &'static str               = "examples";
 /// # file
 /// 
 /// 
-/// The file argument is a required parameter of the example macro.
+/// The file argument is a required parameter of the [`example`](./attr.example.html) macro.
 /// It expects the path to the file that needs to be expanded.
 /// 
 /// This argument is essential as it specifies the target file 
 /// for code expansion.
+/// 
 /// One more time [`example`](./attr.example.html) macro can be 
 /// placed on any item in any file within your `src` directory.
 /// 
@@ -636,15 +637,9 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// The macro will copy method signatures from all 
 /// public methods that do not consume the receiver, excluding 
-/// methods like `pub fn bla(self, val: u8) -> ()` where `self` 
+/// methods like `pub fn foo(self, val: u8) -> ()` where `self` 
 /// is consumed. Please ensure that the 
 /// receiver is defined as `&self` or `&mut self`. 
-/// 
-/// It will 
-/// also include all associated functions that return a type. 
-/// To change this behavior and exclude all associated functions, 
-/// regardless of their return type, you can set the [`assoc`](#assoc) 
-/// argument of the macro to `false`.
 /// 
 /// If only a subset of methods is required to be 
 /// accessible across threads, split the `impl` block 
@@ -675,7 +670,9 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///      
 ///     name    = ""         ✘
 /// 
-///     assoc   = true       ✔
+///     assoc   = false      ✔
+/// 
+///        id   = false      ✔
 ///  
 /// )]
 /// 
@@ -692,6 +689,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - [`edit`](#edit)
 /// - [`name`](#name)
 /// - [`assoc`](#assoc)
+/// - [`id`](#id)
 ///
 /// 
 /// 
@@ -1080,12 +1078,12 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// # assoc
 /// 
 /// The `assoc` option indicates whether **associated**  **functions**
-/// of the actor struct are included in generated code as 
-/// instance methods, allowing them to be invoked on 
+/// ( also known as static methods ) that **return** a type of the actor struct are included 
+/// in generated code as instance methods, allowing them to be invoked on 
 /// the generated struct itself. 
-/// 
-/// - true  (default)
-/// - false
+///
+/// - true  
+/// - false (default)
 /// 
 ///  ## Examples
 ///```rust
@@ -1093,11 +1091,13 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///pub struct Aa;
 ///  
 /// 
-///#[actor(name="Bb")]
+///#[actor(name="Bb", assoc=true)]
 ///impl Aa {
 ///
 ///    pub fn new() -> Self { Self{} }
-///
+/// 
+///    // we don't have a `&self`
+///    // receiver 
 ///    pub fn is_even( n: u8 ) -> bool {
 ///        n % 2 == 0
 ///    }
@@ -1106,17 +1106,127 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///fn main() {
 ///    
 ///    let bb = BbLive::new();
+/// 
+///    // but we can call it 
+///    // as if there was one   
 ///    assert_eq!(bb.is_even(84), Aa::is_even(84));
 ///}
-/// ```
-/// An [`actor`](./attr.actor.html) macro as
-/// ```rust
-/// #[actor(name="Bb",assoc=false)]
-/// ```
-/// on the same object `Aa` will create a type `BbLive`
-/// without any methods defined.
 ///
-
+///```
+/// # id
+/// 
+/// If this argument is set to `true`, the following 
+/// additions and implementations are generated :
+/// 
+/// Within the [`live`](index.html#live) struct definition, the following
+/// fields are generated:
+/// 
+/// - `pub debut: std::time::SystemTime`
+/// - `pub name: String`
+/// 
+/// The following traits are implemented for the [`live`](index.html#live) struct:
+/// 
+/// - `PartialEq`
+/// - `PartialOrd`
+/// - `Eq`
+/// - `Ord`
+/// 
+/// These traits allow for equality and ordering 
+/// comparisons based on the `debut`value.
+/// The `name` field is provided for user needs only and is not 
+/// taken into account when performing comparisons. 
+/// It serves as a descriptive attribute or label 
+/// associated with each instance of the live struct.
+/// 
+/// In the [`script`](index.html#script) struct implementation block, which 
+/// typically encapsulates the functionality of the model,
+/// a static method named `debut` is generated. This 
+/// method returns the current system time and is commonly 
+/// used to set the `debut` field when initializing 
+/// instances of the [`live`](index.html#live) struct.
+///
+/// Use macro [`example`](./attr.example.html) to see the generated code.
+/// 
+/// 
+/// ## Examples
+///  
+///```rust
+///use std::thread::spawn;
+///pub struct MyActor ;
+///
+///#[interthread::actor(channel=2, id=true)] 
+///impl MyActor {
+///    pub fn new() -> Self { Self{} } 
+///}
+///fn main() {
+///
+///    let actor_1 = MyActorLive::new();
+///
+///    let handle_2 = spawn( move || { 
+///        MyActorLive::new()
+///    });
+///    let actor_2 = handle_2.join().unwrap();
+///
+///    let handle_3 = spawn( move || {
+///        MyActorLive::new()
+///    });
+///    let actor_3 = handle_3.join().unwrap();
+///    
+///    // they are the same type objects
+///    // but serving differrent threads
+///    // different actors !   
+///    assert!(actor_1 != actor_2);
+///    assert!(actor_2 != actor_3);
+///    assert!(actor_3 != actor_1);
+///
+///    // sice we know the order of invocation
+///    // we correctly presume
+///    assert_eq!(actor_1 > actor_2, true );
+///    assert_eq!(actor_2 > actor_3, true );
+///    assert_eq!(actor_3 < actor_1, true );
+///
+///    // but if we check the order by `debute` value
+///    assert_eq!(actor_1.debut < actor_2.debut, true );
+///    assert_eq!(actor_2.debut < actor_3.debut, true );
+///    assert_eq!(actor_3.debut > actor_1.debut, true );
+///    
+///    // This is because the 'debut' 
+///    // is a time record of initiation
+///    // Charles S Chaplin (1889)
+///    // Keanu Reeves      (1964)
+///
+///
+///    // we can count `live` instances for 
+///    // every model
+///    use std::sync::Arc;
+///    let mut a11 = actor_1.clone();
+///    let mut a12 = actor_1.clone();
+///
+///    let mut a31 = actor_3.clone();
+///
+///    assert_eq!(Arc::strong_count(&actor_1.debut), 3 );
+///    assert_eq!(Arc::strong_count(&actor_2.debut), 1 );
+///    assert_eq!(Arc::strong_count(&actor_3.debut), 2 );
+///            
+///
+///    // the name field is not taken 
+///    // into account when comparison is
+///    // perfomed       
+///    assert!( a11 == a12);
+///    assert!( a11 != a31);
+///
+///    a11.name = String::from("Alice");
+///    a12.name = String::from("Bob");
+///
+///    a31.name = String::from("Alice");
+///
+///    assert_eq!(a11 == a12, true );
+///    assert_eq!(a11 != a31, true );
+///
+///}
+///``` 
+/// 
+/// 
 
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_attribute]

@@ -22,7 +22,7 @@ impl MyActor {
 }
 
 
- // uncomment to see the generated code
+//  uncomment to see the generated code
 //  #[interthread::example(file="src/main.rs")] 
 //   in examples 
 //  #[interthread::example(file="examples/intro_std.rs")]  

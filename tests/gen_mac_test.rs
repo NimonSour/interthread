@@ -228,7 +228,337 @@ fn self_word_in_arg_type() {
 }
 
 
+// ID Inter 
+#[test]
+fn id_actor_sync_inter(){
+    pub struct Actor(i8);
+    #[life(id=true)]
+    impl Actor {
+        pub fn new() -> Self{Self(0)}
+        pub fn input(&mut self, v:i8){self.0 = v}
+        pub fn output(&self)->i8{self.0}
+        pub fn in_out(&self,v:i8)->i8{v}
+        pub fn add(&mut self, v:i8) -> i8{self.0 += v;self.0}
+    }
+
+    let actor1 = ActorLive::new();
+    let actor2 = ActorLive::new();
+    let actor3 = ActorLive::new();
 
 
 
+    // Equality comparisons
+    assert_eq!(actor1 == actor2, false); 
+    assert_eq!(actor2 == actor3, false); 
+
+    // Not Eq Comparison
+    assert_eq!(actor1 != actor2, true); 
+    assert_eq!(actor2 != actor3, true); 
+
+    // Lesser Comparison
+    assert_eq!(actor1 < actor2, false); 
+    assert_eq!(actor1 < actor3, false); 
+    assert_eq!(actor2 < actor3, false); 
+
+    // Greater Comparison
+    assert_eq!(actor2 > actor1, false); 
+    assert_eq!(actor3 > actor1, false); 
+    assert_eq!(actor3 > actor2, false); 
+
+    // Lesser or Equal Comparison
+    assert_eq!(actor2 <= actor1, true); 
+    assert_eq!(actor3 <= actor1, true); 
+    assert_eq!(actor3 <= actor2, true); 
+
+    // Greater or Equal Comparison
+    assert_eq!(actor1 >= actor2, true); 
+    assert_eq!(actor1 >= actor3, true); 
+    assert_eq!(actor2 >= actor3, true); 
+
+
+
+    // CLONE
+    let actor3_c = actor3.clone();
+    let actor2_c = actor2.clone();
+    let actor1_c = actor1.clone();
+
+    // Equality comparisons
+    assert_eq!(actor1 == actor1_c, true);
+    assert_eq!(actor2 == actor2_c, true);
+    assert_eq!(actor3 == actor3_c, true);
+
+    assert_eq!(actor1_c == actor2_c, false); 
+    assert_eq!(actor2_c == actor3_c, false); 
+
+    // Not Eq Comparison
+    assert_eq!(actor1_c != actor2_c, true); 
+    assert_eq!(actor2_c != actor3_c, true); 
+
+    // Lesser Compari_cson
+    assert_eq!(actor2_c < actor1_c, true); 
+    assert_eq!(actor3_c < actor1_c, true); 
+    assert_eq!(actor3_c < actor2_c, true); 
+
+    // Greater Compar_cison
+    assert_eq!(actor1_c > actor2_c, true); 
+    assert_eq!(actor1_c > actor3_c, true); 
+    assert_eq!(actor2_c > actor3_c, true);
+
+    // Lesser or Equa_cl Comparison
+    assert_eq!(actor1_c <= actor2_c, false); 
+    assert_eq!(actor1_c <= actor3_c, false); 
+    assert_eq!(actor2_c <= actor3_c, false); 
+
+    // Greater or Equ_cal Comparison
+    assert_eq!(actor2_c >= actor1_c, false); 
+    assert_eq!(actor3_c >= actor1_c, false); 
+    assert_eq!(actor3_c >= actor2_c, false); 
+    
+
+    // DEBUT TIME
+
+    // Lesser Comparison
+    assert_eq!(actor1.debut < actor2.debut, !false); 
+    assert_eq!(actor1.debut < actor3.debut, !false); 
+    assert_eq!(actor2.debut < actor3.debut, !false); 
+
+    // Greater Comparison
+    assert_eq!(actor2.debut > actor1.debut, !false); 
+    assert_eq!(actor3.debut > actor1.debut, !false); 
+    assert_eq!(actor3.debut > actor2.debut, !false); 
+
+    // Lesser or Equal Comparison
+    assert_eq!(actor2.debut <= actor1.debut, !true); 
+    assert_eq!(actor3.debut <= actor1.debut, !true); 
+    assert_eq!(actor3.debut <= actor2.debut, !true); 
+    
+    // Greater or Equal Comparison
+    assert_eq!(actor1.debut >= actor2.debut, !true); 
+    assert_eq!(actor1.debut >= actor3.debut, !true); 
+    assert_eq!(actor2.debut >= actor3.debut, !true); 
+}
+
+
+// ID STD
+fn id_actor_sync_bounded() {
+    pub struct Actor(i8);
+    #[life(channel=3,id=true)]
+    impl Actor {
+        pub fn new() -> Self{Self(0)}
+        pub fn input(&mut self, v:i8){self.0 = v}
+        pub fn output(&self)->i8{self.0}
+        pub fn in_out(&self,v:i8)->i8{v}
+        pub fn add(&mut self, v:i8) -> i8{self.0 += v;self.0}
+    }
+    let actor1 = ActorLive::new();
+    let actor2 = ActorLive::new();
+    let actor3 = ActorLive::new();
+
+
+
+    // Equality comparisons
+    assert_eq!(actor1 == actor2, false); 
+    assert_eq!(actor2 == actor3, false); 
+
+    // Not Eq Comparison
+    assert_eq!(actor1 != actor2, true); 
+    assert_eq!(actor2 != actor3, true); 
+
+    // Lesser Comparison
+    assert_eq!(actor1 < actor2, false); 
+    assert_eq!(actor1 < actor3, false); 
+    assert_eq!(actor2 < actor3, false); 
+
+    // Greater Comparison
+    assert_eq!(actor2 > actor1, false); 
+    assert_eq!(actor3 > actor1, false); 
+    assert_eq!(actor3 > actor2, false); 
+
+    // Lesser or Equal Comparison
+    assert_eq!(actor2 <= actor1, true); 
+    assert_eq!(actor3 <= actor1, true); 
+    assert_eq!(actor3 <= actor2, true); 
+
+    // Greater or Equal Comparison
+    assert_eq!(actor1 >= actor2, true); 
+    assert_eq!(actor1 >= actor3, true); 
+    assert_eq!(actor2 >= actor3, true); 
+
+
+
+    // CLONE
+    let actor3_c = actor3.clone();
+    let actor2_c = actor2.clone();
+    let actor1_c = actor1.clone();
+
+    // Equality comparisons
+    assert_eq!(actor1 == actor1_c, true);
+    assert_eq!(actor2 == actor2_c, true);
+    assert_eq!(actor3 == actor3_c, true);
+
+    assert_eq!(actor1_c == actor2_c, false); 
+    assert_eq!(actor2_c == actor3_c, false); 
+
+    // Not Eq Comparison
+    assert_eq!(actor1_c != actor2_c, true); 
+    assert_eq!(actor2_c != actor3_c, true); 
+
+    // Lesser Compari_cson
+    assert_eq!(actor2_c < actor1_c, true); 
+    assert_eq!(actor3_c < actor1_c, true); 
+    assert_eq!(actor3_c < actor2_c, true); 
+
+    // Greater Compar_cison
+    assert_eq!(actor1_c > actor2_c, true); 
+    assert_eq!(actor1_c > actor3_c, true); 
+    assert_eq!(actor2_c > actor3_c, true);
+
+    // Lesser or Equa_cl Comparison
+    assert_eq!(actor1_c <= actor2_c, false); 
+    assert_eq!(actor1_c <= actor3_c, false); 
+    assert_eq!(actor2_c <= actor3_c, false); 
+
+    // Greater or Equ_cal Comparison
+    assert_eq!(actor2_c >= actor1_c, false); 
+    assert_eq!(actor3_c >= actor1_c, false); 
+    assert_eq!(actor3_c >= actor2_c, false); 
+    
+
+    // DEBUT TIME
+
+    // Lesser Comparison
+    assert_eq!(actor1.debut < actor2.debut, !false); 
+    assert_eq!(actor1.debut < actor3.debut, !false); 
+    assert_eq!(actor2.debut < actor3.debut, !false); 
+
+    // Greater Comparison
+    assert_eq!(actor2.debut > actor1.debut, !false); 
+    assert_eq!(actor3.debut > actor1.debut, !false); 
+    assert_eq!(actor3.debut > actor2.debut, !false); 
+
+    // Lesser or Equal Comparison
+    assert_eq!(actor2.debut <= actor1.debut, !true); 
+    assert_eq!(actor3.debut <= actor1.debut, !true); 
+    assert_eq!(actor3.debut <= actor2.debut, !true); 
+    
+    // Greater or Equal Comparison
+    assert_eq!(actor1.debut >= actor2.debut, !true); 
+    assert_eq!(actor1.debut >= actor3.debut, !true); 
+    assert_eq!(actor2.debut >= actor3.debut, !true);
+}
+
+//ID TOKIO
+#[test]
+fn id_actor_tokio_bounded() {
+    pub struct Actor(i8);
+    #[life(channel=3,lib="tokio",id=true)]
+    impl Actor {
+        pub fn new() -> Self{Self(0)}
+        pub fn input(&mut self, v:i8){self.0 = v}
+        pub fn output(&self)->i8{self.0}
+        pub fn in_out(&self,v:i8)->i8{v}
+        pub fn add(&mut self, v:i8) -> i8{self.0 += v;self.0}
+    }
+    tokio::runtime::Runtime::new()
+    .unwrap()
+    .block_on(
+        async {
+
+            let actor1 = ActorLive::new();
+            let actor2 = ActorLive::new();
+            let actor3 = ActorLive::new();
+        
+        
+        
+            // Equality comparisons
+            assert_eq!(actor1 == actor2, false); 
+            assert_eq!(actor2 == actor3, false); 
+        
+            // Not Eq Comparison
+            assert_eq!(actor1 != actor2, true); 
+            assert_eq!(actor2 != actor3, true); 
+        
+            // Lesser Comparison
+            assert_eq!(actor1 < actor2, false); 
+            assert_eq!(actor1 < actor3, false); 
+            assert_eq!(actor2 < actor3, false); 
+        
+            // Greater Comparison
+            assert_eq!(actor2 > actor1, false); 
+            assert_eq!(actor3 > actor1, false); 
+            assert_eq!(actor3 > actor2, false); 
+        
+            // Lesser or Equal Comparison
+            assert_eq!(actor2 <= actor1, true); 
+            assert_eq!(actor3 <= actor1, true); 
+            assert_eq!(actor3 <= actor2, true); 
+        
+            // Greater or Equal Comparison
+            assert_eq!(actor1 >= actor2, true); 
+            assert_eq!(actor1 >= actor3, true); 
+            assert_eq!(actor2 >= actor3, true); 
+        
+        
+        
+            // CLONE
+            let actor3_c = actor3.clone();
+            let actor2_c = actor2.clone();
+            let actor1_c = actor1.clone();
+        
+            // Equality comparisons
+            assert_eq!(actor1 == actor1_c, true);
+            assert_eq!(actor2 == actor2_c, true);
+            assert_eq!(actor3 == actor3_c, true);
+        
+            assert_eq!(actor1_c == actor2_c, false); 
+            assert_eq!(actor2_c == actor3_c, false); 
+        
+            // Not Eq Comparison
+            assert_eq!(actor1_c != actor2_c, true); 
+            assert_eq!(actor2_c != actor3_c, true); 
+        
+            // Lesser Compari_cson
+            assert_eq!(actor2_c < actor1_c, true); 
+            assert_eq!(actor3_c < actor1_c, true); 
+            assert_eq!(actor3_c < actor2_c, true); 
+        
+            // Greater Compar_cison
+            assert_eq!(actor1_c > actor2_c, true); 
+            assert_eq!(actor1_c > actor3_c, true); 
+            assert_eq!(actor2_c > actor3_c, true);
+        
+            // Lesser or Equa_cl Comparison
+            assert_eq!(actor1_c <= actor2_c, false); 
+            assert_eq!(actor1_c <= actor3_c, false); 
+            assert_eq!(actor2_c <= actor3_c, false); 
+        
+            // Greater or Equ_cal Comparison
+            assert_eq!(actor2_c >= actor1_c, false); 
+            assert_eq!(actor3_c >= actor1_c, false); 
+            assert_eq!(actor3_c >= actor2_c, false); 
+            
+        
+            // DEBUT TIME
+        
+            // Lesser Comparison
+            assert_eq!(actor1.debut < actor2.debut, !false); 
+            assert_eq!(actor1.debut < actor3.debut, !false); 
+            assert_eq!(actor2.debut < actor3.debut, !false); 
+        
+            // Greater Comparison
+            assert_eq!(actor2.debut > actor1.debut, !false); 
+            assert_eq!(actor3.debut > actor1.debut, !false); 
+            assert_eq!(actor3.debut > actor2.debut, !false); 
+        
+            // Lesser or Equal Comparison
+            assert_eq!(actor2.debut <= actor1.debut, !true); 
+            assert_eq!(actor3.debut <= actor1.debut, !true); 
+            assert_eq!(actor3.debut <= actor2.debut, !true); 
+            
+            // Greater or Equal Comparison
+            assert_eq!(actor1.debut >= actor2.debut, !true); 
+            assert_eq!(actor1.debut >= actor3.debut, !true); 
+            assert_eq!(actor2.debut >= actor3.debut, !true); 
+    });
+}
 

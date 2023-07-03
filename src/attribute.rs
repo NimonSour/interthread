@@ -298,11 +298,12 @@ impl Default for AAEdit {
 #[derive(Debug, Eq, PartialEq)]
 pub struct ActorAttributeArguments {
 
-    pub name       :  Option<syn::Ident>,
-    pub lib        :  AALib,
-    pub assoc      :  bool,
-    pub channel    :  AAChannel,
-    pub edit       :  AAEdit,
+    pub name    :  Option<syn::Ident>,
+    pub lib     :  AALib,
+    pub assoc   :  bool,
+    pub channel :  AAChannel,
+    pub edit    :  AAEdit,
+    pub id      :  bool,
     /* ADD NEW OPTION */
 }
 
@@ -316,13 +317,15 @@ impl Default for ActorAttributeArguments {
         let assoc         = true;
         let channel  = AAChannel::default();
         let edit        = AAEdit::default() ;
+        let id            = true;
         /* ADD NEW ATTRIBUTE */
         
         Self {     name,
                     lib,  
                   assoc, 
                 channel,
-                   edit 
+                   edit,
+                     id 
         /*  ADD NEW ATTRIBUTE */
         }  
     }
@@ -337,7 +340,7 @@ pub struct ParseActorAttributeArguments {
    pub assoc          : ( Option<syn::LitBool>   , bool               ),
    pub channel        : ( Option<syn::Lit>       , AAChannel          ),
    pub edit           : AAEdit,
-
+   pub id             : ( Option<syn::LitBool>   , bool               ),
 }
 
 impl Default for ParseActorAttributeArguments {
@@ -346,17 +349,18 @@ impl Default for ParseActorAttributeArguments {
 
         let name =  ( None, None);
         let lib          =  ( None, AALib::default() );
-        let assoc        =  ( None, true);
+        let assoc        =  ( None, false);
         let channel     =  ( None, AAChannel::default());
         let edit                          =  AAEdit::default() ;
-        
+        let id           =  ( None, false);
         ParseActorAttributeArguments { 
 
                      name,
                       lib,  
                     assoc,  
                   channel,
-                     edit 
+                     edit,
+                       id         
         }  
     }
 }
@@ -372,6 +376,7 @@ impl ParseActorAttributeArguments {
                  assoc: self.assoc.1.clone(),  
                channel: self.channel.1.clone(),
                   edit: self.edit.clone(),
+                    id: self.id.1.clone()
         } 
 
     }
@@ -418,7 +423,7 @@ impl ParseActorAttributeArguments {
             }
 
             // STATIC
-            else if meta.path.is_ident("static_methods"){
+            else if meta.path.is_ident("assoc"){
 
                 let  value = meta.value()?.parse::<syn::Lit>()?;
                     
@@ -474,6 +479,21 @@ impl ParseActorAttributeArguments {
                     }
                 }
             }
+            //ID
+            else if meta.path.is_ident("id"){
+
+                let  value = meta.value()?.parse::<syn::Lit>()?;
+                    
+                match value.clone() {
+                    syn::Lit::Bool(val) => { 
+                        self.id.0 = Some(val.clone());
+                        self.id.1 = val.value();
+                        return Ok(());
+                    },
+                    v => abort!(v, error::error_name_type( ident.clone(), "bool".into()); help=error::AVAIL_ACTOR ),
+                }
+            }
+
             // UNKNOWN ARGUMENT
             else {
                 error::unknown_attr_arg("actor",ident )

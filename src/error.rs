@@ -219,9 +219,11 @@ pub static AVAIL_ACTOR: &'static str = "
 
         name = \"\" 
 
-        assoc = true *
-               false
+        assoc = false *
+                 true
         
+        id    = false *
+                 true
     )
 ]
 
