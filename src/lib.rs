@@ -273,11 +273,11 @@
 //! Invoking a method on a live instance, it's triggering the eventual 
 //! invocation of the corresponding method within the Actor. 
 //! 
-//! The `live` method `new` is creating : new channel, an instace of 
-//! the Actor,
-//! spawning the `play` component in a separate 
-//! thread allowing for parallel execution,
-//! returns an instance of `Self`.
+//! The special method of `live` method `new`  
+//! - declares a new channel
+//! - initiates an instace of the Actor
+//! - spawns the `play` component in a separate thread 
+//! - returns an instance of `Self`
 //! 
 //! 
 //! ```rust 
@@ -323,7 +323,12 @@
 //!}
 //! 
 //! ```
-//! 
+//! The methods of `live` type have same method signature
+//! as Actor's own methods 
+//! - declare a `oneshot` channel
+//! - declare a `msg` specific `script` variant
+//! - send the `msg` via `live`'s channel 
+//! - receive and return the output if any   
 //! 
 //! # Panics
 //! 
@@ -714,7 +719,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// ```rust
 /// #[actor(channel=0)]
 /// ```
-/// are identical and both specify an unbounded channel.
+/// are in fact identical, both specifying same unbounded channel.
 /// 
 /// When specifying an [`usize`] value for the `channel` argument 
 /// in the [`actor`](./attr.actor.html) macro, such as 
@@ -726,8 +731,8 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// buffer before blocking/suspending the sender.
 ///
 /// Using a bounded channel with a specific buffer size allows 
-/// you to control the memory usage and backpressure behavior 
-/// of the actor. When the buffer is full, any further attempts 
+/// for control over the memory usage and backpressure behavior 
+/// of the model. When the buffer is full, any further attempts 
 /// to send messages will block/suspend until there is available space. 
 /// This provides a natural form of backpressure, allowing the 
 /// sender to slow down or pause message production when the 

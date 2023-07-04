@@ -14,9 +14,10 @@ impl MyActor {
         // clone the value of Actor 
         let value = Arc::clone(&self.0);
         tokio::spawn(async move {
-            // I prefer to initialize them like this,
-            // since they are competing with each other
-            // to obtain the unique ID.
+            // I prefer to initialize the actors 
+            // like this, since they are competing 
+            // with each other to obtain the unique ID.
+
             // commentout the "sleep" statement
             // it will work anyway
             sleep(Duration::from_millis(val as u64)).await;
@@ -52,10 +53,10 @@ async fn main(){
             
             // we want to receive an instance of 
             // new actor 
-            // we send channel sender   
+            // we send channel's "sender"    
             act_clone.init_actor_increment(i, send).await;
 
-            // awaiting for new actor 
+            // awaiting on reciver for new actor 
             recv.await
         });
         handles.push(handle);
@@ -77,17 +78,16 @@ async fn main(){
     
 
     // actors can be sorted by
-    // the time they were invoked,
-    // allowing for ordering based 
-    // on their invocation timestamps.
+    // `time of initiation' 
+    // allowing for ordering 
     actors.sort();
+
     assert_eq!(actors[0] < actors[1],true); 
     assert_eq!(actors[121] < actors[122],true); 
     assert_eq!(actors[998] < actors[999],true); 
 
 
-    // check if they have unic Id 
-    // for act in actors.clone(){
+    // check if they have unic Ids 
     for i in (actors.len() - 1) ..0{
         let target = actors.remove(i);
         if actors.iter().any(move |x| *x == target){
@@ -95,4 +95,5 @@ async fn main(){
         }
     }
     eprintln!(" * end of program * ");
+
 }

@@ -222,6 +222,7 @@ fn self_word_in_arg_type() {
     let a = ActorSelf::new();
     let mut live = ActorSelfLive::new();
     live.input(3); 
+
     assert_eq!( live.output(),  3); 
     assert_eq!( live.in_out(a.clone()), a); 
     assert_eq!( live.add(5),    8); 
@@ -340,19 +341,16 @@ fn id_actor_sync_inter(){
 
 
 // ID STD
+#[test]
 fn id_actor_sync_bounded() {
-    pub struct Actor(i8);
+    pub struct Actor(u8);
     #[life(channel=3,id=true)]
     impl Actor {
-        pub fn new() -> Self{Self(0)}
-        pub fn input(&mut self, v:i8){self.0 = v}
-        pub fn output(&self)->i8{self.0}
-        pub fn in_out(&self,v:i8)->i8{v}
-        pub fn add(&mut self, v:i8) -> i8{self.0 += v;self.0}
+        pub fn new(v:u8) -> Self{Self(v)}
     }
-    let actor1 = ActorLive::new();
-    let actor2 = ActorLive::new();
-    let actor3 = ActorLive::new();
+    let actor1 = ActorLive::new(0);
+    let actor2 = ActorLive::new(0);
+    let actor3 = ActorLive::new(0);
 
 
 
