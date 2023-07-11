@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "0.2.0"
+//!interthread = "0.2.1"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -634,7 +634,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// The macro is placed upon an implement block of an object
 ///  (`struct` or `enum`),
-/// which has a public method named `new` returning  `Self`.
+/// which has a public or restricted method named `new` returning  `Self`.
 ///
 /// In case if the initialization could potentially fail, 
 /// the method can be named `try_new` 

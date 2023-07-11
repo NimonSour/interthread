@@ -7,7 +7,7 @@ pub fn met_new_note_help(name: &syn::Ident) -> (String, String)  {
     let name = name.to_string();
 
     let note = format!(
-        "The object {name:?} must implement a public method named 'new' \
+        "The object {name:?} must implement a public or restricted method named 'new' \
         that returns Self or {name}. If the function may fail to return \
         an instance of {name}, name it 'try_new' \
         and return a 'Result<{name}>' or 'Option<{name}'. 
@@ -21,6 +21,7 @@ pub fn met_new_note_help(name: &syn::Ident) -> (String, String)  {
     - returning Type
     
         pub fn new (arg, ...) -> Self
+        pub(crate) fn new (arg, ...) -> Self
         pub fn new (arg, ...) -> {name} 
     
     - returning Option <Type>  

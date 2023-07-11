@@ -63,7 +63,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "0.2.0"
+interthread = "0.2.1"
 oneshot     = "0.1.5" 
 ```
 
@@ -153,7 +153,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "0.2.0"
+interthread = "0.2.1"
 tokio = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -218,7 +218,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "0.2.0"
+interthread = "0.2.1"
 oneshot     = "0.1.5" 
 ```
 
@@ -324,7 +324,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "0.2.0"
+interthread = "0.2.1"
 tokio = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -445,8 +445,15 @@ Total tasks - 60
 
 To return a type from the task, we will use a 'channel' 
 from crate <a href="https://docs.rs/oneshot">oneshot</a>.
-Tokio offers its own version of `oneshot`, so we are good to go,
-with the same dependencies in Cargo.toml file 
+Tokio offers its own version of `oneshot`.
+
+Filename: Cargo.toml
+
+```text
+[dependencies]
+interthread = "0.2.1"
+tokio = { version="1.28.2",features=["full"]}
+```
 
 ### Examples
 
@@ -470,8 +477,8 @@ impl MyActor {
             // I prefer to initialize them like this,
             // since they are competing with each other
             // to obtain the unique ID.
-            // commentout the "sleep" statement
-            // it will work anyway
+            // but if you commentout the "sleep" 
+            // statement it will work anyway
             sleep(Duration::from_millis(val as u64)).await;
 
             //create actor
@@ -530,21 +537,19 @@ async fn main(){
     
 
     // actors can be sorted by
-    // the time they were invoked,
-    // allowing for ordering based 
-    // on their invocation timestamps.
+    // the time they were invoked
     actors.sort();
     assert_eq!(actors[0] < actors[1],true); 
     assert_eq!(actors[121] < actors[122],true); 
     assert_eq!(actors[998] < actors[999],true); 
 
 
-    // check if they have unic Id 
+    // check if they have unique Id 
     // for act in actors.clone(){
     for i in (actors.len() - 1) ..0{
         let target = actors.remove(i);
         if actors.iter().any(move |x| *x == target){
-            println!("ActorModel Id's are not identical")
+            println!("ActorModel Ids are not unique")
         }
     }
     eprintln!(" * end of program * ");
@@ -561,7 +566,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "0.2.0"
+interthread = "0.2.1"
 oneshot     = "0.1.5" 
 ```
 

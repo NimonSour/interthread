@@ -90,14 +90,14 @@ impl ActorMacroGeneration {
         }
     }
 
-    fn live_static_method(&mut self,  name: Ident, mut sig: Signature, args: TokenStream ) {
+    fn live_static_method(&mut self,  name: Ident, vis: syn::Visibility, mut sig: Signature, args: TokenStream ) {
         
         method::change_signature_refer(&mut sig);
         let await_call = Self::await_token(sig.asyncness.is_some());
         let actor_name = &self.name;
         let gen_method = quote! {
 
-            pub #sig {
+            #vis #sig {
                 #actor_name::#name #args #await_call
             }
         };
@@ -147,11 +147,11 @@ impl ActorMacroGeneration {
 
             match method {
 
-                method::ActorMethod::Io   { stat, ident, arguments, output,.. } => {
+                method::ActorMethod::Io   { vis,stat, ident, arguments, output,.. } => {
                     let (args_ident,args_type) = method::arguments_ident_type(&arguments);
                     
                     if stat {
-                        self.live_static_method(ident, sig, args_ident)
+                        self.live_static_method(ident, vis, sig, args_ident)
                     }
                     else {
                         
@@ -172,7 +172,7 @@ impl ActorMacroGeneration {
                        
                         let live_method      = quote! {
 
-                            pub #sig {
+                            #vis #sig {
                                 #instant_channel
                                 let msg = #script_name::#arm_match;
                                 #send_input
@@ -198,7 +198,7 @@ impl ActorMacroGeneration {
                     }
                 },
 
-                method::ActorMethod::I    { ident, arguments ,..} => {
+                method::ActorMethod::I    { vis,ident, arguments ,..} => {
                     
                     let (args_ident,args_type) = method::arguments_ident_type(&arguments);
                     
@@ -222,7 +222,7 @@ impl ActorMacroGeneration {
 
                     let live_method = quote!{
         
-                        pub #sig {
+                        #vis #sig {
                             let msg = #script_name::#arm_match ;
                             #send_input
                         }
@@ -240,11 +240,11 @@ impl ActorMacroGeneration {
                     self.script_fields.push(script_field);
 
                 },
-                method::ActorMethod::O    {stat, ident, output ,..} => {
+                method::ActorMethod::O    {vis, stat, ident, output ,..} => {
                     let (args_ident,_) = method::arguments_ident_type(&vec![]);
 
                     if stat {
-                        self.live_static_method(ident, sig, args_ident)
+                        self.live_static_method(ident, vis, sig, args_ident)
                     }
                     else {
 
@@ -268,7 +268,7 @@ impl ActorMacroGeneration {
 
                         let live_method = quote!{
                         
-                            pub #sig {
+                            #vis #sig {
                                 #instant_channel
                                 let msg = #script_name::#arm_match ;
                                 #send_input
@@ -290,7 +290,7 @@ impl ActorMacroGeneration {
                         self.script_fields.push(script_field);
                     }
                 },
-                method::ActorMethod::None { ident ,..} => {
+                method::ActorMethod::None { vis,ident ,..} => {
 
 
 
@@ -311,7 +311,7 @@ impl ActorMacroGeneration {
 
                     let live_method = quote!{
                     
-                        pub #sig {
+                        #vis #sig {
                             let msg = #script_name::#arm_match ;
                             #send_input
                         }
@@ -461,7 +461,6 @@ impl ActorMacroGeneration {
 
                 AALib::Std => {
                     quote! {
-        
                         pub fn #play_name ( #recv_channel mut actor: #name ) {
                             while let Ok(msg) = receiver.recv(){
                                 msg.#direct_name ( &mut actor );
@@ -473,7 +472,6 @@ impl ActorMacroGeneration {
 
                 AALib::Tokio => {
                     quote! {
-        
                         pub #async_decl fn #play_name ( #recv_channel mut actor: #name ) {
                             while let Some(msg) = receiver.recv().await{
                                 msg.#direct_name ( &mut actor ) #await_call;
@@ -485,7 +483,6 @@ impl ActorMacroGeneration {
 
                 _ => { 
                     quote! {
-    
                         pub #async_decl fn #play_name ( #recv_channel mut actor: #name ) {
                             while let Ok(msg) = receiver.recv().await {
             
@@ -538,6 +535,7 @@ impl ActorMacroGeneration {
         let func_new_name           = &new_sig.ident;
         let unwrapped          = self.met_new.unwrap_sign();
         let return_statement   = self.met_new.live_ret_statement(&live_var);
+        let vis                = &self.met_new.vis;
 
         let (init_actor, play_args) = {
             let id_debut = if self.aaa.id {quote!{ ,debut,name}} else {quote!{}};
@@ -558,7 +556,7 @@ impl ActorMacroGeneration {
 
         quote!{
 
-            pub #new_sig {
+           #vis #new_sig {
                 #send_recv_channel
                 let actor = #name:: #func_new_name #args_ident #unwrapped;
                 #id_debut

@@ -5,10 +5,10 @@ use quote::{quote,format_ident};
 
 #[derive(Debug,Clone)]
 pub enum ActorMethod {
-    Io  { sig: syn::Signature, ident: syn::Ident, stat: bool,  arguments: Vec<syn::FnArg>, output: Box<syn::Type> },   
-    I   { sig: syn::Signature, ident: syn::Ident,              arguments: Vec<syn::FnArg>                         },    
-    O   { sig: syn::Signature, ident: syn::Ident, stat: bool,                              output: Box<syn::Type> },    
-    None{ sig: syn::Signature, ident: syn::Ident                                                                  }, 
+    Io  { vis: syn:: Visibility, sig: syn::Signature, ident: syn::Ident, stat: bool,  arguments: Vec<syn::FnArg>, output: Box<syn::Type> },   
+    I   { vis: syn:: Visibility, sig: syn::Signature, ident: syn::Ident,              arguments: Vec<syn::FnArg>                         },    
+    O   { vis: syn:: Visibility, sig: syn::Signature, ident: syn::Ident, stat: bool,                              output: Box<syn::Type> },    
+    None{ vis: syn:: Visibility, sig: syn::Signature, ident: syn::Ident                                                                  }, 
 }
 
 impl ActorMethod {
@@ -43,7 +43,8 @@ impl ActorMethod {
  
 #[derive(Debug,Clone)]
 pub struct ActorMethodNew {
-
+    
+    pub vis:               syn::Visibility,
     pub sig:                syn::Signature,
     pub new_sig:            syn::Signature,
     pub res_opt:              Option<bool>,
@@ -59,11 +60,11 @@ impl ActorMethodNew {
         
         match met {
 
-            ActorMethod::Io   { sig,ident,arguments,output,.. } =>  {
-                return  Some(ActorMethodNew{ sig,ident,arguments: Some(arguments), output, new_sig, res_opt });
+            ActorMethod::Io   { vis,sig,ident,arguments,output,.. } =>  {
+                return  Some(ActorMethodNew{ vis,sig,ident,arguments: Some(arguments), output, new_sig, res_opt });
             },
-            ActorMethod::O    { sig,ident,output,..} =>  {
-                return  Some(ActorMethodNew{ sig,ident,arguments: None, output, new_sig, res_opt });
+            ActorMethod::O    { vis,sig,ident,output,..} =>  {
+                return  Some(ActorMethodNew{ vis,sig,ident,arguments: None, output, new_sig, res_opt });
             } 
             _   =>  return  None,
         };
@@ -250,10 +251,12 @@ pub fn get_methods( name: &syn::Ident, item_impl: syn::ItemImpl, stat:bool ) -> 
             syn::ImplItem::Fn( m ) => {
                 match m.vis {
                     // check visibility "pub"
-                    syn::Visibility::Public(_) => {
+                    syn::Visibility::Public(_)|
+                    syn::Visibility::Restricted(_) 
+                    => {
 
                         if is_self_refer(&m.sig){
-                            loc.push(sieve(explicit(&m.sig,name),Some(false)));
+                            loc.push(sieve(m.vis,explicit(&m.sig,name),Some(false)));
 
                         } else {
 
@@ -261,14 +264,14 @@ pub fn get_methods( name: &syn::Ident, item_impl: syn::ItemImpl, stat:bool ) -> 
                             if m.sig.ident.eq(&ident_new) || m.sig.ident.eq(&ident_try_new){
 
                                 let(new_sig,res_opt) = check_self_return(name,&mut m.sig.clone());
-                                let method = sieve(m.sig.clone(),Some(true));
+                                let method = sieve(m.vis,m.sig.clone(),Some(true));
                                 method_new = ActorMethodNew::try_new( method, new_sig, res_opt ); 
                             } 
 
                             else {
                                 if stat {
                                     if is_return(&m.sig){
-                                        loc.push(sieve(explicit(&m.sig,name),Some(true)));
+                                        loc.push(sieve(m.vis,explicit(&m.sig,name),Some(true)));
                                     }
                                 }
                             }
@@ -283,7 +286,7 @@ pub fn get_methods( name: &syn::Ident, item_impl: syn::ItemImpl, stat:bool ) -> 
     (loc, method_new)
 }
 
-pub fn sieve( sig: syn::Signature, stat: Option<bool> ) -> ActorMethod {
+pub fn sieve( vis: syn::Visibility, sig: syn::Signature, stat: Option<bool> ) -> ActorMethod {
 
     let stat = if stat.is_some(){ stat.unwrap() } else { is_self_refer(&sig) };
     let (ident,arguments,output) = ident_arguments_output(&sig);
@@ -297,17 +300,17 @@ pub fn sieve( sig: syn::Signature, stat: Option<bool> ) -> ActorMethod {
         syn::ReturnType::Type(_,output) => { 
 
             if arg_bool {
-                return ActorMethod::Io{ sig, stat, ident, arguments, output };
+                return ActorMethod::Io{ vis, sig, stat, ident, arguments, output };
             } else {
-                return ActorMethod::O{ sig, stat, ident, output };
+                return ActorMethod::O{ vis, sig, stat, ident, output };
             }
         },
         syn::ReturnType::Default => {
 
             if arg_bool {
-                return ActorMethod::I{ sig, ident, arguments };
+                return ActorMethod::I{ vis, sig, ident, arguments };
             } else {
-                return ActorMethod::None{ sig, ident };
+                return ActorMethod::None{ vis, sig, ident };
             }
         },
     }
