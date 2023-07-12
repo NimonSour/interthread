@@ -22,7 +22,7 @@ impl MyActor {
             // it will work anyway
             sleep(Duration::from_millis(val as u64)).await;
 
-            //create actor
+            // initiate new actor 
             let actor = MyActorLive::new();
 
             // send actor
@@ -87,13 +87,14 @@ async fn main(){
     assert_eq!(actors[998] < actors[999],true); 
 
 
-    // check if they have unic Ids 
+    // check if they have unique Ids 
     for i in (actors.len() - 1) ..0{
         let target = actors.remove(i);
         if actors.iter().any(move |x| *x == target){
-            println!("ActorModel Id's are not identical")
+            println!("ActorModel Id's are not unique")
         }
     }
+    
     eprintln!(" * end of program * ");
 
 }

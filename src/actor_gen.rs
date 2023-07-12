@@ -331,6 +331,36 @@ impl ActorMacroGeneration {
         } 
     }
 
+    // INTER
+    fn live_inter_get_count_debut(&self) -> TokenStream {
+        let vis = &self.met_new.vis;
+        quote!{
+
+            #vis fn inter_get_debut(&self) -> std::time::SystemTime {
+                *self.debut
+            }
+            
+            #vis fn inter_get_count(&self) -> usize {
+                std::sync::Arc::strong_count(&self.debut)
+            }
+        }
+    }
+
+    fn live_inter_set_get_name(&self) -> TokenStream {
+        let vis = &self.met_new.vis;
+
+        quote!{
+           #vis fn inter_set_name<T: std::string::ToString>(&mut self, name: T) {
+                self.name = name.to_string();
+            }
+            
+           #vis fn inter_get_name(&self) -> &str {
+                &self.name
+            }
+            
+        }
+
+    } 
     fn live_new_spawn(&self, play: TokenStream ) -> TokenStream {
         match self.aaa.lib {
             AALib::Std      => {
@@ -599,7 +629,11 @@ impl ActorMacroGeneration {
         let impl_drop     = self.gen_live_impl_drop();
         
         let id_debut = if self.aaa.id { quote!{ pub debut: std::sync::Arc<std::time::SystemTime>,}} else { quote!{}};
-        let id_name = if self.aaa.id { quote!{pub name: String,}} else { quote!{}};
+        let id_name  = if self.aaa.id { quote!{ pub name: String,}} else { quote!{}};
+
+        let id_set_get_name      = if self.aaa.id { self.live_inter_set_get_name() } else { quote!{}};
+        let id_get_count_debut   = if self.aaa.id { self.live_inter_get_count_debut()} else { quote!{}};
+
         quote!{
             #[derive(Clone,Debug)]
             pub struct #live_name {
@@ -613,6 +647,10 @@ impl ActorMacroGeneration {
                 #fn_new_self
 
                 #(#methods)*
+
+                #id_set_get_name
+
+                #id_get_count_debut
             }
             #impl_drop
         }

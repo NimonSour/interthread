@@ -2,6 +2,7 @@
 use std::thread::spawn;
 pub struct MyActor ;
 
+//  #[interthread::example(file="examples/id_arg.rs")]  
 #[interthread::actor(channel=2, id=true)] 
 impl MyActor {
     pub fn new() -> Self { Self{} } 
@@ -20,7 +21,7 @@ fn main() {
     });
     let actor_3 = handle_3.join().unwrap();
     
-    // they are the same type objects
+    // they are objects of the same type 
     // but serving differrent threads
     // different actors !   
     assert!(actor_1 != actor_2);
@@ -55,8 +56,20 @@ fn main() {
     assert_eq!(Arc::strong_count(&actor_1.debut), 3 );
     assert_eq!(Arc::strong_count(&actor_2.debut), 1 );
     assert_eq!(Arc::strong_count(&actor_3.debut), 2 );
-            
 
+
+    // or use getter `count`                 (since v0.3.0)
+    assert_eq!(actor_1.inter_get_count(), 3 );
+    assert_eq!(actor_2.inter_get_count(), 1 );
+    assert_eq!(actor_3.inter_get_count(), 2 );
+    
+
+    use std::time::SystemTime;
+
+    // getter `debut` to get its timestamp   (since v0.3.0)
+    let _debut1: SystemTime = actor_1.inter_get_debut();
+
+            
     // the name field is not taken 
     // into account when comparison is
     // perfomed       
@@ -70,5 +83,18 @@ fn main() {
 
     assert_eq!(a11 == a12, true );
     assert_eq!(a11 != a31, true );
+
+    // setter `name` accepts any ToString  (since v0.3.0)
+    a11.inter_set_name('t');
+    a12.inter_set_name(84u32);
+    a31.inter_set_name(3.14159);
+
+    // getter `name`                       (since v0.3.0)
+    assert_eq!(a11.inter_get_name(), "t" );
+    assert_eq!(a12.inter_get_name(), "84" );
+    assert_eq!(a31.inter_get_name(), "3.14159" );
+
+
+
 
 }

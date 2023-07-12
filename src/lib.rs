@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "0.2.1"
+//!interthread = "0.3.0"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -1214,6 +1214,18 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    assert_eq!(Arc::strong_count(&actor_3.debut), 2 );
 ///            
 ///
+///    // or use getter `count`                 (since v0.3.0)
+///    assert_eq!(actor_1.inter_get_count(), 3 );
+///    assert_eq!(actor_2.inter_get_count(), 1 );
+///    assert_eq!(actor_3.inter_get_count(), 2 );
+///    
+///
+///    use std::time::SystemTime;
+///
+///    // getter `debut` to get its timestamp   (since v0.3.0)
+///    let _debut1: SystemTime = actor_1.inter_get_debut();
+///
+///            
 ///    // the name field is not taken 
 ///    // into account when comparison is
 ///    // perfomed       
@@ -1228,8 +1240,50 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    assert_eq!(a11 == a12, true );
 ///    assert_eq!(a11 != a31, true );
 ///
+///    // setter `name` accepts any ToString  (since v0.3.0)
+///    a11.inter_set_name('t');
+///    a12.inter_set_name(84u32);
+///    a31.inter_set_name(3.14159);
+///
+///    // getter `name`                       (since v0.3.0)
+///    assert_eq!(a11.inter_get_name(), "t" );
+///    assert_eq!(a12.inter_get_name(), "84" );
+///    assert_eq!(a31.inter_get_name(), "3.14159" );
+///
 ///}
 ///``` 
+/// 
+/// 
+/// 
+/// 
+/// Since `v0.3.0` using `id` will generate fore additional
+///methods on `live` struct:
+/// 
+/// 1. `inter_set_name(s: ToString)`: Sets the value of the 
+/// name field.
+/// 2. `inter_get_name() -> &str`: Retrieves the value of the 
+/// name field.
+/// 3. `inter_get_debut() -> std::time::SystemTime`: Retrieves
+/// the value of the debut field, which represents a timestamp.
+/// 4. `inter_get_count() -> usize`: Provides the strong 
+/// reference count for the debut field.
+///  
+/// > **Note:** Additional generated methods prefixed with `inte`
+///  will have the same visibility as the initiating
+///  method `new` or `try_new`. 
+/// 
+///This convention allows 
+///- easy identification in text editor methods that 
+///solely manipulate the internal state of the live struct and/or 
+///methods that are added by the `interthread` macros
+///- it mitigates the risk of potential naming conflicts in case if there
+///is or will be a custom method `get_name`
+///-  helps the macro  identify methods that are intended 
+///to be used within its context
+///
+///This section is currently under development and will
+///be continued in the next version....
+/// 
 /// 
 /// 
 
