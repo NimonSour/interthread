@@ -1,6 +1,7 @@
 pub struct MyActor {
     value: i8,
 }
+#[interthread::actor(lib = "smol", channel = 2)]
 impl MyActor {
     pub fn new(v: i8) -> Self {
         Self { value: v }
@@ -28,7 +29,7 @@ pub enum MyActorScript {
     },
 }
 impl MyActorScript {
-    pub fn my_actor_direct(self, actor: &mut MyActor) {
+    pub fn direct(self, actor: &mut MyActor) {
         match self {
             MyActorScript::Increment {} => {
                 actor.increment();
@@ -46,54 +47,45 @@ impl MyActorScript {
             }
         }
     }
-}
-pub fn my_actor_play(receiver: std::sync::mpsc::Receiver<MyActorScript>, mut actor: MyActor) {
-    while let Ok(msg) = receiver.recv() {
-        msg.my_actor_direct(&mut actor);
+    pub async fn play(receiver: async_channel::Receiver<MyActorScript>, mut actor: MyActor) {
+        while let Ok(msg) = receiver.recv().await {
+            msg.direct(&mut actor);
+        }
+        eprintln!("MyActor end of life ...");
     }
-    eprintln!("MyActor end of life ...");
 }
 #[derive(Clone, Debug)]
 pub struct MyActorLive {
-    sender: std::sync::mpsc::SyncSender<MyActorScript>,
+    sender: async_channel::Sender<MyActorScript>,
 }
 impl MyActorLive {
-    pub fn new(v: i8) -> Self {
-        let (sender, receiver) = std::sync::mpsc::sync_channel(2);
-        let actor = MyActor::new(v);
-        let actor_live = Self { sender };
-        std::thread::spawn(|| my_actor_play(receiver, actor));
-        actor_live
-    }
-    pub fn increment(&mut self) {
+    pub async fn increment(&mut self) {
         let msg = MyActorScript::Increment {};
-        let _ = self
-            .sender
-            .send(msg)
-            .expect("'MyActorLive::method.send'. Channel is closed!");
+        let _ = self.sender.send(msg).await;
     }
-    pub fn add_number(&mut self, num: i8) -> i8 {
+    pub async fn add_number(&mut self, num: i8) -> i8 {
         let (send, recv) = oneshot::channel();
         let msg = MyActorScript::AddNumber {
             input: (num),
             output: send,
         };
-        let _ = self
-            .sender
-            .send(msg)
-            .expect("'MyActorLive::method.send'. Channel is closed!");
-        recv.recv()
+        let _ = self.sender.send(msg).await;
+        recv.await
             .expect("'MyActorLive::method.recv'. Channel is closed!")
     }
-    pub fn get_value(&self) -> i8 {
+    pub async fn get_value(&self) -> i8 {
         let (send, recv) = oneshot::channel();
         let msg = MyActorScript::GetValue { output: send };
-        let _ = self
-            .sender
-            .send(msg)
-            .expect("'MyActorLive::method.send'. Channel is closed!");
-        recv.recv()
+        let _ = self.sender.send(msg).await;
+        recv.await
             .expect("'MyActorLive::method.recv'. Channel is closed!")
+    }
+    pub fn new(v: i8) -> Self {
+        let (sender, receiver) = async_channel::bounded(2);
+        let actor = MyActor::new(v);
+        let actor_live = Self { sender };
+        smol::spawn(MyActorScript::play(receiver, actor)).detach();
+        actor_live
     }
 }
 fn main() {
@@ -108,5 +100,4 @@ fn main() {
     });
     let _ = handle_a.join();
     let _ = handle_b.join();
-    assert_eq!(actor.get_value(), 11)
 }

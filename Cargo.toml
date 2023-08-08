@@ -13,14 +13,14 @@ keywords = ["actor","async","thread","interthread","actor-model"]
 [lib]
 proc-macro = true
 
-
 [dependencies]
 
 quote = { version = "1" }
 syn   = { version = "2", features = ["parsing","full","extra-traits"]}
-proc-macro2 = { version = "1" }
+proc-macro2      = { version = "1" }
 proc-macro-error = { version = "1" }
 proc-macro-crate = "1.3.1"
+prettyplease     = "0.2.10"
 
 [dev-dependencies]
 smol          = "1.3.0"

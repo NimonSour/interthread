@@ -5,7 +5,8 @@ use interthread::actor;
 pub struct MyActor {
     value: i8,
 }
- #[actor(channel=2, edit(play))]
+//  #[actor(channel=2, edit(play))]
+#[actor(channel=2, edit(script(imp(play))))]
 impl MyActor {
 
     pub fn new( value: i8 ) -> Self {
@@ -39,7 +40,7 @@ impl MyActorScript {
             { let _ = output.send(Some(counter.clone()));},
             
             // else as usual 
-            msg => { msg.my_actor_direct(actor); }
+            msg => { msg.direct(actor); }
         }
     } 
 }
@@ -47,23 +48,26 @@ impl MyActorScript {
 // manually create "play" function 
 // use `example` macro to copy paste
 // `play`'s body
-pub fn my_actor_play( 
-     receiver: mpsc::Receiver<MyActorScript>,
-    mut actor: MyActor) {
-    // set a custom variable 
-    let mut call_counter = 0;
-    
-    // nice and tidy while loop ready
-    // for more wild things to happen
-    while let Ok(msg) = receiver.recv() {
-        
-        // this is the invocation
-        // of MyActorScript.custom_direct()
-        msg.custom_direct(&mut actor, &call_counter);
+impl MyActorScript {
 
-        call_counter += 1;
+    pub fn play( 
+         receiver: mpsc::Receiver<MyActorScript>,
+        mut actor: MyActor) {
+        // set a custom variable 
+        let mut call_counter = 0;
+        
+        // nice and tidy while loop ready
+        // for more wild things to happen
+        while let Ok(msg) = receiver.recv() {
+            
+            // this is the invocation
+            // of MyActorScript.custom_direct()
+            msg.custom_direct(&mut actor, &call_counter);
+    
+            call_counter += 1;
+        }
+        eprintln!("the end");
     }
-    eprintln!("the end");
 }
 
 

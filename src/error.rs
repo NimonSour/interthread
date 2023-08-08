@@ -1,10 +1,10 @@
 use crate::name;
-use quote::quote;
+use quote::{quote,ToTokens};
 use proc_macro_error::abort;
 use proc_macro2::TokenStream;
 
-pub fn met_new_note_help(name: &syn::Ident) -> (String, String)  {
-    let name = name.to_string();
+pub fn met_new_note_help<T: ToTokens>(name: &T) -> (String, String)  {
+    let name = quote!{#name}.to_string();
 
     let note = format!(
         "The object {name:?} must implement a public or restricted method named 'new' \
@@ -45,10 +45,10 @@ pub fn met_new_note_help(name: &syn::Ident) -> (String, String)  {
 }
 
 
-pub fn met_new_found(sig: &syn::Signature, name: &syn::Ident, bit: TokenStream, res_opt: Option<bool>) -> (String,String,String){
-    let sig_name     = sig.ident.to_string();
-    let act_name     = name.to_string();
-    let mut bit_str  = bit.to_string();
+pub fn met_new_found<T: ToTokens>(sig: &syn::Signature, name: &T, bit: TokenStream, res_opt: Option<bool>) -> (String,String,String){
+    let sig_name      = sig.ident.to_string();
+    let act_name      = quote!{ #name }.to_string();
+    let mut bit_str   = bit.to_string();
     if bit_str == ""{
         bit_str = " ".to_string();
     }
@@ -82,9 +82,9 @@ pub fn met_new_found(sig: &syn::Signature, name: &syn::Ident, bit: TokenStream, 
     (msg,note,help)
 }
 
-pub fn met_new_not_instance(sig: &syn::Signature, name: &syn::Ident, bit: TokenStream, res_opt: Option<bool>) -> (String,String,String){
-    let sig_name     = sig.ident.to_string();
-    let act_name     = name.to_string();
+pub fn met_new_not_instance<T: ToTokens>(sig: &syn::Signature, name: &T, bit: TokenStream, res_opt: Option<bool>) -> (String,String,String){
+    let sig_name = sig.ident.to_string();
+    let act_name = quote!{#name}.to_string();
     let bit_str  = bit.to_string();
     
     let msg = {
@@ -183,7 +183,7 @@ pub static AVAIL_CHANNEL: &'static str ="
 
 *  -  default
 ";
-
+/*
 pub static AVAIL_EDIT: &'static str = "
 \navailable 'edit' options:
          
@@ -195,6 +195,35 @@ pub static AVAIL_EDIT: &'static str = "
     'live'      'struct ActorLive' 
     'live::new' 'struct ActorLive::new'
 ";
+ */
+
+
+pub static AVAIL_EDIT: &'static str = "
+\navailable 'edit' options:
+         
+     Struct        Options        
+         
+    'script'    ( 
+                 def        
+                 imp(name, ..)
+                )  
+
+    'live'      ( 
+                  def
+                  imp(name, ..)
+                  trt(name, ..)
+                ) 
+
+def - Struct definition 
+imp - Struct methods 
+trt - Struct traits
+
+! When employing the `imp` or `trt` option without providing a tuple list, \
+the macro interprets it as a request to include all method/trait names.
+Similarly, for `script` and `live` where `edit(live)` implies `edit(live(def, imp, trt))`,
+`edit` itself implies `edit(live,script)` !
+";
+
 
 
 pub static AVAIL_ACTOR: &'static str = "
@@ -211,11 +240,8 @@ pub static AVAIL_ACTOR: &'static str = "
 
         edit
         ( 
-            script
-            direct
-            play
-            live
-            live::new
+            script(..)
+            live(..)
         ) 
 
         name = \"\" 
@@ -265,4 +291,51 @@ pub fn direct_send(cust_name: &syn::Ident) -> TokenStream {
     let direct_name  = &name::direct(cust_name);
     let msg = format!("'{direct_name}.send'. Channel closed");
     quote!{#msg}
+}
+
+pub fn trait_new_sig<T: quote::ToTokens>(ty:&T, exists: bool) -> (String,String){
+    let actor_ty = quote!{#ty}.to_string();
+    let note = format!("
+    Using the `actor` macro with a `trait` block is not as flexible \
+    as when it is applied to an `impl` block. \n
+    The `trait` must include a specific signature for the `new` \
+    initiation function: \n \t
+    fn new(s: Self) -> Self
+    This signature, is the only available initiation signature \
+    that the macro will consider for its functionality.
+    \n"); 
+    let msg = 
+    if exists {
+        format!("Expected signature `fn new (s:Self) -> Self` for {} ! \n",actor_ty)
+    } else {
+        format!("Expected signature `fn new (s:Self) -> Self` for {} not found !\n",actor_ty)
+    };
+    (msg,note)
+}
+
+
+pub fn item_vis() -> (String,String){
+    //"The macros 'actor' and 'group' require the object itself and its \
+    // - `fn` block: `fn`'s visibility itself
+    let note = format!("The macro 'actor' require the object itself and its \
+    methods to have explicit visibility (public or restricted) if they are intended \
+    to be considered.
+    
+    The macros adhere to Rust's principles, where private functions are regarded as internal \
+    helper functions, not intended for external use beyond the object body.
+    
+    The visibility level of the newly generated Actor Model types will \
+    be preserved and applied from : \n 
+    - `impl`  block: function `new` \n 
+    - `trait` block: `trait`'s visibility itself ( which is the same as `new` function ) 
+     
+    Please ensure that the required visibility specifications are followed to use the 'actor' \
+    macro effectively.\n") ;
+
+    let help = format!("If a private Actor Model is desired, it is recommended to begin with \
+    public visibility and then manually adjust visibility using the 'edit' option or \
+    the macro 'example' to modify the types created by the macro.");
+
+
+    (note,help)
 }

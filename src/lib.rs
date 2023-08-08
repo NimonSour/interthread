@@ -616,11 +616,15 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 
     let (file, lib)  = file::expand_macros(&eaa.get_file(),&eaa.expand);
 
-    let path = if eaa.main { 
-        show::example_show(file, &eaa.get_file(), Some(lib))
-    } else {
-        show::example_show(file, &eaa.get_file(), None ) 
-    };
+    let some_lib = if eaa.main { Some(lib)} else { None };
+
+    // let path = if eaa.main { 
+    //     show::example_show(file, &eaa.get_file(), Some(lib))
+    // } else {
+    //     show::example_show(file, &eaa.get_file(), None ) 
+    // };
+
+    let path = show::example_show(file, &eaa.get_file(), some_lib );
 
     let msg = format!("The file has been SUCCESSFULLY created at {}",path.to_string_lossy());
     let note  = "To avoid potential issues and improve maintainability, it is recommended to comment out the macro after its successful execution. To proceed, please comment out the macro and re-run the compilation.";
@@ -1291,25 +1295,37 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 #[proc_macro_attribute]
 pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
     
-    let impl_block                      = syn::parse_macro_input!(item as syn::ItemImpl);
-    let mut paaa    = attribute::ParseActorAttributeArguments::default();
+    let mac = attribute::AAExpand::Actor;
+    let act_item   = syn::parse_macro_input!(item as syn::Item);
+    check::actor_item(&act_item);
+    let mut aaa    = attribute::ActorAttributeArguments::default();
 
     let attr_str = attr.clone().to_string();
 
     if !attr_str.is_empty(){
 
         let aaa_parser  = 
-        syn::meta::parser(|meta| paaa.parse(meta));
+        syn::meta::parser(|meta| aaa.parse(meta));
         syn::parse_macro_input!(attr with aaa_parser);
     }
-    let aaa = paaa.get_arguments();
+    // let aaa = paaa.get_arguments();
 
     check::channels_import( &aaa.lib );
     
-    let mut inter_gen_actor = actor_gen::ActorMacroGeneration::new( /*name,*/ aaa, impl_block );
-    let code = inter_gen_actor.generate();
+    // let mut inter_gen_actor = actor_gen::ActorMacroGeneration::new( /*name,*/ aaa, impl_block );
+    // let code = inter_gen_actor.generate();
+
+    let (code,_) = crate::actor_gen::actor_macro_generate_code( aaa, act_item.clone(),mac);
+    // proc_macro_error::abort!(act_item, "After Generate");
+    
+    // check if aaa.edit
+    // check if file 
+    // if so write to file 
+                //   * prefix
+                //   * edifix
+                //   * suffix
+    
     quote::quote!{#code}.into()
-   
 }
 
 /// ## Currently under development (((

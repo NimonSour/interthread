@@ -1,6 +1,7 @@
 use crate::error;
 use crate::use_macro;
 
+use std::path::PathBuf;
 use proc_macro2::Span;
 use proc_macro_error::abort;
 use quote::{quote,format_ident};
@@ -34,8 +35,8 @@ impl Default for ExampleAttributeArguments {
     fn default() -> Self {
 
         let file  = None ;
-        let main             = false ;
-        let expand  = vec![AAExpand::Actor, AAExpand::Group] ;
+        let main             = false;
+        let expand  = vec![AAExpand::Actor, AAExpand::Group];
         /* ADD NEW OPTION */ 
 
         Self { file, main, expand }
@@ -47,7 +48,8 @@ impl ExampleAttributeArguments {
     pub fn parse(&mut self, meta: syn::meta::ParseNestedMeta) -> Result<(), syn::Error> {
 
         let mut parse_macro_arguments = |meta: syn::meta::ParseNestedMeta| { 
-
+            
+            // PATH
             if meta.path.is_ident("file") {
 
                 let value = meta.value()?.parse::<syn::Lit>()?;
@@ -243,54 +245,24 @@ impl Default for AAChannel {
 }
 
 //-----------------------  ACTOR EDIT 
-
 #[derive(Debug, Eq, PartialEq, Clone)]
+
 pub struct AAEdit {
-
-    pub script:   Option<syn::Path>, 
-    pub direct:   Option<syn::Path>, 
-    pub play:     Option<syn::Path>, 
-    pub live:     Option<syn::Path>,
-    pub live_new: Option<syn::Path>,
-}
-
-impl AAEdit {
-
-    fn parse(&mut self, path: &syn::Path ){
-        let msg = format!("Unknown option  -  {:?} for 'edit' ", quote!{#path}.to_string());
-
-        if path.segments.len() == 1 {
-
-            if      path.is_ident("script")  {self.script = Some(path.clone())}
-            else if path.is_ident("direct")  {self.direct = Some(path.clone())}
-            else if path.is_ident("play")    {self.play   = Some(path.clone())}
-            else if path.is_ident("live")    {self.live   = Some(path.clone())}
-            else {  abort!(path, msg ;help = error::AVAIL_EDIT) }
-
-        } else {
-
-            let live     = format_ident!("live");
-            let new      = format_ident!("new");
-            let live_new  = use_macro::UseMacro::create_path(Some(live),new);
-           
-            if live_new.eq(path) { self.live_new = Some(path.clone()) }
-            else {  abort!(path, msg ;help = error::AVAIL_EDIT) }
-        }
-    }
+    pub live:  ( bool, Option<Vec<syn::Ident>>, Option<Vec<syn::Ident>> ),
+    pub script:( bool, Option<Vec<syn::Ident>>, Option<Vec<syn::Ident>> ),
 }
 
 impl Default for AAEdit {
     fn default() -> Self {
 
-        let script  = None;
-        let direct  = None;
-        let play    = None;
-        let live    = None;
-        let live_new= None;
+        let script  = (false,None,None);
+        let live    = (false,None,None);
 
-        Self { script, direct, play, live, live_new }
+        Self { script, live }
     }
 }
+
+
 
 
 //-----------------------  ACTOR  
@@ -304,6 +276,7 @@ pub struct ActorAttributeArguments {
     pub channel :  AAChannel,
     pub edit    :  AAEdit,
     pub id      :  bool,
+    pub file    :  Option<PathBuf>,
     /* ADD NEW OPTION */
 }
 
@@ -312,35 +285,30 @@ impl Default for ActorAttributeArguments {
 
     fn default() -> ActorAttributeArguments {
 
-        let name = None;
-        let lib          = AALib::default() ;
-        let assoc         = true;
-        let channel  = AAChannel::default();
-        let edit        = AAEdit::default() ;
-        let id            = true;
-        /* ADD NEW ATTRIBUTE */
-        
-        Self {     name,
-                    lib,  
-                  assoc, 
-                channel,
-                   edit,
-                     id 
-        /*  ADD NEW ATTRIBUTE */
+        Self { 
+            name   : None,
+            lib    : AALib::default() ,
+            assoc  : true,
+            channel: AAChannel::default(),
+            edit   : AAEdit::default() ,
+            id     : true,
+            file   : None,
+            /* ADD NEW ATTRIBUTE */
         }  
     }
 }
 
-
+/*
 #[derive(Debug, Eq, PartialEq)]
 pub struct ParseActorAttributeArguments {
 
    pub name           : ( Option<syn::LitStr>    , Option<syn::Ident> ),
    pub lib            : ( Option<syn::LitStr>    , AALib              ),
-   pub assoc          : ( Option<syn::LitBool>   , bool               ),
+   pub assoc          : ( Option<syn::Ident>     , bool               ),
    pub channel        : ( Option<syn::Lit>       , AAChannel          ),
-   pub edit           : AAEdit,
-   pub id             : ( Option<syn::LitBool>   , bool               ),
+   pub edit           :                                          AAEdit,
+   pub id             : ( Option<syn::Ident>     , bool               ),
+   pub file           : ( Option<syn::Lit>, Option<std::path::PathBuf>),
 }
 
 impl Default for ParseActorAttributeArguments {
@@ -349,10 +317,11 @@ impl Default for ParseActorAttributeArguments {
 
         let name =  ( None, None);
         let lib          =  ( None, AALib::default() );
-        let assoc        =  ( None, false);
+        let assoc          =  ( None, false);
         let channel     =  ( None, AAChannel::default());
         let edit                          =  AAEdit::default() ;
-        let id           =  ( None, false);
+        let id             =  ( None, false);
+        let file  = (None,None);
         ParseActorAttributeArguments { 
 
                      name,
@@ -364,9 +333,14 @@ impl Default for ParseActorAttributeArguments {
         }  
     }
 }
+*/
 
-impl ParseActorAttributeArguments {
+// impl ParseActorAttributeArguments {
 
+impl ActorAttributeArguments {
+    
+    /*
+    
     pub fn get_arguments(&mut self) -> ActorAttributeArguments {
 
         ActorAttributeArguments { 
@@ -378,8 +352,9 @@ impl ParseActorAttributeArguments {
                   edit: self.edit.clone(),
                     id: self.id.1.clone()
         } 
-
     }
+     */
+
 
     pub fn parse(&mut self, meta: syn::meta::ParseNestedMeta) -> Result<(), syn::Error> {
 
@@ -392,14 +367,14 @@ impl ParseActorAttributeArguments {
                 let  value = meta.value()?.parse::<syn::Lit>()?;
                 match value.clone() {
                     syn::Lit::Str(val) => {  
-                        self.name.0 = Some(val.clone());
+                        // self.name.0 = Some(val.clone());
                         let str_name = val.value();
 
                         if str_name == "".to_string() {
                             abort!(ident,"Attribute field 'name' is empty. Enter a name.") 
                         }
                         else {
-                            self.name.1 = Some(format_ident!("{}",val.value()));
+                            self.name = Some(format_ident!("{}",val.value()));
                         } 
                         return Ok(());
                     },
@@ -414,8 +389,8 @@ impl ParseActorAttributeArguments {
 
                 match value.clone() {
                     syn::Lit::Str(val) => {
-                        self.lib.0 = Some(val.clone()); 
-                        self.lib.1 = AALib::from(&val);
+                        // self.lib.0 = Some(val.clone()); 
+                        self.lib = AALib::from(&val);
                         return Ok(());
                     },
                     v => abort!(v, error::error_name_type( ident.clone(), "str".into()),; help=error::AVAIL_ACTOR ),
@@ -424,34 +399,36 @@ impl ParseActorAttributeArguments {
 
             // STATIC
             else if meta.path.is_ident("assoc"){
-
-                let  value = meta.value()?.parse::<syn::Lit>()?;
-                    
-                match value.clone() {
-                    syn::Lit::Bool(val) => { 
-                        self.assoc.0 = Some(val.clone());
-                        self.assoc.1 = val.value();
-                        return Ok(());
-                    },
-                    v => abort!(v, error::error_name_type( ident.clone(), "bool".into()); help=error::AVAIL_ACTOR ),
+                if meta.input.clone().to_string().is_empty() {
+                    // self.assoc.0 = Some(ident.clone());
+                    self.assoc = true;
+                } else {
+                    let  value = meta.value()?.parse::<syn::Lit>()?;
+                    match value.clone() {
+                        syn::Lit::Bool(val) => { 
+                            // self.assoc.0 = Some(ident.clone());
+                            self.assoc = val.value();
+                            return Ok(());
+                        },
+                        v => abort!(v, error::error_name_type( ident.clone(), "bool".into()); help=error::AVAIL_ACTOR ),
+                    }
                 }
             }
-
-                            
+          
             // CHANNEL
             else if meta.path.is_ident("channel"){
 
                 let  value = meta.value()?.parse::<syn::Lit>()?;
 
-                    self.channel.0 = Some(value.clone());
+                    // self.channel.0 = Some(value.clone());
 
                 match value {
                     syn::Lit::Int(val) => { 
-                        self.channel.1 = AAChannel::from(Either::R(val));
+                        self.channel = AAChannel::from(Either::R(val));
                     },
                     syn::Lit::Str(val) => {
 
-                        self.channel.1 = AAChannel::from(Either::L(val));
+                        self.channel = AAChannel::from(Either::L(val));
                     },
                     v => abort!(v, error::error_name_type( ident.clone(), "int | str".into()),; help=error::AVAIL_ACTOR ),
                 }
@@ -462,35 +439,184 @@ impl ParseActorAttributeArguments {
             else if meta.path.is_ident("edit"){
                 
                 if meta.input.clone().to_string().is_empty() {
-                    abort!(ident,"Enter an option for 'edit' or remove it. ";help=error::AVAIL_EDIT );
-                }
-                match meta.parse_nested_meta(|meta| {  
+                    //if ident 
+                    self.edit.script.0 = true;
+                    self.edit.script.1 = Some(Vec::new());
+                    self.edit.script.2 = Some(Vec::new());
+                    self.edit.live.0   = true;
+                    self.edit.live.1   = Some(Vec::new());
+                    self.edit.live.2   = Some(Vec::new());
 
-                        self.edit.parse(&meta.path);
-                        return Ok(());
-                }){
+                } 
+                else { 
 
-                    Ok(_) => { 
-                        return Ok(());       
-                    },
-                    Err(e) => {
+                    match meta.parse_nested_meta( |meta| {
 
-                        abort!(e.span(),e.to_string() ;help=error::AVAIL_ACTOR )
+                        if meta.path.is_ident("script") {
+                            // if ident 
+                            if meta.input.clone().to_string().is_empty() {
+                                self.edit.script.0 = true;
+                                self.edit.script.1 = Some(Vec::new());
+                                self.edit.script.2 = Some(Vec::new());
+                                return Ok(());
+                            } else {
+                                meta.parse_nested_meta(|meta|{
+                             
+                                    if meta.path.is_ident("def"){
+                                        self.edit.script.0 = true;
+                                        return Ok(());
+                                    }
+
+                                    else if meta.path.is_ident("imp"){
+                                        // if ident
+                                        if meta.input.clone().to_string().is_empty() {
+                                            self.edit.script.1 = Some( Vec::new());
+                                            return Ok(());
+                                        } else {
+
+                                            meta.parse_nested_meta(|meta| {
+                                                if let Some(ident) = meta.path.get_ident(){
+                                                    if self.edit.script.1.is_some(){
+                                                        self.edit.script.1.as_mut().map(|x| x.push(ident.clone()));
+                                                        return Ok(());
+                                                    } else {
+                                                        self.edit.script.1 = Some( Vec::from([ident.clone()]));
+                                                        return Ok(());
+                                                    }
+                                                } else {
+                                                    return Err(meta.error("Unsuported 'edit(script(impl(?)))' option !"));
+                                                }
+                                            })
+                                        }
+                                    }
+                                    else if meta.path.is_ident("trt"){
+                                        let msg = "As of the current version, the `actor`'s `Script \
+                                        struct` does not implement any traits. Consequently, the use of the \
+                                        `trt` argument for `script` is not applicable. If your intention is \
+                                        to modify derived traits, consider using the `def` option instead.";
+                                        return Err(meta.error(msg));
+                                    }
+                                    else {
+                                        return Err(meta.error("Unsuported 'edit(script(?))' option ! "));
+                                    }
+                                })
+                            }
+                        }
+
+                        else if  meta.path.is_ident("live") {
+                            // if ident 
+                            if meta.input.clone().to_string().is_empty() {
+                                self.edit.live.0 = true;
+                                self.edit.live.1 = Some(Vec::new());
+                                self.edit.live.2 = Some(Vec::new());
+                                return Ok(());
+                            } else {
+                                meta.parse_nested_meta(|meta|{
+                                    if meta.path.is_ident("def"){
+                                        self.edit.live.0 = true;
+                                        return Ok(());
+                                    }
+                                    else if meta.path.is_ident("imp"){
+                                        // if ident
+                                        if meta.input.clone().to_string().is_empty() {
+                                            self.edit.live.1 = Some( Vec::new());
+                                            return Ok(());
+                                        } else {
+                                            meta.parse_nested_meta(|meta| {
+                                                if let Some(ident) = meta.path.get_ident(){
+                                                    if self.edit.live.1.is_some(){
+                                                        self.edit.live.1.as_mut().map(|x| x.push(ident.clone()));
+                                                        return Ok(());
+                                                    } else {
+                                                        self.edit.live.1 = Some( Vec::from([ident.clone()]));
+                                                        return Ok(());
+                                                    }
+                                                } else {
+                                                    return Err(meta.error("Unsuported 'edit(live(impl( ? )))' option !"));
+                                                }
+                                            })
+                                        }
+                                    }
+                                    
+                                    else if meta.path.is_ident("trt"){
+                                        // if ident
+                                        if meta.input.clone().to_string().is_empty() {
+                                            self.edit.live.2 = Some( Vec::new());
+                                            return Ok(());
+                                        } else {
+                                            meta.parse_nested_meta(|meta| {
+                                                if let Some(ident) = meta.path.get_ident(){
+                                                    if self.edit.live.2.is_some(){
+                                                        self.edit.live.2.as_mut().map(|x| x.push(ident.clone()));
+                                                        return Ok(());
+                                                    } else {
+                                                        self.edit.live.2 = Some( Vec::from([ident.clone()]));
+                                                        return Ok(());
+                                                    }
+                                                } else {
+                                                    return Err(meta.error("Unsuported 'edit(live(impl( ? )))' option !"));
+                                                }
+                                            })
+                                        }
+                                    }
+                                    else {
+                                        return Err(meta.error("Unsuported 'edit(live( ? ))' option !"));
+                                    }
+                                })
+                            }
+                        }
+                        else { return Err( meta.error("Unsuported edit option") );}
+                    }){
+                        Ok(_) => (),
+                        Err(e) => {
+                            let span   = e.span();
+                            let msg  = e.to_string();
+                            abort!(span,msg;help=error::AVAIL_EDIT );
+                        },
                     }
                 }
             }
+
             //ID
             else if meta.path.is_ident("id"){
+                if meta.input.clone().to_string().is_empty() {
+                    // self.id.0 = Some(ident.clone());
+                    self.id = true;
+                } else {
+                    let  value = meta.value()?.parse::<syn::Lit>()?;
+                    match value.clone() {
+                        syn::Lit::Bool(val) => { 
+                            // self.id.0 = Some(ident.clone());
+                            self.id = val.value();
+                            return Ok(());
+                        },
+                        v => abort!(v, error::error_name_type( ident.clone(), "bool".into()); help=error::AVAIL_ACTOR ),
+                    }
+                }
+            }
+            
+            // FILE
+            else if meta.path.is_ident("file") {
 
-                let  value = meta.value()?.parse::<syn::Lit>()?;
-                    
+                let value = meta.value()?.parse::<syn::Lit>()?;
+
                 match value.clone() {
-                    syn::Lit::Bool(val) => { 
-                        self.id.0 = Some(val.clone());
-                        self.id.1 = val.value();
-                        return Ok(());
+                    syn::Lit::Str(val) => {
+
+                        // the path needs to be checked first 
+                        let path = std::path::PathBuf::from(val.value());
+
+                        if path.exists() {
+                            self.file = Some(path);
+                            return Ok(());
+                        }
+                        else {
+                            abort!(val, format!("Path - {:?} does not exists.",val.value())); 
+                        } 
                     },
-                    v => abort!(v, error::error_name_type( ident.clone(), "bool".into()); help=error::AVAIL_ACTOR ),
+                    _ => {
+                        return Err( meta.error(format!("Expected a  'str'  value for argument '{}'.", ident.to_string() )));
+                    },
                 }
             }
 

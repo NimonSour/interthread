@@ -1,4 +1,4 @@
-use crate::attribute::{AALib,AAExpand,ParseActorAttributeArguments};
+use crate::attribute::{AALib,AAExpand,ActorAttributeArguments};
 use crate::use_macro::UseMacro;
 use crate::actor_gen;
 
@@ -9,7 +9,7 @@ pub fn code_to_file(code: proc_macro2::TokenStream ) -> syn::File {
     match  syn::parse::<syn::File>(code.into() ){
         Ok( file ) => {return file},
         Err(e) => {
-            abort!( Span::call_site() ,e );
+            abort!( Span::call_site(), e );
         },
     }
 }
@@ -46,7 +46,6 @@ pub fn expand_macros( path: &std::path::PathBuf, macs: &Vec<AAExpand>) -> (syn::
         if AALib::default()!= lib{
             libr = lib;
         }
-        
     }
     (file,libr)
 }
@@ -58,32 +57,55 @@ pub fn expand_macro( mut file: syn::File, mac: &AAExpand  ) -> (syn::File, AALib
 
     let mut new_items_file: Vec<Vec<syn::Item>> = Vec::new();
 
-    for item  in &mut file.items{
+    'f1: for item  in &mut file.items{
         use_example.exclude_self_macro(item);
-        match item.clone() {
+        match item {
 
-            syn::Item::Impl( mut impl_block) => {
+            syn::Item::Impl( impl_block) => {
 
                 if impl_block.attrs.iter().any(|x| use_macro.is(x)){
 
                     for attr in &impl_block.attrs.clone() {
                         if use_macro.is(attr){
                            
-                            let mut paaa = ParseActorAttributeArguments::default();
-                            
-                            let _ = attr.clone().parse_nested_meta(|meta| paaa.parse(meta));
-                            let aaa = paaa.get_arguments();
+                            let mut aaa = ActorAttributeArguments::default();
+                            let _ = attr.clone().parse_nested_meta(|meta| aaa.parse(meta));
 
                             //get lib 
                             lib = aaa.lib.clone();
                             //exclude self macro 
-                            impl_block.attrs = use_macro.exclude( &impl_block.attrs );
-                            
-                            //generate macro
-                            let mut inter_actor = 
-                            actor_gen::ActorMacroGeneration::new( aaa, impl_block.clone() );
+                            use_macro.exclude_self_macro(item);
+                            //generate code
+                            let (code,_) = 
+                            actor_gen::actor_macro_generate_code( aaa, item.clone(), mac.clone() );
 
-                            let code = inter_actor.generate();
+                            let f = code_to_file(code);
+                            new_items_file.push(f.items);
+                            continue 'f1; 
+                        }
+                    }
+                } else { 
+                    new_items_file.push( vec![item.clone()] ); 
+                }
+            },
+
+            syn::Item::Trait(item_trait)  => {
+                if item_trait.attrs.iter().any(|x| use_macro.is(x)){
+
+                    for attr in &item_trait.attrs.clone() {
+                        if use_macro.is(attr){
+                           
+                            let mut aaa = ActorAttributeArguments::default();
+                            let _ = attr.clone().parse_nested_meta(|meta| aaa.parse(meta));
+
+                            //get lib 
+                            lib = aaa.lib.clone();
+                            //exclude self macro 
+                            use_macro.exclude_self_macro(item);
+                            //generate code
+                            let (code,_) = 
+                            actor_gen::actor_macro_generate_code( aaa, item.clone(), mac.clone() );
+
                             let f = code_to_file(code);
                             new_items_file.push(f.items);
                             continue; 
@@ -111,7 +133,7 @@ pub fn expand_macro( mut file: syn::File, mac: &AAExpand  ) -> (syn::File, AALib
 
             syn::Item::Use(item_use) => {
                 
-                if let Some(item) = use_macro.update(item_use){
+                if let Some(item) = use_macro.update(item_use.clone()){
                     if let Some(it) = use_example.update(item){
 
                         new_items_file.push( vec![syn::Item::Use(it)] );

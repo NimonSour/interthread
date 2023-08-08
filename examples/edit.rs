@@ -7,7 +7,9 @@ use interthread::actor;
 pub struct MyActor {
     value: i8,
 }
- #[actor(channel=2, edit(play))]
+
+#[actor(channel=2, edit(script(imp(play))))]
+
 impl MyActor {
 
     pub fn new( value: i8 ) -> Self {
@@ -22,23 +24,26 @@ impl MyActor {
 // manually create "play" function 
 // use `example` macro to copy paste
 // `play`'s body 
-pub fn my_actor_play( 
-     receiver: mpsc::Receiver<MyActorScript>,
-    mut actor: MyActor) {
-    // set a custom variable 
-    let mut call_counter = 0;
-    while let Ok(msg) = receiver.recv() {
-        // do something 
-        // like 
-        println!("Value of call_counter = {}",call_counter);
+impl MyActorScript {
 
-        // `direct` as usual 
-        msg.my_actor_direct(&mut actor);
-
-        // increment the counter as well
-        call_counter += 1;
+    pub fn play( 
+         receiver: mpsc::Receiver<MyActorScript>,
+        mut actor: MyActor) {
+        // set a custom variable 
+        let mut call_counter = 0;
+        while let Ok(msg) = receiver.recv() {
+            // do something 
+            // like 
+            println!("Value of call_counter = {}",call_counter);
+    
+            // `direct` as usual 
+            msg.direct(&mut actor);
+    
+            // increment the counter as well
+            call_counter += 1;
+        }
+        eprintln!(" the end ");
     }
-    eprintln!(" the end ");
 }
 
 

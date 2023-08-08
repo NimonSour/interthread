@@ -68,21 +68,37 @@ pub fn write( val:String, path: &std::path::PathBuf ) -> Result<(), std::io::Err
 
     write!(file, "{}", val)
 }
-
-
 fn write_file( file: syn::File, path: &std::path::PathBuf ) -> Result<(), std::io::Error> {
 
-    let val = quote::quote!{ #file }.to_string();
+    // let val = quote::quote!{ #file }.to_string();
+    // let trace = "// this is written with pretty please!";
+    let code =  prettyplease::unparse(&file);
 
-    write(val, path )?;
-    std::process::Command::new("rustfmt")
-    .arg("--edition")
-    .arg("2021")
-    .arg(path)
-    .output()?;
+    write(code, path )?;
+
+    // std::process::Command::new("rustfmt")
+    // .arg("--edition")
+    // .arg("2021")
+    // .arg(path)
+    // .output()?;
 
     Ok(())
 }
+
+
+// fn write_file( file: syn::File, path: &std::path::PathBuf ) -> Result<(), std::io::Error> {
+
+//     let val = quote::quote!{ #file }.to_string();
+
+//     write(val, path )?;
+//     std::process::Command::new("rustfmt")
+//     .arg("--edition")
+//     .arg("2021")
+//     .arg(path)
+//     .output()?;
+
+//     Ok(())
+// }
 
 pub fn example_show( file: syn::File, path: &std::path::PathBuf, lib: Option<attribute::AALib> ) -> std::path::PathBuf {
 

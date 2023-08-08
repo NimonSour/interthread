@@ -5,7 +5,9 @@ use interthread::actor;
 pub struct MyActor {
     value: i8,
 }
- #[actor(channel=2, edit(play))]
+
+#[actor(channel=2, edit(script(imp(play))))]
+
 impl MyActor {
 
     pub fn new( value: i8 ) -> Self {
@@ -28,30 +30,33 @@ impl MyActor {
 // manually create "play" function 
 // use `example` macro to copy paste
 // `play`'s body
-pub fn my_actor_play( 
-     receiver: mpsc::Receiver<MyActorScript>,
-    mut actor: MyActor) {
-    // set a custom variable 
-    let mut call_counter = 0;
+impl MyActorScript {
 
-    while let Ok(msg) = receiver.recv() {
-
-        // match incoming msgs
-        // for `play_get_counter` variant
-        match msg {
-            // you don't have to remember the 
-            // the name of the `Script` variant 
-            // your text editor does it for you
-            // so just choose the variant
-            MyActorScript::PlayGetCounter { output  } =>
-            { let _ = output.send(Some(call_counter));},
-            
-            // else as usual 
-            _ => { msg.my_actor_direct(&mut actor); }
+    pub fn play( 
+         receiver: mpsc::Receiver<MyActorScript>,
+        mut actor: MyActor) {
+        // set a custom variable 
+        let mut call_counter = 0;
+    
+        while let Ok(msg) = receiver.recv() {
+    
+            // match incoming msgs
+            // for `play_get_counter` variant
+            match msg {
+                // you don't have to remember the 
+                // the name of the `Script` variant 
+                // your text editor does it for you
+                // so just choose the variant
+                MyActorScript::PlayGetCounter { output  } =>
+                { let _ = output.send(Some(call_counter));},
+                
+                // else as usual 
+                _ => { msg.direct(&mut actor); }
+            }
+            call_counter += 1;
         }
-        call_counter += 1;
+        eprintln!("the end");
     }
-    eprintln!("the end");
 }
 
 
