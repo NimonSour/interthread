@@ -661,7 +661,6 @@ pub fn edit_write(  aaf: &AAFile,
 
 
     prefix += LINE_ENDING;
-    prefix += LINE_ENDING;
     prefix += "//++++++++++++++++++[ Interthread  Write to File ]+++++++++++++++++//";
     prefix += LINE_ENDING;
     prefix += &obj_name;
