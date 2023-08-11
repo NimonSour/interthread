@@ -129,35 +129,6 @@ fn find_file( index: usize, s: &str, attr: &Attribute) -> (usize,usize) {
 }
 
 
-fn get_attrs( item: &Item ) -> Result<(Vec<Attribute>, Item),String>{
-    let item = item.clone();
-    let attrs;
-
-    let res = match item {
-
-        Item::Fn(mut body)       => {
-            attrs = body.attrs;
-            body.attrs = Vec::new();
-            (attrs, Item::Fn(body))
-        },
-        Item::Trait(mut body) => {
-            attrs = body.attrs;
-            body.attrs = Vec::new();
-            (attrs, Item::Trait(body))
-        },
-        Item::Impl(mut body)   => {
-            attrs = body.attrs;
-            body.attrs = Vec::new();
-            (attrs, Item::Impl(body))
-        },
-        _ => { return Err("Internal Error. `parses::get_attrs`. Expected Fn, Imbl block or Trait !".to_string())},
-    };
-
-    Ok( res )
-}
-
-
-
 pub struct ActiveTextParser {
     pub open:      Option<String>,
     data:   Option<(usize,usize)>,
@@ -661,6 +632,7 @@ pub fn edit_write(  aaf: &AAFile,
 
 
     prefix += LINE_ENDING;
+    prefix += LINE_ENDING;
     prefix += "//++++++++++++++++++[ Interthread  Write to File ]+++++++++++++++++//";
     prefix += LINE_ENDING;
     prefix += &obj_name;
@@ -688,6 +660,34 @@ mod tests {
     
     #[test]
     fn test_find_attr(){
+        // NOT USED
+        fn get_attrs( item: &Item ) -> Result<(Vec<Attribute>, Item),String>{
+            let item = item.clone();
+            let attrs;
+        
+            let res = match item {
+            
+                Item::Fn(mut body)       => {
+                    attrs = body.attrs;
+                    body.attrs = Vec::new();
+                    (attrs, Item::Fn(body))
+                },
+                Item::Trait(mut body) => {
+                    attrs = body.attrs;
+                    body.attrs = Vec::new();
+                    (attrs, Item::Trait(body))
+                },
+                Item::Impl(mut body)   => {
+                    attrs = body.attrs;
+                    body.attrs = Vec::new();
+                    (attrs, Item::Impl(body))
+                },
+                _ => { return Err("Internal Error. `parses::get_attrs`. Expected Fn, Imbl block or Trait !".to_string())},
+            };
+        
+            Ok( res )
+        }
+
 
         let s = r#"
         struct Bla(i8);
