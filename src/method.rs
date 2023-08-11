@@ -1,7 +1,7 @@
 use crate::error::{self,met_new_found};
 use crate::attribute::AALib;
 
-use syn::{Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Receiver,Item,Token};
+use syn::{Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,Receiver,Item,Token};
 use proc_macro_error::abort;
 use proc_macro2::{TokenStream,Span};
 use quote::{quote,format_ident};
@@ -324,7 +324,7 @@ fn get_sigs(item: &syn::Item) -> (Option<Visibility>, Vec<(Visibility,Signature)
     res
 }
 
-// needs an argument for static methods
+
 pub fn get_methods( actor_type: &syn::Type, item: Item, stat:bool ) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
 
     let mut loc              = vec![];
@@ -332,8 +332,9 @@ pub fn get_methods( actor_type: &syn::Type, item: Item, stat:bool ) -> (Vec<Acto
     let ident_new                       = format_ident!("new");
     let ident_try_new                   = format_ident!("try_new");
 
-    let (item_vis,sigs) = get_sigs(&item);
-    // proc_macro_error::abort!(item, "After get_sigs");
+    // use item_vis for `group` 
+    let (_item_vis,sigs) = get_sigs(&item);
+
 
     for (vis,sig) in sigs {
 
@@ -358,48 +359,6 @@ pub fn get_methods( actor_type: &syn::Type, item: Item, stat:bool ) -> (Vec<Acto
             }
         }
     }
-
-
-    /*
-    for i in item_impl.items {
-        match i {
-            ImplItem::Fn( m ) => {
-                match m.vis {
-                    // check visibility "pub"
-                    Visibility::Public(_)|
-                    Visibility::Restricted(_) 
-                    => 
-                    {
-
-                        if is_self_refer(&m.sig){
-                            loc.push(sieve(m.vis,explicit(&m.sig,actor_type),Some(false)));
-                        } else {
-
-                            // check if there is a function "new" or "try_new"
-                            if m.sig.ident.eq(&ident_new) || m.sig.ident.eq(&ident_try_new){
-
-                                let(new_sig,res_opt) = check_self_return(actor_type,&mut m.sig.clone());
-                                let method = sieve(m.vis,m.sig.clone(),Some(true));
-                                method_new = ActorMethodNew::try_new( method, new_sig, res_opt ); 
-                            } 
-
-                            else {
-                                if stat {
-                                    if is_return(&m.sig){
-                                        loc.push(sieve(m.vis,explicit(&m.sig,actor_type),Some(true)));
-                                    }
-                                }
-                            }
-                        }
-                    },
-                    _ => (),
-                } 
-            },
-            _ => (),
-        }
-    }
-    */
-
     (loc, method_new)
 }
 

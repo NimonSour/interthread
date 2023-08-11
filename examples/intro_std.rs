@@ -23,9 +23,9 @@ impl MyActor {
 
 
 //  uncomment to see the generated code
-//  #[interthread::example(file="src/main.rs")] 
+//  #[interthread::example(path="src/main.rs")] 
 //   in examples 
-//  #[interthread::example(file="examples/intro_std.rs")]  
+//  #[interthread::example(path="examples/intro_std.rs")]  
 fn main() {
 
     let actor = MyActorLive::new(5);

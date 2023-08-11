@@ -63,7 +63,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "0.3.0"
+interthread = "1.0.0"
 oneshot     = "0.1.5" 
 ```
 
@@ -93,7 +93,7 @@ impl MyActor {
 }
 
 // uncomment to see the generated code
-//#[interthread::example(file="src/main.rs")] 
+//#[interthread::example(path="src/main.rs")] 
 fn main() {
 
     let actor = MyActorLive::new(5);
@@ -153,7 +153,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "0.3.0"
+interthread = "1.0.0"
 tokio = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -218,7 +218,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "0.3.0"
+interthread = "1.0.0"
 oneshot     = "0.1.5" 
 ```
 
@@ -314,373 +314,8 @@ Thread MAIN - Dog Tango says: Woof!
 
 The crate also includes a powerful macro called [`example`](https://docs.rs/interthread/latest/interthread/attr.example.html) that can expand the [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) macro, ensuring that users always have the opportunity to visualize and interact with the generated code. Which makes [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html)  100%  transparent macro . 
 
-Using [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) in conjuction with [`example`](https://docs.rs/interthread/latest/interthread/attr.example.html) empowers users to 
-explore more and more advanced techniques and unlock the full potential of 
-parallel and concurrent programming, paving the way for 
-improved performance and streamlined development processes.
-
-### Examples
-Filename: Cargo.toml
-
-```text
-[dependencies]
-interthread = "0.3.0"
-tokio = { version="1.28.2",features=["full"]}
-```
-Filename: main.rs
-```rust
-use tokio::time::{sleep,Duration};
-pub struct MyActor;
-
-#[interthread::actor(channel=2,lib="tokio")] 
-impl MyActor {
-
-    pub fn new() -> Self {Self}
-
-    pub async fn sleep(&self, n:u8) {
-        tokio::spawn(async move{
-            // sleep one second
-            sleep(Duration::from_secs(1)).await;
-            println!("Task {} awake now!",n);
-        });
-    }
-}
-
-#[tokio::main]
-async fn main(){
-
-    let actor = MyActorLive::new();
-
-    for i in 0..60 {
-
-        let act_a = actor.clone();
-
-        let _ = tokio::spawn(async move {
-            act_a.sleep(i).await;
-        });
-    }
-    // check how long
-    // will take to sleep a minute 
-    sleep(Duration::from_secs_f64(1.01)).await; 
-}
-
-```
-
-Outputs (on my machine )
-
-```terminal
-Task 34 awake now!
-Task 23 awake now!
-Task 25 awake now!
-Task 24 awake now!
-Task 5 awake now!
-        ...
-Task 59 awake now!
-Task 42 awake now!
-Task 57 awake now!
-Task 58 awake now!
-Task 55 awake now!
-```
-60 in  total.
-
-The above example demonstrates a more advanced usage of the [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) macro, showcasing its flexibility and capabilities. In this example, we explore non-blocking behavior that doesn't modify the state of the object or return any type.
-
-To modify the state we'll need to use some additional types  "shared state types" or "thread-safe types".
-
-### Examples
-
-```rust
-
-use tokio::time::{sleep,Duration};
-use std::sync::{Arc,Mutex};
-
-pub struct MyActor(Arc<Mutex<u8>>);
-
-#[interthread::actor(channel=2,lib="tokio")] 
-impl MyActor {
-
-    pub fn new() -> Self {Self(Arc::new(Mutex::new(0)))}
-
-    pub async fn sleep_increment(&self) {
-        // clone the value 
-        let value = Arc::clone(&self.0);
-        tokio::spawn(async move{
-            // sleep one second 
-            sleep(Duration::from_secs(1)).await;
-            // increment the value
-            let mut guard = value.lock().unwrap();
-            *guard += 1;
-        });
-    }
-    pub fn get_value(&self) -> u8 {
-        self.0.lock().unwrap().clone()
-    }
-}
-
-#[tokio::main]
-async fn main(){
-
-    let actor = MyActorLive::new();
-
-    for _ in 0..60 {
-        let act_clone = actor.clone();
-
-        let _ = tokio::spawn(async move {
-            act_clone.sleep_increment().await;
-        });
-    }
-    // play with Duration
-    // set it to `1.00` and see how many tasks will
-    // increment after sleep 
-    sleep(Duration::from_secs_f64(1.01)).await;
-    println!("Total tasks - {}", actor.get_value().await);
-}
-
-```
-Outputs ( on my machine )
-
-```terminal
-Total tasks - 60
-```
-
-To return a type from the task, we will use a 'channel' 
-from crate <a href="https://docs.rs/oneshot">oneshot</a>.
-Tokio offers its own version of `oneshot`.
-
-Filename: Cargo.toml
-
-```text
-[dependencies]
-interthread = "0.3.0"
-tokio = { version="1.28.2",features=["full"]}
-```
-
-### Examples
-
-```rust
-
-use tokio::time::{sleep,Duration};
-use tokio::sync::oneshot::{self,Sender};
-use std::sync::{Arc,Mutex};
-pub struct MyActor(Arc<Mutex<u32>>);
-// we use argument `id`
-#[interthread::actor(channel=2,lib="tokio",id=true)] 
-impl MyActor {
-
-    pub fn new() -> Self {Self(Arc::new(Mutex::new(0)))}
-
-    pub async fn init_actor_increment(&self,val:usize, sender: Sender<MyActorLive>){
-        
-        // clone the value of Actor 
-        let value = Arc::clone(&self.0);
-        tokio::spawn(async move {
-            // I prefer to initialize them like this,
-            // since they are competing with each other
-            // to obtain the unique ID.
-            // but if you commentout the "sleep" 
-            // statement it will work anyway
-            sleep(Duration::from_millis(val as u64)).await;
-
-            //create actor
-            let actor = MyActorLive::new();
-
-            // send actor
-            let _ = sender.send(actor);
-
-            // increment the value
-            let mut guard = value.lock().unwrap();
-            *guard += 1;
-        });
-    }
-    pub fn get_value(&self) -> u32 {
-        self.0.lock().unwrap().clone()
-    }
-}
-
-#[tokio::main]
-async fn main(){
-    let mut handles = Vec::new();
-    let actor = MyActorLive::new();
-    
-  
-    for i in 0..1000 {
-        let act_clone = actor.clone();
-
-        let handle = tokio::spawn(async move {
-
-            let (send,recv) = oneshot::channel();
-            
-            // we want to receive an instance of 
-            // new actor 
-            // we send channel sender   
-            act_clone.init_actor_increment(i, send).await;
-
-            // awaiting for new actor 
-            recv.await
-        });
-        handles.push(handle);
-    }
-    
-    let mut actors = Vec::new(); 
-    // receiving 
-    for handle in handles {
-        let act = 
-        handle.await
-              .expect("Task Fails")
-              .expect("Receiver Fails");
-        
-        actors.push(act);
-    }
-
-    println!("Total tasks - {}", actor.get_value().await);
-    println!("actors.len() -> {}", actors.len());
-    
-
-    // actors can be sorted by
-    // the time they were invoked
-    actors.sort();
-    assert_eq!(actors[0] < actors[1],true); 
-    assert_eq!(actors[121] < actors[122],true); 
-    assert_eq!(actors[998] < actors[999],true); 
-
-
-    // check if they have unique Id 
-    // for act in actors.clone(){
-    for i in (actors.len() - 1) ..0{
-        let target = actors.remove(i);
-        if actors.iter().any(move |x| *x == target){
-            println!("ActorModel Ids are not unique")
-        }
-    }
-    eprintln!(" * end of program * ");
-}
-```
-The `id` argument is particularly useful when working with multiple instances of the same type, each/some serving different threads. It allows for distinct identification and differentiation between these instances, enabling more efficient and precise control over their behavior and interactions.
-
-The following example serves as a demonstration of the  flexibility provided by the [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) macro. It showcases how 
-easy is to customize and modify various aspects of the code generation process. 
-
-### Examples
-
-Filename: Cargo.toml
-
-```text
-[dependencies]
-interthread = "0.3.0"
-oneshot     = "0.1.5" 
-```
-
-Filename: main.rs
-```rust
-
-use std::sync::mpsc;
-use interthread::actor;
- 
-pub struct MyActor {
-    value: i8,
-}
-
-// we use here the `edit` argument
-// indicating the part of code 
-// we want to change
-#[actor(channel=2, edit(play))]
-impl MyActor {
-
-    pub fn new( value: i8 ) -> Self {
-        Self{value}
-    }
-    pub fn increment(&mut self) -> i8{
-        self.value += 1;
-        self.value
-    }
-    // it's safe to hack the macro in this way
-    // having `&self` as receiver along  with
-    // other things creates a `Script` variant  
-    // We'll catch it in `play` function
-    pub fn play_get_counter(&self)-> Option<u32>{
-        None
-    }
-
-}
-
-// manually create "play" function 
-// use `example` macro to copy paste
-// `play`'s body
-pub fn my_actor_play( 
-     receiver: mpsc::Receiver<MyActorScript>,
-    mut actor: MyActor) {
-
-    // set a custom variable 
-    let mut call_counter = 0;
-
-    while let Ok(msg) = receiver.recv() {
-
-        // match incoming msgs
-        // for `play_get_counter` variant
-        match msg {
-            // you don't have to remember the 
-            // the name of the `Script` variant 
-            // your text editor does it for you
-            // so just choose the variant
-            MyActorScript::PlayGetCounter { output  } =>
-            { let _ = output.send(Some(call_counter));},
-            
-            // else `direct` as usual 
-            _ => { msg.my_actor_direct(&mut actor); }
-        }
-        call_counter += 1;
-    }
-    eprintln!("the end");
-}
-
-
-fn main() {
-
-    let my_act = MyActorLive::new(0);
-    let mut act_a = my_act.clone();
-    let mut act_b = my_act.clone();
-
-    let handle_a = std::thread::spawn(move || {
-        act_a.increment();
-    });
-    let handle_b = std::thread::spawn(move || {
-        act_b.increment();
-    });
-    
-    let _ = handle_a.join();
-    let _ = handle_b.join();
-
-
-    let handle_c = std::thread::spawn(move || {
-
-        // as usual we invoke a method on `live` instance
-        // which has the same name as on the Actor object
-        // but 
-        if let Some(counter) = my_act.play_get_counter(){
-
-            println!("This call never riched the `Actor`, 
-            it returns the value of total calls from the 
-            `play` function, call_counter = {:?}",counter);
-
-            assert_eq!(counter, 2);
-        }
-    });
-    let _ = handle_c.join();
-
-}
-```
-The provided example serves as a glimpse into the capabilities of the actor macro, which significantly reduces the amount of boilerplate code required for interthread actors. While the example may not be immediately comprehensible, it demonstrates how the macro automates the generation of essential code, granting developers the freedom to modify and manipulate specific parts as needed.
-
 For more details, read the
 [![Docs.rs](https://docs.rs/interthread/badge.svg)](https://docs.rs/interthread#sdpl-framework)
 
-If you like this project, please consider making a small  contribution. 
-
-Your support helps ensure its continued development
-<a href="https://www.buymeacoffee.com/6fm9wrhmk7V" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me A Coffee" style="height: 30px !important;width: 108px !important;" ></a>
-
-Join `interthread` on GitHub for discussions! [![GitHub](https://img.shields.io/badge/GitHub-%2312100E.svg?&style=plastic&logo=GitHub&logoColor=white)](https://github.com/NimonSour/interthread/discussions/1)
-
-Please check regularly for new releases and upgrade to the latest version!
 
 Happy coding! 

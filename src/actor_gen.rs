@@ -5,34 +5,19 @@ use crate::error;
 
 use proc_macro_error::abort;
 use std::boxed::Box;
-use syn::{Ident,ItemImpl,Signature,Item,Type,Token};
+use syn::{Ident,Signature,Item,Type };
 use quote::{quote,format_ident};
 use proc_macro2::{Span,TokenStream};
 
 
-
-
-pub fn impl_get_name(impl_block: &ItemImpl) -> Ident{
-    match &*impl_block.self_ty {
-        Type::Path(tp) => tp.path.segments.first().unwrap().ident.clone(),
-        _ => abort!(impl_block,"Internal Error.'actor_gen::impl_get_name'. Could not get item Impl's name!"),
-    }
-}
-
-
 // returns  (code,edit) TokenStreams 
-pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:AAExpand ) -> (TokenStream, TokenStream){
+pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac: &AAExpand ) -> (TokenStream, TokenStream){
 
-    // let actor_name = impl_get_name(&impl_block);
     let (actor_name,actor_type) = name::get_name_and_type(mac,&item,);
     
-    // proc_macro_error::abort!(item, "After type returns");
-    // let actor_ty = quote::format_ident!{"Actor"};
     let (actor_methods, 
          met_new) =
          method::get_methods( &actor_type,item.clone(),aaa.assoc );
-    
-    // proc_macro_error::abort!(item, "After actor methods");
 
     let met_new = if met_new.is_none() {
         if method::is_trait(&actor_type) {
@@ -48,9 +33,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
     // Giving a new name if specified 
     let cust_name   = if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { actor_name.clone() }; 
     
-    // let play_name   = name::play(  &cust_name);
     let script_name = name::script(&cust_name);
-    // let direct_name = name::direct(&cust_name);
     let live_name   = name::live(&cust_name);
     
     
@@ -76,7 +59,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
     let mut script_def;
     let mut script_mets  = vec![];
-    let mut script_trts  = vec![];
+    // let mut script_trts  = vec![];
 
 
 
@@ -106,7 +89,6 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         
         method::change_signature_refer(&mut sig);
         let await_call = await_token(sig.asyncness.is_some());
-        // let actor_name  = &self.name;
         let stat_met = quote! {
             #vis #sig {
                 #actor_name::#ident #args #await_call
@@ -297,6 +279,68 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
     } 
 
 
+    // METHOD NEW
+    { 
+        let new_sig             = &met_new.new_sig;
+        let func_new_name           = &new_sig.ident;
+        let (args_ident, _ )   = method::arguments_ident_type(&met_new.get_arguments());
+        let live_var                 = format_ident!("actor_live");
+        let unwrapped          = met_new.unwrap_sign();
+        let return_statement   = met_new.live_ret_statement(&live_var);
+        let vis                = &met_new.vis.clone();
+
+        let live_new_spawn = |play_args:TokenStream| {
+            match aaa.lib {
+                AALib::Std      => {
+                    quote!{ std::thread::spawn(|| { #script_name :: play(#play_args) } );}
+                },
+                AALib::Smol     => {
+                    quote!{ smol::spawn( #script_name :: play(#play_args) ).detach();} 
+                },
+                AALib::Tokio    => {
+                    quote!{ tokio::spawn( #script_name :: play(#play_args) );}
+                },
+                AALib::AsyncStd => {
+                    quote!{ async_std::task::spawn( #script_name :: play(#play_args) );}
+                },
+            }
+        };
+
+        let (init_actor, play_args) = {
+            let id_debut_name = if aaa.id {quote!{ ,debut,name}} else {quote!{}};
+            match  aaa.channel {
+                AAChannel::Inter => {
+                    ( quote!{ Self{ queue: queue.clone(), condvar: condvar.clone() #id_debut_name } }, quote!{ queue, condvar, actor  } )
+                },
+                _  => {
+                    ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, actor } )
+                },
+            }
+        };
+
+        let spawn = live_new_spawn(play_args);
+        let (id_debut,id_name)  =  
+        if aaa.id {
+            (quote!{let debut =  #script_name ::debut();},
+                quote!{let name  = String::from("");})
+        } else { (quote!{}, quote!{}) };
+
+        let func_new_body = quote!{
+
+            #vis #new_sig {
+                #new_live_send_recv
+                let actor = #actor_name:: #func_new_name #args_ident #unwrapped;
+                #id_debut
+                #id_name
+                let #live_var = #init_actor;
+                #spawn
+                #return_statement
+            }
+        };
+        // live_mets.push((new_sig.ident.clone(),func_new_body));
+        live_mets.insert(0,(new_sig.ident.clone(),func_new_body));
+    };
+
     // INTER METHODS AND TRAITS
     if aaa.id {
 
@@ -379,111 +423,29 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         }));  
     } 
 
-/*
+    script_def = {
 
-// match aaa.channel {
-//     AAChannel::Inter =>{ 
-//         live_trts.push((format_ident!("Drop"),
-//         quote!{
-//             impl Drop for #live_name{
-//                 fn drop(&mut self){
-//                     self.condvar.notify_one();
-//                 }
-//             }
-//         }));
-//     },
-//     _ => (),
-// }
-*/
+        quote! {
+            #[derive(Debug)]
+            #new_vis enum #script_name {
+                #(#script_fields),*
+            }
+        }
+    };
 
-/*
- 
-// fn gen_impl_debut(&self) -> TokenStream {
-//     let script_name = name::script(&self.cust_name);
-//     if self.aaa.id {
-//         quote!{
-//             impl #script_name {
+    // DIRECT
+    {
 
-//                 pub fn debut() -> std::sync::Arc<std::time::SystemTime>{
-//                     static FLAG: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-//                     loop {
-//                         let current = FLAG.load(std::sync::atomic::Ordering::SeqCst);
-//                         let time = std::sync::Arc::new(std::time::SystemTime::now());
-//                         if let Ok(_) = FLAG.compare_exchange(
-//                             current,
-//                             !current,
-//                             std::sync::atomic::Ordering::SeqCst,
-//                             std::sync::atomic::Ordering::Relaxed,
-//                         ){ return time }
-//                     }
-//                 }
-//             }
-//         }
-//     }
-//     else {
-//         quote!{}
-//     }
-// }
-*/
-
-/*
-fn gen_impl_eq_ord(&self) -> TokenStream {
-    let live_name = name::live(&self.cust_name);
-    if self.aaa.id {
+        let decl_async= async_token(direct_async);
+        script_mets.push((format_ident!("direct"),
         quote!{
-            impl PartialEq for #live_name {
-                fn eq(&self, other: &Self) -> bool {
-                    *self.debut == *other.debut
+            #new_vis #decl_async fn direct (self, actor: &mut #actor_type ) {
+                match self {
+                    #(#direct_arms)*
                 }
             }
-            
-            impl Eq for #live_name {}
-            
-            impl PartialOrd for #live_name {
-                fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                    other.debut.partial_cmp(&self.debut)
-                }
-            }
-            
-            impl Ord for #live_name {
-                fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                    other.debut.cmp(&self.debut)
-                }
-            }
-        }
+        }));
     }
-    else {
-        quote!{}
-    }
-}
-
- */
-
-script_def = {
-
-    quote! {
-        #[derive(Debug)]
-        #new_vis enum #script_name {
-            #(#script_fields),*
-        }
-    }
-};
-
-
-
-// DIRECT
-{
-
-    let decl_async= async_token(direct_async);
-    script_mets.push((format_ident!("direct"),
-    quote!{
-        #new_vis #decl_async fn direct (self, actor: &mut #actor_type ) {
-            match self {
-                #(#direct_arms)*
-            }
-        }
-    }));
-}
 
 
     // PLAY
@@ -570,95 +532,8 @@ script_def = {
                 }
             },
         };
-
         script_mets.push(( format_ident!("play"), play_met ));
     }
-
-
-    // METHOD NEW
-    { 
-        let new_sig             = &met_new.new_sig;
-        let func_new_name           = &new_sig.ident;
-        let (args_ident, _ )   = method::arguments_ident_type(&met_new.get_arguments());
-        let live_var                 = format_ident!("actor_live");
-        let unwrapped          = met_new.unwrap_sign();
-        let return_statement   = met_new.live_ret_statement(&live_var);
-        let vis                = &met_new.vis.clone();
-
-        let live_new_spawn = |play_args:TokenStream| {
-            match aaa.lib {
-                AALib::Std      => {
-                    quote!{ std::thread::spawn(|| { #script_name :: play(#play_args) } );}
-                },
-                AALib::Smol     => {
-                    quote!{ smol::spawn( #script_name :: play(#play_args) ).detach();} 
-                },
-                AALib::Tokio    => {
-                    quote!{ tokio::spawn( #script_name :: play(#play_args) );}
-                },
-                AALib::AsyncStd => {
-                    quote!{ async_std::task::spawn( #script_name :: play(#play_args) );}
-                },
-            }
-        };
-
-        let (init_actor, play_args) = {
-            let id_debut_name = if aaa.id {quote!{ ,debut,name}} else {quote!{}};
-            match  aaa.channel {
-                AAChannel::Inter => {
-                    ( quote!{ Self{ queue: queue.clone(), condvar: condvar.clone() #id_debut_name } }, quote!{ queue, condvar, actor  } )
-                },
-                _  => {
-                    ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, actor } )
-                },
-            }
-        };
-
-        let spawn = live_new_spawn(play_args);
-        let (id_debut,id_name)  =  
-        if aaa.id {
-            (quote!{let debut =  #script_name ::debut();},
-             quote!{let name  = String::from("");})
-        } else { (quote!{}, quote!{}) };
-
-        let func_new_body = quote!{
-
-            #vis #new_sig {
-                #new_live_send_recv
-                let actor = #actor_name:: #func_new_name #args_ident #unwrapped;
-                #id_debut
-                #id_name
-                let #live_var = #init_actor;
-                #spawn
-                #return_statement
-            }
-        };
-        live_mets.push(
-            (new_sig.ident.clone(),func_new_body)
-        );
-    };
-
-/*
-
-// DROP FOR INTER
-// {
-//     // let live_name  = name::live(&self.cust_name);
-//     match aaa.channel{
-
-//         AAChannel::Inter =>{ 
-//             quote!{
-
-//                 impl Drop for #live_name{
-//                     fn drop(&mut self){
-//                         self.condvar.notify_one();
-//                     }
-//                 }
-//             }
-//         },
-//         _ => (),
-//     }
-// };
-*/
 
     live_def = {
         let (debut_field, name_field) = if aaa.id {
@@ -676,53 +551,11 @@ script_def = {
         }
     };
 
-/*
-// generate handlestruct
-let gen_struct_live = {
-
-    // let live_name           = name::live(&self.cust_name);
-    // let send_channel  = self.channels.live_field_sender.clone(); 
-    let fn_new_self   = 
-    if  self.aaa.edit.live_new.is_none() {
-        self.gen_struct_live_method_new()
-    } else { quote!{}};
-    let methods = &self.live_methods; 
-    // let impl_drop     = self.gen_live_impl_drop();
-    
-    let id_debut = if aaa.id { quote!{ pub debut: std::sync::Arc<std::time::SystemTime>,}} else { quote!{}};
-    let id_name  = if aaa.id { quote!{ pub name: String,}} else { quote!{}};
-
-    let id_set_get_name      = if aaa.id { self.live_inter_set_get_name() } else { quote!{}};
-    let id_get_count_debut   = if aaa.id { self.live_inter_get_count_debut()} else { quote!{}};
-
-    quote!{
-        #[derive(Clone,Debug)]
-        pub struct #live_name {
-            #live_field_sender
-            #id_debut
-            #id_name
-        }
-
-        impl #live_name  {
-
-            #fn_new_self
-
-            #(#methods)*
-
-            #id_set_get_name
-
-            #id_get_count_debut
-        }
-        #live_impl_drop
-    }
-};
- */
-
     // Create and Select Edit Parts
 
     let mut edit_script_def   = quote::quote!{};
     let edit_script_mets ;
-    let edit_script_trts ;
+    // let edit_script_trts ;
 
     let mut edit_live_def  = quote::quote!{};
     let edit_live_mets ;
@@ -734,13 +567,13 @@ let gen_struct_live = {
         crate::attribute::AAEdit  { live, script } => {
             match script {
 
-                ( def , mets, trts) => {
+                ( def , mets, _trts) => {
                     if def {
                         edit_script_def = script_def.clone();
                         script_def      = quote::quote!{}; 
                     }
                     edit_script_mets = edit_select(mets,&mut script_mets);
-                    edit_script_trts = edit_select(trts,&mut script_trts);
+                    // edit_script_trts = edit_select(trts,&mut script_trts);
                 },
             }
 
@@ -781,54 +614,29 @@ let gen_struct_live = {
 
     };
 
-    let res_edit = quote!{
+    let res_edit_script_mets =  
+    if  edit_script_mets.is_empty() { quote!{} }
+    else { quote!{ impl #script_name { #(#edit_script_mets)* }}};
 
+    let res_edit_live_mets =  
+    if  edit_live_mets.is_empty() { quote!{} }
+    else { quote!{ impl #live_name { #(#edit_live_mets)* }}};
+
+    let res_edit_live_trts =  
+    if  edit_live_trts.is_empty() { quote!{} }
+    else { quote!{ #(#edit_live_trts)* }};
+
+
+    let res_edit = quote!{
+        #edit_script_def
+        #res_edit_script_mets
+        #edit_live_def
+        #res_edit_live_mets
+        #res_edit_live_trts
     };
+
     (res_code, res_edit)
 
-/*
-// this method will generate SDPL parts
-pub fn generate(&mut self) -> TokenStream {
-
-    // populate
-    self.gen_tokio_actor_model_bits();
-    let impl_debut = self.gen_impl_debut();
-    let id_impl_traits = self.gen_impl_eq_ord();
-    
-    // ACTOR
-    let actor       = self.impl_block.clone();
-
-    // SCRIPT 
-    let script   = if  self.aaa.edit.script.is_none() {self.gen_script()} else { quote!{}};
-
-    // DIRECT
-    let direct   = if  self.aaa.edit.direct.is_none() {self.gen_impl_direct()} else { quote!{}};
-
-    // PLAY 
-    let play     = if  self.aaa.edit.play.is_none() {self.gen_func_play()} else { quote!{}};
-
-    // LIVE
-    let live     = if  self.aaa.edit.live.is_none() {self.gen_struct_live()} else { quote!{}};
-    
-
-    let res = quote! {
-
-        #actor
-
-        #script
-            #impl_debut
-        #direct
-
-        #play
-
-        #live
-            #id_impl_traits
-    };
-
-    res
-
-}
-*/
 }
 
 

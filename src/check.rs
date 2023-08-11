@@ -30,15 +30,3 @@ pub fn channels_import( lib: &AALib ){
         }
     }
 }
-
-pub fn actor_item( item: &syn::Item ){
-    
-    match item {
-        syn::Item::Impl(_)  => (),
-        syn::Item::Trait(_) => (),
-        _ => {
-            let msg = "Expected an `impl` or `trait` block!";
-            abort!(item,msg);
-        }
-    }
-}

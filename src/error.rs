@@ -131,7 +131,7 @@ pub static AVAIL_EXAMPLE: &'static str = "
     main 
 
     (   
-        file = \"path/to/file.rs\" 
+        path = \"path/to/file.rs\" 
 
         expand(actor,group) *
     )
@@ -183,20 +183,6 @@ pub static AVAIL_CHANNEL: &'static str ="
 
 *  -  default
 ";
-/*
-pub static AVAIL_EDIT: &'static str = "
-\navailable 'edit' options:
-         
-     Options        Description 
-         
-    'script'    'enum ActorScript'            
-    'direct'    'impl ActorScript::actor_direct()'  
-    'play'      'fn actor_play'               
-    'live'      'struct ActorLive' 
-    'live::new' 'struct ActorLive::new'
-";
- */
-
 
 pub static AVAIL_EDIT: &'static str = "
 \navailable 'edit' options:
@@ -214,16 +200,16 @@ pub static AVAIL_EDIT: &'static str = "
                   trt(name, ..)
                 ) 
 
-def - Struct definition 
-imp - Struct methods 
-trt - Struct traits
+def  - Struct definition 
+imp  - Struct methods 
+trt  - Struct traits
+name - method/trait name
 
-! When employing the `imp` or `trt` option without providing a tuple list, \
+    When employing the `imp` or `trt` option without providing a tuple list, \
 the macro interprets it as a request to include all method/trait names.
-Similarly, for `script` and `live` where `edit(live)` implies `edit(live(def, imp, trt))`,
-`edit` itself implies `edit(live,script)` !
+    Similarly, for `script` or `live` a statement `edit(live)` implies `edit(live(def, imp, trt))`, \
+a statement just `edit` implies `edit(live,script)` !
 ";
-
 
 
 pub static AVAIL_ACTOR: &'static str = "
@@ -239,10 +225,10 @@ pub static AVAIL_ACTOR: &'static str = "
               \"async_std\"
 
         edit
-        ( 
-            script(..)
-            live(..)
-        ) 
+            ( 
+             script(..)
+             live(..)
+            ) 
 
         name = \"\" 
 
@@ -254,10 +240,8 @@ pub static AVAIL_ACTOR: &'static str = "
     )
 ]
 
-
 *  -  default 
 ";
-
 
 
 pub fn live_send_recv(cust_name: &syn::Ident, ) -> (TokenStream, TokenStream){
@@ -275,8 +259,8 @@ pub fn live_guard(cust_name: &syn::Ident) -> TokenStream {
 }
 
 pub fn play_guard(cust_name: &syn::Ident) -> TokenStream {
-    let play_name  = &name::play(cust_name);
-    let msg        = format!("'{play_name}::queuing'. Failed to unwrap MutexGuard!");
+    let script_name = &name::script(cust_name);
+    let msg        = format!("'{script_name}::play::queuing'. Failed to unwrap MutexGuard!");
     quote!{#msg}
 }
 
@@ -288,10 +272,16 @@ pub fn end_of_life(name: &syn::Ident) -> TokenStream {
 }
 
 pub fn direct_send(cust_name: &syn::Ident) -> TokenStream {
-    let direct_name  = &name::direct(cust_name);
-    let msg = format!("'{direct_name}.send'. Channel closed");
+    let script_name = &name::script(cust_name);
+    let msg = format!("'{script_name}::direct.send'. Channel closed");
     quote!{#msg}
 }
+
+pub static SCRIPT_NO_TRT: &'static str = "
+    The `actor`'s `Script struct` does not implement any traits. 
+    Consequently, the use of the `trt` argument for `script` is not applicable. If your intention is \
+to modify derived traits, consider using the `def` option instead.";
+
 
 pub fn trait_new_sig<T: quote::ToTokens>(ty:&T, exists: bool) -> (String,String){
     let actor_ty = quote!{#ty}.to_string();
@@ -338,4 +328,17 @@ pub fn item_vis() -> (String,String){
 
 
     (note,help)
+}
+
+// temp error new args 
+pub static OLD_DIRECT_ARG: &'static str = "
+    Since v1.0.0 `direct` argument is not aplicable. Use `edit(script(imp(direct)))` instead!
+";
+
+pub static OLD_PLAY_ARG: &'static str = "
+    Since v1.0.0 `play` argument is not aplicable. Use `edit(script(imp(play)))` instead!
+";
+
+pub fn old_file_arg( path: String ) -> String {
+    format!( "Since v1.0.0 `file` argument is not aplicable. Use `path= \"{}\"` instead!", &path )
 }

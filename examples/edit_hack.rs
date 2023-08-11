@@ -6,6 +6,9 @@ pub struct MyActor {
     value: i8,
 }
 
+// this is initial macro 
+// #[actor(channel=2,file="src/main.rs",edit(script(imp(play))))]
+// will change to 
 #[actor(channel=2, edit(script(imp(play))))]
 
 impl MyActor {
@@ -27,9 +30,9 @@ impl MyActor {
 
 }
 
-// manually create "play" function 
-// use `example` macro to copy paste
-// `play`'s body
+// we have the code of `play` component
+// using `edit` in conjuction with `file`
+// Initiated By  : #[actor(channel=2,file="src/main.rs",edit(script(imp(play))))]  
 impl MyActorScript {
 
     pub fn play( 

@@ -68,7 +68,7 @@
 //! 
 //! The [`actor`](./attr.actor.html) macro -  when applied to the 
 //! implementation block of a given "MyActor" object,
-//! generates additional types and functions 
+//! generates additional Struct types  
 //! that enable communication between threads.
 //! 
 //! A notable outcome of applying this macro is the 
@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "0.3.0"
+//!interthread = "1.0.0"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -113,7 +113,7 @@
 //!    }
 //!}
 //! // uncomment to see the generated code
-//! //#[interthread::example(file="src/main.rs")]  
+//! //#[interthread::example(path="src/main.rs")]  
 //!fn main() {
 //!
 //!    let actor = MyActorLive::new(5);
@@ -204,15 +204,15 @@
 //! 
 //! 
 //! # direct
-//! The implementation block of [`script`](#script), specifically 
-//! the `actor_name_ + direct` method which allows 
+//! The implementation block of `script`struct, specifically 
+//! the `direct` method which allows 
 //! for direct invocation of the Actor's methods by mapping 
 //! the enum variants to the corresponding function calls.
 //! 
 //! 
-//! ```rust
+//!```rust
 //!impl MyActorScript {
-//!    pub fn my_actor_direct(self, actor: &mut MyActor) {
+//!    pub fn direct(self, actor: &mut MyActor) {
 //!        match self {
 //!            MyActorScript::Increment {} => {
 //!                actor.increment();
@@ -231,11 +231,11 @@
 //!        }
 //!    }
 //!}
-//! 
-//! ```
+//!```
 //! 
 //! # play
-//! The function  `actor_name_ + play` responsible for 
+//! The implementation block of `script`struct, specifically 
+//! the `play` associated (static) method responsible for 
 //! continuously receiving `script` variants from 
 //! a dedicated channel and `direct`ing them.
 //! 
@@ -243,14 +243,16 @@
 //! 
 //! 
 //!```rust
-//!pub fn my_actor_play(
-//!    receiver: std::sync::mpsc::Receiver<MyActorScript>, 
-//!    mut actor: MyActor) {
-//! 
-//!    while let Ok(msg) = receiver.recv() {
-//!        msg.my_actor_direct(&mut actor);
+//!impl MyActorScript { 
+//!    pub fn play(
+//!        receiver: std::sync::mpsc::Receiver<MyActorScript>, 
+//!        mut actor: MyActor) {
+//!     
+//!        while let Ok(msg) = receiver.recv() {
+//!            msg.direct(&mut actor);
+//!        }
+//!        eprintln!("MyActor end of life ...");
 //!    }
-//!    eprintln!("MyActor end of life ...");
 //!}
 //!``` 
 //! 
@@ -258,7 +260,7 @@
 //! macro, such as 
 //! 
 //!```rust
-//!#[interthread::actor(channel=2, edit(play))]
+//!#[interthread::actor(channel=2, edit(script(imp(play))))]
 //!``` 
 //! 
 //! it allows for manual implementation of the `play` part, which 
@@ -282,12 +284,16 @@
 //! 
 //! ```rust 
 //! 
+//!#[derive(Clone, Debug)]
+//!pub struct MyActorLive {
+//!    sender: std::sync::mpsc::SyncSender<MyActorScript>,
+//!}
 //!impl MyActorLive {
 //!    pub fn new(v: i8) -> Self {
 //!        let (sender, receiver) = std::sync::mpsc::sync_channel(2);
 //!        let actor = MyActor::new(v);
 //!        let actor_live = Self { sender };
-//!        std::thread::spawn(|| my_actor_play(receiver, actor));
+//!        std::thread::spawn(|| { MyActorScript::play(receiver, actor) });
 //!        actor_live
 //!    }
 //!    pub fn increment(&mut self) {
@@ -307,18 +313,18 @@
 //!            .sender
 //!            .send(msg)
 //!            .expect("'MyActorLive::method.send'. Channel is closed!");
-//!        recv.recv()
-//!            .expect("'MyActorLive::method.recv'. Channel is closed!")
+//!        recv.recv().expect("'MyActorLive::method.recv'. Channel is closed!")
 //!    }
 //!    pub fn get_value(&self) -> i8 {
 //!        let (send, recv) = oneshot::channel();
-//!        let msg = MyActorScript::GetValue { output: send };
+//!        let msg = MyActorScript::GetValue {
+//!            output: send,
+//!        };
 //!        let _ = self
 //!            .sender
 //!            .send(msg)
 //!            .expect("'MyActorLive::method.send'. Channel is closed!");
-//!        recv.recv()
-//!            .expect("'MyActorLive::method.recv'. Channel is closed!")
+//!        recv.recv().expect("'MyActorLive::method.recv'. Channel is closed!")
 //!    }
 //!}
 //! 
@@ -397,6 +403,7 @@ mod name;
 mod method;
 mod check;
 mod error;
+mod parse;
 
 
 static INTERTHREAD: &'static str            = "interthread";
@@ -407,6 +414,10 @@ static ACTOR: &'static str                  = "actor";
 static EXAMPLE: &'static str                = "example";
 static EXAMPLES: &'static str               = "examples";
 
+#[cfg(windows)]
+const LINE_ENDING: &'static str = "\r\n";
+#[cfg(not(windows))]
+const LINE_ENDING: &'static str = "\n";
 
 /// # Code transparency and exploration
 ///  
@@ -451,7 +462,7 @@ static EXAMPLES: &'static str               = "examples";
 ///pub struct Number;
 ///
 /// // you can have "example" macro in the same file
-/// // #[example(file="src/my_file.rs")]
+/// // #[example(path="src/my_file.rs")]
 ///
 ///#[actor(channel=5)]
 ///impl Number {
@@ -463,7 +474,7 @@ static EXAMPLES: &'static str               = "examples";
 ///Filename: main.rs 
 ///```rust
 ///use interthread::example;
-///#[example(file="src/my_file.rs")]
+///#[example(path="src/my_file.rs")]
 ///fn main(){
 ///}
 ///
@@ -501,13 +512,13 @@ static EXAMPLES: &'static str               = "examples";
 /// `examples/inter` directory. For example:
 ///
 ///```rust
-///#[example(file="my_file.rs")]
+///#[example(path="my_file.rs")]
 ///```
 ///
 /// This is equivalent to:
 ///
 ///```rust
-///#[example(mod(file="my_file.rs"))]
+///#[example(mod(path="my_file.rs"))]
 ///```
 ///
 /// The generated example code file will be located at 
@@ -525,7 +536,7 @@ static EXAMPLES: &'static str               = "examples";
 /// and an additional `main.rs` file. 
 ///
 ///```rust
-///#[example(main(file="my_file.rs"))]
+///#[example(main(path="my_file.rs"))]
 ///```
 ///
 /// This option is particularly useful for testing and 
@@ -549,7 +560,7 @@ static EXAMPLES: &'static str               = "examples";
 ///    main 
 ///
 ///    (   
-///        file = "path/to/file.rs" ❗️ 
+///        path = "path/to/file.rs" ❗️ 
 ///
 ///        expand(actor,group) ✔
 ///    )
@@ -564,19 +575,19 @@ static EXAMPLES: &'static str               = "examples";
 /// 
 /// # Arguments
 /// 
-/// - [`file`](#file)
+/// - [`path`](#file)
 /// - [`expand`](#expand) (default)
 /// 
-/// # file
+/// # path
 /// 
 /// 
-/// The file argument is a required parameter of the [`example`](./attr.example.html) macro.
+/// The `path` argument is a required parameter of the [`example`](./attr.example.html) macro.
 /// It expects the path to the file that needs to be expanded.
 /// 
 /// This argument is essential as it specifies the target file 
 /// for code expansion.
 /// 
-/// One more time [`example`](./attr.example.html) macro can be 
+/// ! One more time [`example`](./attr.example.html) macro can be 
 /// placed on any item in any file within your `src` directory.
 /// 
 ///  
@@ -594,7 +605,7 @@ static EXAMPLES: &'static str               = "examples";
 /// example code, you can use the following attribute:
 /// 
 /// ```rust
-/// #[example(file="my_file.rs",expand(actor))]
+/// #[example(path="my_file.rs",expand(actor))]
 /// ```
 /// This will generate an example code file that includes 
 /// the expanded code of the [`actor`](./attr.actor.html) macro,
@@ -614,17 +625,11 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
     syn::parse_macro_input!(attr with aaa_parser);
 
 
-    let (file, lib)  = file::expand_macros(&eaa.get_file(),&eaa.expand);
+    let (file, lib)  = file::expand_macros(&eaa.get_path(),&eaa.expand);
 
     let some_lib = if eaa.main { Some(lib)} else { None };
 
-    // let path = if eaa.main { 
-    //     show::example_show(file, &eaa.get_file(), Some(lib))
-    // } else {
-    //     show::example_show(file, &eaa.get_file(), None ) 
-    // };
-
-    let path = show::example_show(file, &eaa.get_file(), some_lib );
+    let path = show::example_show(file, &eaa.get_path(), some_lib );
 
     let msg = format!("The file has been SUCCESSFULLY created at {}",path.to_string_lossy());
     let note  = "To avoid potential issues and improve maintainability, it is recommended to comment out the macro after its successful execution. To proceed, please comment out the macro and re-run the compilation.";
@@ -670,12 +675,9 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///               "async_std"
 ///     
 ///     edit    (            ✘
-///               script
-///               direct
-///               play
-///               live
-///               live::new 
-///              )           
+///               script(..)
+///               live(..)
+///             )            
 ///      
 ///     name    = ""         ✘
 /// 
@@ -696,6 +698,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - [`channel`](#channel)
 /// - [`lib`](#lib) 
 /// - [`edit`](#edit)
+/// - [`file`](#file)
 /// - [`name`](#name)
 /// - [`assoc`](#assoc)
 /// - [`id`](#id)
@@ -773,28 +776,87 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///
 /// The `edit` argument specifies the available editing options.
 /// When using this argument, the macro expansion will 
-/// **exclude** the code related to `edit` options, 
+/// **exclude** the code related to `edit` options 
 /// allowing the user to manually implement and 
 /// customize those parts according to their specific needs.
 /// 
-/// - [`script`](index.html#script)
-/// - [`direct`](index.html#direct)
-/// - [`play`](index.html#play)
-/// - [`live`](index.html#live)
-/// - `live::new`  
+/// 
+/// The SDPL Model encompasses two main structs, namely `ActorScript` and `ActorLive`.
+/// Within the `edit` statement, these are referenced as `script` 
+/// and `live` respectively.
+/// Each struct comprises three distinct sections: definition, 
+/// implementation block, and implemented traits (`def`, `imp`, and `trt`).
+///
+/// To modify the `foo` method within `ActorLive` methods:
+/// ```rust
+/// #[actor(channel = 2,
+///    edit(live(imp(foo))))
+/// ]
+/// ```
+/// For multiple methods, simply extend the list: `edit(live(imp(foo, bar)))`.
+/// You can edit code from both structs using: `edit(script(imp(play)), live(imp(foo, bar)))`.
+///
+/// To add a field to `ActorLive` instances, access the definition and initiating method `new`:
+/// ```rust
+/// #[actor(channel = 2,
+///    edit(live(def, imp(new))))
+/// ]
+/// ```
+///
+/// Note: This approach is different from pre-v1.0.0 versions of the `interthread` crate,
+/// providing users with precise control over generated code. 
+/// 
+/// Below are the previous options and their new equivalents:  
+/// 
+/// - [`script`](index.html#script)  - `script(def)`
+/// - [`direct`](index.html#direct)  - `script(imp(direct))`
+/// - [`play`](index.html#play)      - `script(imp(play))`
+/// - [`live`](index.html#live)      - `live`
+/// - `live::new`                    - `live(imp(new))`
 ///
 /// 
+/// See the `file` argument which works in conjuction with `edit` for an expicit example. 
+/// 
+/// # file
+/// This is argument works in conjuction with `edit` and writes to the 
+/// curent module the code omited by the `edit` argument ready for user to
+/// modify it.
+/// 
+/// > **Note:** While it is possible to have multiple actor macros
+/// within the same module, only one of the macro can have file 
+/// argument active.
+///  
 /// ## Examples
-///```rust
-///
-///use std::sync::mpsc;
-///use interthread::actor;
 /// 
+/// Filename: main.rs
+/// 
+///```rust
 ///pub struct MyActor {
 ///    value: i8,
 ///}
-/// // we will edit `play` function
-/// #[actor(channel=2, edit(play))]
+/// 
+/// #[actor(channel=2,file="src/main.rs",edit(script(imp(play))))]
+///impl MyActor {
+///
+///    pub fn new( value: i8 ) -> Self {
+///        Self{value}
+///    }
+///    pub fn increment(&mut self) -> i8{
+///        self.value += 1;
+///        self.value
+///    }
+///} 
+/// 
+///```
+/// Tis is the output of the above file after compilation :
+/// 
+/// ```rust
+///  
+///pub struct MyActor {
+///    value: i8,
+///}
+///
+/// #[actor(channel=2, edit(script(imp(play))))]
 ///impl MyActor {
 ///
 ///    pub fn new( value: i8 ) -> Self {
@@ -805,51 +867,23 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///        self.value
 ///    }
 ///}
-///
-///// manually create "play" function 
-///// use `example` macro to copy paste
-///// `play`'s body 
-///pub fn my_actor_play( 
-///     receiver: mpsc::Receiver<MyActorScript>,
-///    mut actor: MyActor) {
-///    // set a custom variable 
-///    let mut call_counter = 0;
-///    while let Ok(msg) = receiver.recv() {
-///        // do something 
-///        // like 
-///        println!("Value of call_counter = {}",call_counter);
-///
-///        // `direct` as usual 
-///        msg.my_actor_direct(&mut actor);
-///
-///        // increment the counter as well
-///        call_counter += 1;
-///    }
-///    eprintln!(" the end ");
-///}
-///
-///
-///fn main() {
-///
-///    let my_act       = MyActorLive::new(0);
-///    let mut act_a = my_act.clone();
-///    
-///
-///    let handle_a = std::thread::spawn(move || -> i8{
-///        act_a.increment()
-///    });
-///
-///    let value = handle_a.join().unwrap();
-///    
-///    assert_eq!(value, 1);
-///
-///    // and it will print the value of 
-///    // call_counter
-///}
-///```
-///
-/// > **Note:** The expanded `actor` can be viewed using [`example`](./attr.example.html) macro. 
+/// //++++++++++++++++++[ Interthread  Write to File ]+++++++++++++++++//
+/// // Object Name   : MyActor  
+/// // Initiated By  : #[actor(channel=2,file="src/main.rs",edit(script(imp(play))))]  
 /// 
+/// /*
+/// impl MyActorScript {
+///     pub fn play(receiver: std::sync::mpsc::Receiver<MyActorScript>, mut actor: MyActor) {
+///         while let Ok(msg) = receiver.recv() {
+///             msg.direct(&mut actor);
+///         }
+///         eprintln!("MyActor end of life ...");
+///     }
+/// }
+/// 
+/// // *///.............[ Interthread  End of Write  ].................//
+/// 
+/// ```
 /// 
 /// Now, let's explore a scenario where we want to manipulate or 
 /// even return a type from the [`play`](index.html#play) 
@@ -858,202 +892,108 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// enable this functionality.
 /// 
 /// ## Examples
+/// 
+/// Filename: main.rs
+/// 
 ///```rust
-///use std::sync::mpsc;
-///use interthread::actor;
+/// use std::sync::mpsc;
+/// use interthread::actor;
+///  
+/// pub struct MyActor {
+///     value: i8,
+/// }
 /// 
-///pub struct MyActor {
-///    value: i8,
-///}
-/// #[actor(channel=2, edit(play))]
-///impl MyActor {
-///
-///    pub fn new( value: i8 ) -> Self {
-///        Self{value}
-///    }
-///    pub fn increment(&mut self) -> i8{
-///        self.value += 1;
-///        self.value
-///    }
-///    // it's safe to hack the macro in this way
-///    // having `&self` as receiver along  with
-///    // other things creates a `Script` variant  
-///    // We'll catch it in `play` function
-///    pub fn play_get_counter(&self)-> Option<u32>{
-///        None
-///    }
-///
-///}
-///
-///// manually create "play" function 
-///// use `example` macro to copy paste
-///// `play`'s body
-///pub fn my_actor_play( 
-///     receiver: mpsc::Receiver<MyActorScript>,
-///    mut actor: MyActor) {
-///    // set a custom variable 
-///    let mut call_counter = 0;
-///
-///    while let Ok(msg) = receiver.recv() {
-///
-///        // match incoming msgs
-///        // for `play_get_counter` variant
-///        match msg {
-///            // you don't have to remember the 
-///            // the name of the `Script` variant 
-///            // your text editor does it for you
-///            // so just choose the variant
-///            MyActorScript::PlayGetCounter { output  } =>
-///            { let _ = output.send(Some(call_counter));},
-///            
-///            // else as usual 
-///            _ => { msg.my_actor_direct(&mut actor); }
-///        }
-///        call_counter += 1;
-///    }
-///    eprintln!("the end");
-///}
-///
-///
-///fn main() {
-///
-///    let my_act = MyActorLive::new(0);
-///    let mut act_a = my_act.clone();
-///    let mut act_b = my_act.clone();
-///
-///    let handle_a = std::thread::spawn(move || {
-///        act_a.increment();
-///    });
-///    let handle_b = std::thread::spawn(move || {
-///        act_b.increment();
-///    });
-///    
-///    let _ = handle_a.join();
-///    let _ = handle_b.join();
-///
-///
-///    let handle_c = std::thread::spawn(move || {
-///
-///        // as usual we invoke a method on `live` instance
-///        // which has the same name as on the Actor object
-///        // but 
-///        if let Some(counter) = my_act.play_get_counter(){
-///
-///            println!("This call never riched the `Actor`, 
-///            it returns the value of total calls from the 
-///            `play` function ,call_counter = {:?}",counter);
-///
-///            assert_eq!(counter, 2);
-///        }
-///    });
-///    let _ = handle_c.join();
-///
-///}
-///```
-/// Let's take a moment to rearrange our example. 
+/// // this is initial macro 
+/// // #[actor(channel=2,file="src/main.rs",edit(script(imp(play))))]
+/// // will change to 
+/// #[actor(channel=2, edit(script(imp(play))))]
+/// 
+/// impl MyActor {
+/// 
+///     pub fn new( value: i8 ) -> Self {
+///         Self{value}
+///     }
+///     pub fn increment(&mut self) -> i8{
+///         self.value += 1;
+///         self.value
+///     }
+///     // it's safe to hack the macro in this way
+///     // having `&self` as receiver along  with
+///     // other things creates a `Script` variant  
+///     // We'll catch it in `play` function
+///     pub fn play_get_counter(&self)-> Option<u32>{
+///         None
+///     }
+/// 
+/// }
+/// 
+/// // we have the code of `play` component
+/// // using `edit` in conjuction with `file`
+/// // Initiated By  : #[actor(channel=2,file="src/main.rs",edit(script(imp(play))))]  
+/// impl MyActorScript {
+/// 
+///     pub fn play( 
+///          receiver: mpsc::Receiver<MyActorScript>,
+///         mut actor: MyActor) {
+///         // set a custom variable 
+///         let mut call_counter = 0;
+///     
+///         while let Ok(msg) = receiver.recv() {
+///     
+///             // match incoming msgs
+///             // for `play_get_counter` variant
+///             match msg {
+///                 // you don't have to remember the 
+///                 // the name of the `Script` variant 
+///                 // your text editor does it for you
+///                 // so just choose the variant
+///                 MyActorScript::PlayGetCounter { output  } =>
+///                 { let _ = output.send(Some(call_counter));},
+///                 
+///                 // else as usual 
+///                 _ => { msg.direct(&mut actor); }
+///             }
+///             call_counter += 1;
+///         }
+///         eprintln!("the end");
+///     }
+/// }
 /// 
 /// 
-/// ## Examples
-///```rust
-///use std::sync::mpsc;
-///use interthread::actor;
+/// fn main() {
 /// 
-///pub struct MyActor {
-///    value: i8,
-///}
-/// #[actor(channel=2, edit(play))]
-///impl MyActor {
-///
-///    pub fn new( value: i8 ) -> Self {
-///        Self{value}
-///    }
-///    pub fn increment(&mut self) -> i8{
-///        self.value += 1;
-///        self.value
-///    }
-///    pub fn play_get_counter(&self)-> Option<u32>{
-///        None
-///    }
-///
-///}
-///
-///
-///// incapsulate the matching block
-///// inside `Script` impl block
-///// where the `direct`ing is happening
-///// to keep our `play` function nice
-///// and tidy 
-///impl MyActorScript {
-///    pub fn custom_direct(self,
-///           actor: &mut MyActor, 
-///           counter: &u32 ){
-///
-///        // the same mathing block 
-///        // as in above example    
-///        match self {
-///            MyActorScript::PlayGetCounter { output  } =>
-///            { let _ = output.send(Some(counter.clone()));},
-///            
-///            // else as usual 
-///            msg => { msg.my_actor_direct(actor); }
-///        }
-///    } 
-///}
-///
-///// manually create "play" function 
-///// use `example` macro to copy paste
-///// `play`'s body
-///pub fn my_actor_play( 
-///     receiver: mpsc::Receiver<MyActorScript>,
-///    mut actor: MyActor) {
-///    // set a custom variable 
-///    let mut call_counter = 0;
-///    
-///    // nice and tidy while loop ready
-///    // for more wild things to happen
-///    while let Ok(msg) = receiver.recv() {
-///        
-///        // this is the invocation
-///        // of MyActorScript.custom_direct()
-///        msg.custom_direct(&mut actor, &call_counter);
-///
-///        call_counter += 1;
-///    }
-///    eprintln!("the end");
-///}
-///
-///
-///fn main() {
-///
-///    let my_act = MyActorLive::new(0);
-///    let mut act_a = my_act.clone();
-///    let mut act_b = my_act.clone();
-///
-///    let handle_a = std::thread::spawn(move || {
-///        act_a.increment();
-///    });
-///    let handle_b = std::thread::spawn(move || {
-///        act_b.increment();
-///    });
-///    
-///    let _ = handle_a.join();
-///    let _ = handle_b.join();
-///
-///
-///    let handle_c = std::thread::spawn(move || {
-///
-///        if let Some(counter) = my_act.play_get_counter(){
-///
-///            println!("This call never riched the `Actor`, 
-///            it returns the value of total calls from the 
-///            `play` function ,call_counter = {:?}",counter);
-///
-///            assert_eq!(counter, 2);
-///        }
-///    });
-///    let _ = handle_c.join();
-///
-///}
+///     let my_act = MyActorLive::new(0);
+///     let mut act_a = my_act.clone();
+///     let mut act_b = my_act.clone();
+/// 
+///     let handle_a = std::thread::spawn(move || {
+///         act_a.increment();
+///     });
+///     let handle_b = std::thread::spawn(move || {
+///         act_b.increment();
+///     });
+///     
+///     let _ = handle_a.join();
+///     let _ = handle_b.join();
+/// 
+/// 
+///     let handle_c = std::thread::spawn(move || {
+/// 
+///         // as usual we invoke a method on `live` instance
+///         // which has the same name as on the Actor object
+///         // but 
+///         if let Some(counter) = my_act.play_get_counter(){
+/// 
+///             println!("This call never riched the `Actor`, 
+///             it returns the value of total calls from the 
+///             `play` function ,call_counter = {:?}",counter);
+/// 
+///             assert_eq!(counter, 2);
+///         }
+///     });
+///     let _ = handle_c.join();
+/// 
+/// }
 ///```
 /// 
 /// # name
@@ -1188,7 +1128,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    assert!(actor_2 != actor_3);
 ///    assert!(actor_3 != actor_1);
 ///
-///    // sice we know the order of invocation
+///    // since we know the order of invocation
 ///    // we correctly presume
 ///    assert_eq!(actor_1 > actor_2, true );
 ///    assert_eq!(actor_2 > actor_3, true );
@@ -1218,7 +1158,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    assert_eq!(Arc::strong_count(&actor_3.debut), 2 );
 ///            
 ///
-///    // or use getter `count`                 (since v0.3.0)
+///    // or use getter `count`                 
 ///    assert_eq!(actor_1.inter_get_count(), 3 );
 ///    assert_eq!(actor_2.inter_get_count(), 1 );
 ///    assert_eq!(actor_3.inter_get_count(), 2 );
@@ -1226,7 +1166,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///
 ///    use std::time::SystemTime;
 ///
-///    // getter `debut` to get its timestamp   (since v0.3.0)
+///    // getter `debut` to get its timestamp   
 ///    let _debut1: SystemTime = actor_1.inter_get_debut();
 ///
 ///            
@@ -1244,12 +1184,12 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    assert_eq!(a11 == a12, true );
 ///    assert_eq!(a11 != a31, true );
 ///
-///    // setter `name` accepts any ToString  (since v0.3.0)
+///    // setter `name` accepts any ToString  
 ///    a11.inter_set_name('t');
 ///    a12.inter_set_name(84u32);
 ///    a31.inter_set_name(3.14159);
 ///
-///    // getter `name`                       (since v0.3.0)
+///    // getter `name`                      
 ///    assert_eq!(a11.inter_get_name(), "t" );
 ///    assert_eq!(a12.inter_get_name(), "84" );
 ///    assert_eq!(a31.inter_get_name(), "3.14159" );
@@ -1260,7 +1200,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// 
 /// 
-/// Since `v0.3.0` using `id` will generate fore additional
+/// Using `id` will generate fore additional
 ///methods on `live` struct:
 /// 
 /// 1. `inter_set_name(s: ToString)`: Sets the value of the 
@@ -1297,35 +1237,26 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     
     let mac = attribute::AAExpand::Actor;
     let act_item   = syn::parse_macro_input!(item as syn::Item);
-    check::actor_item(&act_item);
-    let mut aaa    = attribute::ActorAttributeArguments::default();
 
-    let attr_str = attr.clone().to_string();
-
-    if !attr_str.is_empty(){
-
+    let mut aaa = attribute::ActorAttributeArguments::default();
+    if !attr.clone().to_string().is_empty(){
         let aaa_parser  = 
         syn::meta::parser(|meta| aaa.parse(meta));
         syn::parse_macro_input!(attr with aaa_parser);
+        aaa.cross_check();
     }
-    // let aaa = paaa.get_arguments();
 
     check::channels_import( &aaa.lib );
-    
-    // let mut inter_gen_actor = actor_gen::ActorMacroGeneration::new( /*name,*/ aaa, impl_block );
-    // let code = inter_gen_actor.generate();
 
-    let (code,_) = crate::actor_gen::actor_macro_generate_code( aaa, act_item.clone(),mac);
-    // proc_macro_error::abort!(act_item, "After Generate");
-    
-    // check if aaa.edit
-    // check if file 
-    // if so write to file 
-                //   * prefix
-                //   * edifix
-                //   * suffix
-    
+    let (code,edit) = 
+    crate::actor_gen::actor_macro_generate_code( aaa.clone(), act_item.clone(), &mac );
+
+    if let Some( aaf ) = aaa.file {
+        parse::edit_write(  &aaf, act_item, aaa.edit.is_all(), &mac, edit);
+    }
+
     quote::quote!{#code}.into()
+
 }
 
 /// ## Currently under development (((

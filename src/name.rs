@@ -3,7 +3,7 @@ use quote::format_ident;
 use crate::attribute::AAExpand;
 use proc_macro_error::abort;
 
-pub fn get_name_and_type(mac: AAExpand, item: &syn::Item) -> (syn::Ident,syn::Type) {
+pub fn get_name_and_type(mac: &AAExpand, item: &syn::Item) -> (syn::Ident,syn::Type) {
 
     let name ;
     let mut tp = false;
@@ -48,9 +48,6 @@ pub fn get_name_and_type(mac: AAExpand, item: &syn::Item) -> (syn::Ident,syn::Ty
     }
     
     let ty: syn::Type = if tp {syn::parse_quote!{ impl #name }} else { syn::parse_quote!{ #name }} ;
-    // let res = if tp { (name.clone(), syn::parse_quote!{ dyn #name }) } else { (name.clone(), syn::parse_quote!{ #name })};
-    // proc_macro_error::abort!(item, "After format");
-    // res
     (name,ty)
 }
 
@@ -63,6 +60,7 @@ pub fn script_field(name: &syn::Ident) -> syn::Ident{
     let new_name = fn_to_struct(&name.to_string());
     format_ident!("{}",new_name)
 }
+/*
 pub fn direct(name: &syn::Ident) -> syn::Ident{
     let new_name = struct_to_fn(&name.to_string()) + "_direct";
     format_ident!("{}",new_name)
@@ -71,6 +69,8 @@ pub fn play(name: &syn::Ident) -> syn::Ident{
     let new_name = struct_to_fn(&name.to_string()) + "_play";
     format_ident!("{}",new_name)
 }
+*/
+
 pub fn live(name: &syn::Ident) -> syn::Ident{
     let new_name = name.to_string() + "Live";
     format_ident!("{}",new_name)
