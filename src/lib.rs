@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.0.1"
+//!interthread = "1.0.2"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -575,7 +575,7 @@ const LINE_ENDING: &'static str = "\n";
 /// 
 /// # Arguments
 /// 
-/// - [`path`](#file)
+/// - [`path`](#path)
 /// - [`expand`](#expand) (default)
 /// 
 /// # path
