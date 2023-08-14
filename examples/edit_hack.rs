@@ -21,8 +21,8 @@ impl MyActor {
         self.value
     }
     // it's safe to hack the macro in this way
-    // having `&self` as receiver along  with
-    // other things creates a `Script` variant  
+    // while developing, along  with other
+    // things will be created a new `Script` variant  
     // We'll catch it in `play` function
     pub fn play_get_counter(&self)-> Option<u32>{
         None

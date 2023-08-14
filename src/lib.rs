@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.0.0"
+//!interthread = "1.0.1"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -796,7 +796,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// For multiple methods, simply extend the list: `edit(live(imp(foo, bar)))`.
 /// You can edit code from both structs using: `edit(script(imp(play)), live(imp(foo, bar)))`.
 ///
-/// To add a field to `ActorLive` instances, access the definition and initiating method `new`:
+/// To add a field to `ActorLive` instance, access the definition and initiating method `new`:
 /// ```rust
 /// #[actor(channel = 2,
 ///    edit(live(def, imp(new))))
@@ -818,7 +818,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// See the `file` argument which works in conjuction with `edit` for an expicit example. 
 /// 
 /// # file
-/// This is argument works in conjuction with `edit` and writes to the 
+/// This argument works in conjuction with `edit` and writes to the 
 /// curent module the code omited by the `edit` argument ready for user to
 /// modify it.
 /// 
@@ -848,7 +848,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///} 
 /// 
 ///```
-/// Tis is the output of the above file after compilation :
+/// This is the output of the above file after compilation :
 /// 
 /// ```rust
 ///  
@@ -1088,7 +1088,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// associated with each instance of the live struct.
 /// 
 /// In the [`script`](index.html#script) struct implementation block, which 
-/// typically encapsulates the functionality of the model,
+/// encapsulates the functionality of the model,
 /// a static method named `debut` is generated. This 
 /// method returns the current system time and is commonly 
 /// used to set the `debut` field when initializing 
