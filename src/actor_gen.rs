@@ -598,7 +598,32 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
     let live_methods   = live_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
     let live_traits    = live_trts.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
 
-    let where_clause = generics.as_ref().map(|g| g.where_clause.clone()).flatten();
+    let where_clause = generics.as_ref().map(|g| {
+        let mut where_clause = match &g.where_clause {
+            Some(w) => w.clone(),
+            None => {
+                syn::WhereClause {
+                    where_token: <syn::Token![where]>::default(),
+                    predicates: syn::punctuated::Punctuated::new(),
+                }
+            }
+        };
+
+        // Add "Send + Sync + 'static" bound for all generic parameters
+        for param in g.params.iter() {
+            match param {
+                syn::GenericParam::Type(type_param) => {
+                    let type_param_name = &type_param.ident;
+                    where_clause.predicates.push(syn::parse_quote! {
+                        #type_param_name: Send + Sync + 'static
+                    });
+                }
+                _ => {}
+            }
+        }
+
+        where_clause
+    });
 
     let res_code = quote! {
 
