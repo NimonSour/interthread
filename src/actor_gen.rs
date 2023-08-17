@@ -13,7 +13,7 @@ use proc_macro2::{Span,TokenStream};
 // returns  (code,edit) TokenStreams 
 pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac: &AAExpand ) -> (TokenStream, TokenStream){
 
-    let (actor_name,actor_type) = name::get_name_and_type(mac,&item,);
+    let (actor_name,actor_type,generics) = name::get_name_and_type(mac,&item,);
     
     let (actor_methods, 
          met_new) =
@@ -48,7 +48,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         live_meth_send_recv, 
         script_field_output, 
         live_send_input,
-        live_recv_output ) = channels( &aaa.lib, &aaa.channel, &cust_name);
+        live_recv_output ) = channels( &aaa.lib, &aaa.channel, &cust_name, &generics);
 
     let mut direct_arms   = vec![];
     let mut script_fields = vec![];
@@ -427,7 +427,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
         quote! {
             #[derive(Debug)]
-            #new_vis enum #script_name {
+            #new_vis enum #script_name #generics {
                 #(#script_fields),*
             }
         }
@@ -439,7 +439,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         let decl_async= async_token(direct_async);
         script_mets.push((format_ident!("direct"),
         quote!{
-            #new_vis #decl_async fn direct (self, actor: &mut #actor_type ) {
+            #new_vis #decl_async fn direct (self, actor: &mut #actor_type #generics ) {
                 match self {
                     #(#direct_arms)*
                 }
@@ -462,7 +462,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
                 AALib::Std => {
                     quote! {
-                        #new_vis fn play ( #play_input_receiver mut actor: #actor_type ) {
+                        #new_vis fn play ( #play_input_receiver mut actor: #actor_type #generics ) {
                             while let Ok(msg) = receiver.recv(){
                                 msg.direct ( &mut actor );
                             }
@@ -473,7 +473,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
                 AALib::Tokio => {
                     quote! {
-                        #new_vis #async_decl fn play ( #play_input_receiver mut actor: #actor_type ) {
+                        #new_vis #async_decl fn play ( #play_input_receiver mut actor: #actor_type #generics ) {
                             while let Some(msg) = receiver.recv().await{
                                 msg.direct ( &mut actor ) #await_call;
                             }
@@ -484,7 +484,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
                 _ => { 
                     quote! {
-                        #new_vis #async_decl fn play ( #play_input_receiver mut actor: #actor_type ) {
+                        #new_vis #async_decl fn play ( #play_input_receiver mut actor: #actor_type #generics ) {
                             while let Ok(msg) = receiver.recv().await {
             
                                 msg.direct ( &mut actor ) #await_call;
@@ -543,7 +543,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
         quote!{
             #[derive(Clone,Debug)]
-            #new_vis struct #live_name {
+            #new_vis struct #live_name #generics {
                 #live_field_sender
                 #debut_field
                 #name_field
@@ -598,16 +598,18 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
     let live_methods   = live_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
     let live_traits    = live_trts.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
 
+    let where_clause = generics.as_ref().map(|g| g.where_clause.clone()).flatten();
+
     let res_code = quote! {
 
         #item
 
         #script_def
-        impl #script_name {
+        impl #generics #script_name #generics #where_clause {
             #(#script_methods)*
         }
         #live_def
-        impl #live_name {
+        impl #generics #live_name #generics #where_clause {
             #(#live_methods)*
         }
         #(#live_traits)*
@@ -670,7 +672,8 @@ pub fn edit_select(edit_idents: Option<Vec<syn::Ident>>,
 
 pub fn channels( lib: &AALib,
              channel: &AAChannel,
-           cust_name: &Ident ) -> ( 
+           cust_name: &Ident,
+            generics: &Option<syn::Generics>) -> ( 
                                     TokenStream,
                                     TokenStream,
                                     TokenStream,
@@ -706,16 +709,16 @@ pub fn channels( lib: &AALib,
             match  lib { 
 
                 AALib::Std      => {
-                    live_field_sender   = quote!{ sender: std::sync::mpsc::Sender<#type_ident>, };   
-                    play_input_receiver = quote!{ receiver: std::sync::mpsc::Receiver<#type_ident>, }; 
+                    live_field_sender   = quote!{ sender: std::sync::mpsc::Sender<#type_ident #generics>, };   
+                    play_input_receiver = quote!{ receiver: std::sync::mpsc::Receiver<#type_ident #generics>, }; 
                     new_live_send_recv  = quote!{ let ( sender, receiver ) = std::sync::mpsc::channel(); };
                     live_send_input     = quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
                     live_recv_output    = quote!{ recv.recv().expect(#error_live_recv)};
                 },
 
                 AALib::Tokio    => {
-                    live_field_sender   = quote!{ sender: tokio::sync::mpsc::UnboundedSender<#type_ident>, };
-                    play_input_receiver = quote!{ mut receiver: tokio::sync::mpsc::UnboundedReceiver<#type_ident>, }; 
+                    live_field_sender   = quote!{ sender: tokio::sync::mpsc::UnboundedSender<#type_ident #generics>, };
+                    play_input_receiver = quote!{ mut receiver: tokio::sync::mpsc::UnboundedReceiver<#type_ident #generics>, }; 
                     new_live_send_recv  = quote!{ let ( sender, receiver ) = tokio::sync::mpsc::unbounded_channel(); }; 
                     live_meth_send_recv = quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
                     script_field_output = Box::new(|out_type: Box<Type>|quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
@@ -723,14 +726,14 @@ pub fn channels( lib: &AALib,
                 },
 
                 AALib::AsyncStd  => {
-                    live_field_sender   = quote!{ sender: async_std::channel::Sender<#type_ident>, };
-                    play_input_receiver = quote!{ receiver: async_std::channel::Receiver<#type_ident>, };
+                    live_field_sender   = quote!{ sender: async_std::channel::Sender<#type_ident #generics>, };
+                    play_input_receiver = quote!{ receiver: async_std::channel::Receiver<#type_ident #generics>, };
                     new_live_send_recv  = quote!{ let ( sender, receiver ) = async_std::channel::unbounded(); };                    
                 },
 
                 AALib::Smol      => {
-                    live_field_sender   = quote!{ sender: async_channel::Sender<#type_ident>, };
-                    play_input_receiver = quote!{ receiver: async_channel::Receiver<#type_ident>, };
+                    live_field_sender   = quote!{ sender: async_channel::Sender<#type_ident #generics>, };
+                    play_input_receiver = quote!{ receiver: async_channel::Receiver<#type_ident #generics>, };
                     new_live_send_recv  = quote!{ let ( sender, receiver ) =  async_channel::unbounded(); }; 
                 },
             }
@@ -740,29 +743,29 @@ pub fn channels( lib: &AALib,
             match  lib { 
 
                 AALib::Std      => {
-                    live_field_sender   = quote!{ sender: std::sync::mpsc::SyncSender<#type_ident>, };
-                    play_input_receiver = quote!{ receiver: std::sync::mpsc::Receiver<#type_ident>, };
+                    live_field_sender   = quote!{ sender: std::sync::mpsc::SyncSender<#type_ident #generics>, };
+                    play_input_receiver = quote!{ receiver: std::sync::mpsc::Receiver<#type_ident #generics>, };
                     new_live_send_recv  = quote!{ let ( sender, receiver ) = std::sync::mpsc::sync_channel(#val); };
                     live_send_input     = quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
                     live_recv_output    = quote!{ recv.recv().expect(#error_live_recv)};
                 },
                 AALib::Tokio    => {
-                    live_field_sender   = quote!{ sender: tokio::sync::mpsc::Sender<#type_ident>, };
-                    play_input_receiver = quote!{ mut receiver: tokio::sync::mpsc::Receiver<#type_ident>, };
+                    live_field_sender   = quote!{ sender: tokio::sync::mpsc::Sender<#type_ident #generics>, };
+                    play_input_receiver = quote!{ mut receiver: tokio::sync::mpsc::Receiver<#type_ident #generics>, };
                     new_live_send_recv  = quote!{ let ( sender, receiver ) = tokio::sync::mpsc::channel(#val); }; 
                     live_meth_send_recv = quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
                     script_field_output = Box::new(|out_type: Box<Type>|quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
                 },
 
                 AALib::AsyncStd  => {
-                    live_field_sender   = quote!{ sender: async_std::channel::Sender<#type_ident>, };
-                    play_input_receiver = quote!{ receiver: async_std::channel::Receiver<#type_ident>, };
+                    live_field_sender   = quote!{ sender: async_std::channel::Sender<#type_ident #generics>, };
+                    play_input_receiver = quote!{ receiver: async_std::channel::Receiver<#type_ident #generics>, };
                     new_live_send_recv  = quote!{ let ( sender, receiver ) = async_std::channel::bounded(#val); };
                 },
 
                 AALib::Smol      => {
-                    live_field_sender   = quote!{ sender: async_channel::Sender<#type_ident>, };
-                    play_input_receiver = quote!{ receiver: async_channel::Receiver<#type_ident>, };
+                    live_field_sender   = quote!{ sender: async_channel::Sender<#type_ident #generics>, };
+                    play_input_receiver = quote!{ receiver: async_channel::Receiver<#type_ident #generics>, };
                     new_live_send_recv  = quote!{ let ( sender, receiver ) = async_channel::bounded(#val); };
                 },
             }
