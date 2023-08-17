@@ -328,8 +328,8 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         let func_new_body = quote!{
 
             #vis #new_sig {
-                #new_live_send_recv
                 let actor = #actor_name:: #func_new_name #args_ident #unwrapped;
+                #new_live_send_recv
                 #id_debut
                 #id_name
                 let #live_var = #init_actor;
