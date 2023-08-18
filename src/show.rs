@@ -54,10 +54,10 @@ fn example_check_get() -> Result<PathBuf,String> {
     }
 }
 
-pub fn example_path( file: &PathBuf ) -> Result<PathBuf,String> {
+pub fn example_path( file_path: &PathBuf ) -> Result<PathBuf,String> {
 
     let mut path = example_check_get()?;
-    if let Some(name) = file.file_name(){
+    if let Some(name) = file_path.file_name(){
         path.push(name);
         return Ok(path)
     }
