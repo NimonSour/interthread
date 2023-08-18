@@ -404,7 +404,7 @@ impl ItemCodeBlock {
     }
     
     fn check_name(&self, item: &Item) -> bool {
-        let (name,_) = 
+        let (name,_,_) = 
         match item {
             Item::Fn(_) => { get_name_and_type(&AAExpand::Group, item)},
                           _  => { get_name_and_type(&AAExpand::Actor, item)},
@@ -616,7 +616,7 @@ pub fn edit_write(  aaf: &AAFile,
                     mac: &AAExpand,  
                    edit: proc_macro2::TokenStream ) {
 
-    let (name, _ )=  crate::name::get_name_and_type(mac, &item);
+    let (name, _, _)=  crate::name::get_name_and_type(mac, &item);
     let edifile    =  syn::parse2::<syn::File>(edit).unwrap();
     let edifix   =  prettyplease::unparse(&edifile);
 
