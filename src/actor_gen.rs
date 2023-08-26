@@ -2,10 +2,11 @@ use crate::attribute::{ActorAttributeArguments,AALib,AAChannel,AAExpand};
 use crate::name;
 use crate::method;
 use crate::error;
+use crate::generics;
 
 use proc_macro_error::abort;
 use std::boxed::Box;
-use syn::{Ident,Signature,Item,Type };
+use syn::{Ident,Signature,Item,Type,Visibility };
 use quote::{quote,format_ident};
 use proc_macro2::{Span,TokenStream};
 
@@ -15,6 +16,10 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
     let (actor_name,actor_type,generics) = name::get_name_and_type(mac,&item,);
     
+    let ( impl_generics,
+            ty_generics,
+           where_clause ) = generics::get_parts(&generics);
+
     let (actor_methods, 
          met_new) =
          method::get_methods( &actor_type,item.clone(),aaa.assoc );
@@ -48,7 +53,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         live_meth_send_recv, 
         script_field_output, 
         live_send_input,
-        live_recv_output ) = channels( &aaa.lib, &aaa.channel, &cust_name, &generics);
+        live_recv_output ) = channels( &aaa.lib, &aaa.channel, &cust_name, &ty_generics);
 
     let mut direct_arms   = vec![];
     let mut script_fields = vec![];
@@ -82,10 +87,10 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
     fn live_static_method( actor_name: &Ident,
                                 ident: Ident, 
-                                vis: syn::Visibility,
-                            mut sig: Signature,
-                                args: TokenStream,
-                        live_mets: &mut Vec<(Ident,TokenStream)> ) {
+                                  vis: Visibility,
+                              mut sig: Signature,
+                                 args: TokenStream,
+                            live_mets: &mut Vec<(Ident,TokenStream)> ) {
         
         method::change_signature_refer(&mut sig);
         let await_call = await_token(sig.asyncness.is_some());
@@ -319,12 +324,13 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         };
 
         let spawn = live_new_spawn(play_args);
+        let turbofish = ty_generics.as_ref().map(|x| x.as_turbofish());
         let (id_debut,id_name)  =  
         if aaa.id {
-            (quote!{let debut =  #script_name ::debut();},
+            (quote!{let debut =  #script_name #turbofish ::debut();},
                 quote!{let name  = String::from("");})
         } else { (quote!{}, quote!{}) };
-
+        
         let func_new_body = quote!{
 
             #vis #new_sig {
@@ -337,7 +343,6 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                 #return_statement
             }
         };
-        // live_mets.push((new_sig.ident.clone(),func_new_body));
         live_mets.insert(0,(new_sig.ident.clone(),func_new_body));
     };
 
@@ -392,7 +397,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         
         live_trts.push((format_ident!("PartialEq"),
         quote!{
-            impl PartialEq for #live_name {
+            impl #ty_generics PartialEq for #live_name #ty_generics #where_clause{
                 fn eq(&self, other: &Self) -> bool {
                     *self.debut == *other.debut
                 }
@@ -401,12 +406,12 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
         live_trts.push((format_ident!("Eq"),
         quote!{
-            impl Eq for #live_name {}
+            impl #ty_generics Eq for #live_name #ty_generics #where_clause {}
         }));  
 
         live_trts.push((format_ident!("PartialOrd"),
         quote!{
-            impl PartialOrd for #live_name {
+            impl #ty_generics PartialOrd for #live_name #ty_generics #where_clause{
                 fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
                     other.debut.partial_cmp(&self.debut)
                 }
@@ -415,7 +420,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
         live_trts.push((format_ident!("Ord"),
         quote!{
-            impl Ord for #live_name {
+            impl #ty_generics Ord for #live_name #ty_generics #where_clause {
                 fn cmp(&self, other: &Self) -> std::cmp::Ordering {
                     other.debut.cmp(&self.debut)
                 }
@@ -427,7 +432,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
         quote! {
             #[derive(Debug)]
-            #new_vis enum #script_name #generics {
+            #new_vis enum #script_name #ty_generics #where_clause {
                 #(#script_fields),*
             }
         }
@@ -439,7 +444,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         let decl_async= async_token(direct_async);
         script_mets.push((format_ident!("direct"),
         quote!{
-            #new_vis #decl_async fn direct (self, actor: &mut #actor_type #generics ) {
+            #new_vis #decl_async fn direct (self, actor: &mut #actor_type #ty_generics ) {
                 match self {
                     #(#direct_arms)*
                 }
@@ -462,7 +467,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
                 AALib::Std => {
                     quote! {
-                        #new_vis fn play ( #play_input_receiver mut actor: #actor_type #generics ) {
+                        #new_vis fn play ( #play_input_receiver mut actor: #actor_type #ty_generics ) {
                             while let Ok(msg) = receiver.recv(){
                                 msg.direct ( &mut actor );
                             }
@@ -473,7 +478,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
                 AALib::Tokio => {
                     quote! {
-                        #new_vis #async_decl fn play ( #play_input_receiver mut actor: #actor_type #generics ) {
+                        #new_vis #async_decl fn play ( #play_input_receiver mut actor: #actor_type #ty_generics ) {
                             while let Some(msg) = receiver.recv().await{
                                 msg.direct ( &mut actor ) #await_call;
                             }
@@ -484,7 +489,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
                 _ => { 
                     quote! {
-                        #new_vis #async_decl fn play ( #play_input_receiver mut actor: #actor_type #generics ) {
+                        #new_vis #async_decl fn play ( #play_input_receiver mut actor: #actor_type #ty_generics ) {
                             while let Ok(msg) = receiver.recv().await {
             
                                 msg.direct ( &mut actor ) #await_call;
@@ -499,7 +504,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                 //impl drop for live while here
                 live_trts.push((format_ident!("Drop"),
                 quote!{
-                    impl Drop for #live_name{
+                    impl #ty_generics Drop for #live_name #ty_generics #where_clause {
                         fn drop(&mut self){
                             self.condvar.notify_one();
                         }
@@ -509,9 +514,9 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                 let error_msg = error::play_guard(&actor_name);
 
                 quote!{
-                    #new_vis #async_decl fn play ( #play_input_receiver mut actor: #actor_type ) {
+                    #new_vis #async_decl fn play ( #play_input_receiver mut actor: #actor_type #ty_generics ) {
 
-                        let queuing = || -> Option<Vec< #script_name >> {
+                        let queuing = || -> Option<Vec< #script_name #ty_generics>> {
                             let mut guard = queue.lock().expect(#error_msg);
                             while guard.as_ref().unwrap().is_empty() {
                                 if std::sync::Arc::strong_count(&queue) > 1{
@@ -543,7 +548,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
         quote!{
             #[derive(Clone,Debug)]
-            #new_vis struct #live_name #generics {
+            #new_vis struct #live_name #ty_generics #where_clause {
                 #live_field_sender
                 #debut_field
                 #name_field
@@ -553,11 +558,11 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
     // Create and Select Edit Parts
 
-    let mut edit_script_def   = quote::quote!{};
+    let mut edit_script_def   = quote!{};
     let edit_script_mets ;
     // let edit_script_trts ;
 
-    let mut edit_live_def  = quote::quote!{};
+    let mut edit_live_def  = quote!{};
     let edit_live_mets ;
     let edit_live_trts ;
 
@@ -570,7 +575,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                 ( def , mets, _trts) => {
                     if def {
                         edit_script_def = script_def.clone();
-                        script_def      = quote::quote!{}; 
+                        script_def      = quote!{}; 
                     }
                     edit_script_mets = edit_select(mets,&mut script_mets);
                     // edit_script_trts = edit_select(trts,&mut script_trts);
@@ -582,7 +587,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                 ( def , mets, trts) => {
                     if def {
                         edit_live_def = live_def.clone();
-                        live_def      = quote::quote!{}; 
+                        live_def      = quote!{}; 
                     }
                     edit_live_mets = edit_select(mets,&mut live_mets);
                     edit_live_trts = edit_select(trts,&mut live_trts);
@@ -591,55 +596,29 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         }
     }
 
-
     // Prepare Token Stream Vecs
     let script_methods = script_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
     // let script_traits    = script_trts.iter().map(|x| x.1).collect::<Vec<_>>();
     let live_methods   = live_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
     let live_traits    = live_trts.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-
-    let where_clause = generics.as_ref().map(|g| {
-        let mut where_clause = match &g.where_clause {
-            Some(w) => w.clone(),
-            None => {
-                syn::WhereClause {
-                    where_token: <syn::Token![where]>::default(),
-                    predicates: syn::punctuated::Punctuated::new(),
-                }
-            }
-        };
-
-        // Add "Send + Sync + 'static" bound for all generic parameters
-        for param in g.params.iter() {
-            match param {
-                syn::GenericParam::Type(type_param) => {
-                    let type_param_name = &type_param.ident;
-                    where_clause.predicates.push(syn::parse_quote! {
-                        #type_param_name: Send + Sync + 'static
-                    });
-                }
-                _ => {}
-            }
-        }
-
-        where_clause
-    });
+    
 
     let res_code = quote! {
 
         #item
 
         #script_def
-        impl #generics #script_name #generics #where_clause {
+        impl #impl_generics #script_name #ty_generics #where_clause {
             #(#script_methods)*
         }
         #live_def
-        impl #generics #live_name #generics #where_clause {
+        impl #impl_generics #live_name #ty_generics #where_clause {
             #(#live_methods)*
         }
         #(#live_traits)*
 
     };
+
 
     let res_edit_script_mets =  
     if  edit_script_mets.is_empty() { quote!{} }
@@ -668,26 +647,25 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
 
 
-pub fn edit_select(edit_idents: Option<Vec<syn::Ident>>, 
-    ident_mets: &mut Vec<(syn::Ident,proc_macro2::TokenStream)> ) 
-                -> Vec<proc_macro2::TokenStream> {
+pub fn edit_select(edit_idents: Option<Vec<Ident>>, 
+                    ident_mets: &mut Vec<(Ident,TokenStream)> ) -> Vec<TokenStream> {
 
     let mut res = Vec::new();
 
     if let Some(idents) = edit_idents { 
 
         if idents.is_empty() {
-        res = ident_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-        ident_mets.clear();
+            res = ident_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
+            ident_mets.clear();
         }
 
         for ident in idents {
             if let Some(pos) = ident_mets.iter().position(|x| x.0 == ident){
-            let (_,trt)  = ident_mets.remove(pos);
-            res.push(trt);
+                let (_,trt)  = ident_mets.remove(pos);
+                res.push(trt);
             } else {
-            let msg = format!("No method named `{}` in Actor's methods.",ident.to_string());
-            abort!(ident,msg);
+                let msg = format!("No method named `{}` in Actor's methods.",ident.to_string());
+                abort!(ident,msg);
             }
         }
     } 
@@ -698,7 +676,7 @@ pub fn edit_select(edit_idents: Option<Vec<syn::Ident>>,
 pub fn channels( lib: &AALib,
              channel: &AAChannel,
            cust_name: &Ident,
-            generics: &Option<syn::Generics>) -> ( 
+            generics: &Option<syn::TypeGenerics<'_>>) -> ( 
                                     TokenStream,
                                     TokenStream,
                                     TokenStream,
@@ -798,11 +776,11 @@ pub fn channels( lib: &AALib,
         AAChannel::Inter  => {
 
             live_field_sender   = quote!{ 
-                queue: std::sync::Arc<std::sync::Mutex<Option<Vec<#type_ident>>>>,
+                queue: std::sync::Arc<std::sync::Mutex<Option<Vec<#type_ident #generics>>>>,
                 condvar:                       std::sync::Arc<std::sync::Condvar>,
             };
             play_input_receiver = quote!{ 
-                queue: std::sync::Arc<std::sync::Mutex<Option<Vec<#type_ident>>>>,
+                queue: std::sync::Arc<std::sync::Mutex<Option<Vec<#type_ident #generics>>>>,
                 condvar:                       std::sync::Arc<std::sync::Condvar>,
             };
             new_live_send_recv  = quote!{ 

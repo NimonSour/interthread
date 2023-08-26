@@ -62,7 +62,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.0.2"
+interthread = "1.1.0"
 oneshot     = "0.1.5" 
 ```
 
@@ -152,7 +152,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.0.2"
+interthread = "1.1.0"
 tokio = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -209,6 +209,103 @@ async fn main() {
 }
 ```
 
+A recent contribution from [maun](https://github.com/maun) has significantly empowered the [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) macro by introducing support for generic types.
+
+### Examples
+Filename: Cargo.toml
+
+```text
+[dependencies]
+interthread = "1.1.0"
+oneshot     = "0.1.5" 
+```
+
+Filename: main.rs
+```rust
+
+
+pub struct MaunActor<A, B, C> {
+    value_a: Option<A>,
+    value_b: Option<B>,
+    value_c: Option<C>,
+}
+
+
+#[interthread::actor(channel=2)]
+impl<A, B, C>  MaunActor <A, B, C>
+where
+    A: ToString,
+    B: ToString,
+    C: ToString,
+{
+
+    pub fn new() -> Self {
+        MaunActor { 
+            value_a: None, 
+            value_b: None,
+            value_c: None,
+        }
+    }
+
+    pub fn set_a(&mut self, value: A) {
+        self.value_a = Some(value);
+    }
+
+    pub fn set_b(&mut self, value: B) {
+        self.value_b = Some(value);
+    }
+
+    pub fn set_c(&mut self, value: C) {
+        self.value_c = Some(value);
+    }
+
+    pub fn sentence(&self) -> String {
+
+        let mut s = String::new();
+        if let Some(v) = self.value_a.as_ref(){
+            s += &v.to_string();
+        }
+        if let Some(v) = self.value_b.as_ref(){
+            s += &v.to_string();
+        }
+        if let Some(v) = self.value_c.as_ref(){
+            s += &v.to_string();
+        }
+        s
+    }
+}
+fn main() {
+    
+    let act = MaunActorLive::<String,&'static str,char>::new();
+    
+    let mut one = act.clone();
+    let mut two = act.clone();
+    let mut thr = act.clone();
+
+    let one_h = std::thread::spawn( move || { 
+        one.set_a("I'm a generic".to_string());
+    });
+
+    let two_h = std::thread::spawn( move || {
+        two.set_b(" actor - ");
+    });
+
+    let thr_h = std::thread::spawn( move || {
+        thr.set_c('😀');
+    });
+
+    let _ = one_h.join();
+    let _ = two_h.join();
+    let _ = thr_h.join();
+
+
+    assert_eq!(
+        act.sentence(), 
+        "I'm a generic actor - 😀".to_string()
+    );
+}
+```
+
 
 The [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) macro is applied to an impl block, allowing it to be used with both structs and enums to create actor implementations.
 
@@ -217,7 +314,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.0.2"
+interthread = "1.1.0"
 oneshot     = "0.1.5" 
 ```
 
@@ -323,7 +420,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.0.2"
+interthread = "1.1.0"
 tokio = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -450,7 +547,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.0.2"
+interthread = "1.1.0"
 tokio = { version="1.28.2",features=["full"]}
 ```
 
@@ -564,7 +661,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.0.2"
+interthread = "1.1.0"
 oneshot     = "0.1.5" 
 ```
 
@@ -672,10 +769,6 @@ The provided example serves as a glimpse into the capabilities of the actor macr
 For more details, read the
 [![Docs.rs](https://docs.rs/interthread/badge.svg)](https://docs.rs/interthread#sdpl-framework)
 
-If you like this project, please consider making a small  contribution. 
-
-Your support helps ensure its continued development
-<a href="https://www.buymeacoffee.com/6fm9wrhmk7V" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-blue.png" alt="Buy Me A Coffee" style="height: 30px !important;width: 108px !important;" ></a>
 
 Join `interthread` on GitHub for discussions! [![GitHub](https://img.shields.io/badge/GitHub-%2312100E.svg?&style=plastic&logo=GitHub&logoColor=white)](https://github.com/NimonSour/interthread/discussions/1)
 

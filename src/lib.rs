@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.0.2"
+//!interthread = "1.1.0"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -392,7 +392,10 @@
 //!>the dependencies are needed (✔) or not. 
 //!>The macros will provide helpful messages indicating 
 //!>the necessary crate imports based on your project's dependencies.
- 
+//!
+//! 
+//! Checkout `interthread` on [![GitHub](https://img.shields.io/badge/GitHub-%2312100E.svg?&style=plastic&logo=GitHub&logoColor=white)](https://github.com/NimonSour/interthread)
+//! 
 
 mod attribute;
 mod use_macro;
@@ -404,7 +407,7 @@ mod method;
 mod check;
 mod error;
 mod parse;
-
+mod generics;
 
 static INTERTHREAD: &'static str            = "interthread";
 static INTER_EXAMPLE_DIR_NAME: &'static str = "INTER_EXAMPLE_DIR_NAME";
@@ -794,7 +797,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// ]
 /// ```
 /// For multiple methods, simply extend the list: `edit(live(imp(foo, bar)))`.
-/// You can edit code from both structs using: `edit(script(imp(play)), live(imp(foo, bar)))`.
+/// To edit code from both structs : `edit(script(imp(play)), live(imp(foo, bar)))`.
 ///
 /// To add a field to `ActorLive` instance, access the definition and initiating method `new`:
 /// ```rust

@@ -153,12 +153,16 @@ pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<(Attribute, Vec<A
     }
 }
 
+
 pub fn get_aaa( attr: Attribute ) -> ActorAttributeArguments {
     let mut aaa = ActorAttributeArguments::default();
-    if let Err(e) = attr.clone().parse_nested_meta(|meta| aaa.parse(meta)){
-        let span = e.span();
-        let msg = format!("InternalError.'file::get_aaa'. {} ",e.to_string());
-        abort!( span, msg );
+    
+    if let syn::Meta::List(_) = attr.meta{
+        if let Err(e) = attr.parse_nested_meta(|meta| aaa.parse(meta)){
+            let span = e.span();
+            let msg = format!("InternalError.'file::get_aaa'. {} ",e.to_string());
+            abort!( span, msg );
+        } 
     }
     aaa
 }

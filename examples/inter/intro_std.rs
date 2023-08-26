@@ -51,8 +51,8 @@ pub struct MyActorLive {
 }
 impl MyActorLive {
     pub fn new(v: i8) -> Self {
-        let (sender, receiver) = std::sync::mpsc::sync_channel(2);
         let actor = MyActor::new(v);
+        let (sender, receiver) = std::sync::mpsc::sync_channel(2);
         let actor_live = Self { sender };
         std::thread::spawn(|| { MyActorScript::play(receiver, actor) });
         actor_live
