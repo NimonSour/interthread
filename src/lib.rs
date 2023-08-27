@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.1.0"
+//!interthread = "1.1.1"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -1043,7 +1043,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///pub struct Aa;
 ///  
 /// 
-///#[actor(name="Bb", assoc=true)]
+///#[actor(name="Bb", assoc)]
 ///impl Aa {
 ///
 ///    pub fn new() -> Self { Self{} }
@@ -1096,7 +1096,10 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// method returns the current system time and is commonly 
 /// used to set the `debut` field when initializing 
 /// instances of the [`live`](index.html#live) struct.
-///
+/// 
+/// - true  
+/// - false (default)
+/// 
 /// Use macro [`example`](./attr.example.html) to see the generated code.
 /// 
 /// 
@@ -1106,7 +1109,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///use std::thread::spawn;
 ///pub struct MyActor ;
 ///
-///#[interthread::actor(channel=2, id=true)] 
+///#[interthread::actor(channel=2, id)] 
 ///impl MyActor {
 ///    pub fn new() -> Self { Self{} } 
 ///}

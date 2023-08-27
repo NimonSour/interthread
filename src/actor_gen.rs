@@ -365,7 +365,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
         live_mets.push((format_ident!("inter_set_name"),
         quote!{
-            #new_vis fn inter_set_name<T: std::string::ToString>(&mut self, name: T) {
+            #new_vis fn inter_set_name<Name: std::string::ToString>(&mut self, name: Name) {
                 self.name = name.to_string();
             }
         }));
