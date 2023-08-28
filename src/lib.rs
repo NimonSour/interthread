@@ -297,7 +297,7 @@
 //! 
 //! ```rust 
 //! 
-//!#[derive(Clone, Debug)]
+//!#[derive(Clone)]
 //!pub struct MyActorLive {
 //!    sender: std::sync::mpsc::SyncSender<MyActorScript>,
 //!}
