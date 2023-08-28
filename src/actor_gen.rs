@@ -38,8 +38,8 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
     // Giving a new name if specified 
     let cust_name   = if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { actor_name.clone() }; 
     
-    let script_name = name::script(&cust_name);
-    let live_name   = name::live(&cust_name);
+    let script_name = &name::script(&cust_name);
+    let live_name   = &name::live(&cust_name);
     
     
     let direct_async = actor_methods.iter().any(|x| x.is_async());
@@ -55,16 +55,17 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         live_send_input,
         live_recv_output ) = channels( &aaa.lib, &aaa.channel, &cust_name, &ty_generics);
 
-    let mut direct_arms   = vec![];
     let mut script_fields = vec![];
+    let mut direct_arms   = vec![];
+    let mut debug_arms      = vec![];
     
     let mut live_def;
-    let mut live_mets    = vec![];
-    let mut live_trts    = vec![];
+    let mut live_mets = vec![];
+    let mut live_trts = vec![];
 
     let mut script_def;
-    let mut script_mets  = vec![];
-    // let mut script_trts  = vec![];
+    let mut script_mets = vec![];
+    let mut script_trts = vec![];
 
 
 
@@ -128,6 +129,17 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         let await_call = await_token(sig.asyncness.is_some());
         method::to_async(&aaa.lib, &mut sig);
 
+        // Debug arm
+        let add_arm = | debug_arms: &mut Vec<TokenStream>,ident: &Ident | {
+
+            let str_field_name = ident.to_string();
+
+            let debug_arm = quote! {
+                #script_name :: #script_field_name {..} => write!(f, #str_field_name),
+            };
+            debug_arms.push(debug_arm);
+        };
+
         match method {
 
             method::ActorMethod::Io   { vis, ident, stat,  arguments, output,.. } => {
@@ -137,13 +149,15 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                     live_static_method(&actor_name,ident, vis, sig, args_ident,&mut live_mets)
                 }
                 else {
-                    
+                    // Debug Arm push
+                    add_arm(&mut debug_arms, &script_field_name);
+
                     // Direct Arm
                     let arm_match        = quote! { 
                         #script_field_name { input: #args_ident,  output: send }
                     };
                     let direct_arm       = quote! {
-                        #script_name::#arm_match => {send.send( actor.#ident #args_ident #await_call ).expect(#error_send);}
+                        #script_name :: #arm_match => {send.send( actor.#ident #args_ident #await_call ).expect(#error_send);}
                     };
                     direct_arms.push(direct_arm);
                     
@@ -152,7 +166,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
                         #vis #sig {
                             #live_meth_send_recv
-                            let msg = #script_name::#arm_match;
+                            let msg = #script_name :: #arm_match;
                             #live_send_input
                             #live_recv_output
                         }
@@ -177,6 +191,9 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                 
                 let (args_ident,args_type) = method::arguments_ident_type(&arguments);
                 
+                // Debug Arm push
+                add_arm(&mut debug_arms, &script_field_name);
+
                 // Direct Arm
                 let arm_match = quote!{ 
                     #script_field_name{ input: #args_ident }
@@ -215,6 +232,9 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                     live_static_method(&actor_name,ident, vis, sig, args_ident,&mut live_mets)
                 }
                 else {
+                    
+                    // Debug Arm push
+                    add_arm(&mut debug_arms, &script_field_name);
 
                     // Direct Arm
                     let arm_match = quote!{ 
@@ -252,6 +272,9 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                 }
             },
             method::ActorMethod::None { vis, ident ,..} => {
+
+                // Debug Arm push
+                add_arm(&mut debug_arms, &script_field_name);
 
                 // Direct Arm
                 let arm_match = quote!{ 
@@ -346,7 +369,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         live_mets.insert(0,(new_sig.ident.clone(),func_new_body));
     };
 
-    // INTER METHODS AND TRAITS
+    // LIVE INTER METHODS AND TRAITS
     if aaa.id {
 
         live_mets.push((format_ident!("inter_get_debut"),
@@ -428,10 +451,10 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         }));  
     } 
 
+    // SCRIPT DEFINITION
     script_def = {
 
         quote! {
-            #[derive(Debug)]
             #new_vis enum #script_name #ty_generics #where_clause {
                 #(#script_fields),*
             }
@@ -539,7 +562,30 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         };
         script_mets.push(( format_ident!("play"), play_met ));
     }
+    
+    // SCRIPT TRAIT (Debug)
+    {   
 
+        let str_script_name = script_name.to_string();
+        let body = 
+        if debug_arms.is_empty() { 
+            quote!{ write!(f, #str_script_name )} 
+        } else {
+            quote!{ match self { #(#debug_arms)* } }
+        };
+        script_trts.push((format_ident!("Debug"),
+        quote! {
+            impl #ty_generics std::fmt::Debug for #script_name #ty_generics #where_clause {
+        
+                fn fmt( &self, f: &mut std::fmt::Formatter<'_> ) -> std::fmt::Result {
+                    #body
+                }
+            }
+        }));
+    }
+
+
+    // LIVE DEFINITION
     live_def = {
         let (debut_field, name_field) = if aaa.id {
             ( quote!{ pub debut: std::sync::Arc<std::time::SystemTime>,},
@@ -547,7 +593,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         } else { (quote!{}, quote!{})};   
 
         quote!{
-            #[derive(Clone,Debug)]
+            #[derive(Clone)]
             #new_vis struct #live_name #ty_generics #where_clause {
                 #live_field_sender
                 #debut_field
@@ -560,7 +606,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
     let mut edit_script_def   = quote!{};
     let edit_script_mets ;
-    // let edit_script_trts ;
+    let edit_script_trts ;
 
     let mut edit_live_def  = quote!{};
     let edit_live_mets ;
@@ -572,13 +618,13 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         crate::attribute::AAEdit  { live, script } => {
             match script {
 
-                ( def , mets, _trts) => {
+                ( def , mets, trts) => {
                     if def {
                         edit_script_def = script_def.clone();
                         script_def      = quote!{}; 
                     }
                     edit_script_mets = edit_select(mets,&mut script_mets);
-                    // edit_script_trts = edit_select(trts,&mut script_trts);
+                    edit_script_trts = edit_select(trts,&mut script_trts);
                 },
             }
 
@@ -598,7 +644,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
     // Prepare Token Stream Vecs
     let script_methods = script_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-    // let script_traits    = script_trts.iter().map(|x| x.1).collect::<Vec<_>>();
+    let script_traits  = script_trts.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
     let live_methods   = live_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
     let live_traits    = live_trts.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
     
@@ -611,6 +657,8 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         impl #impl_generics #script_name #ty_generics #where_clause {
             #(#script_methods)*
         }
+        #(#script_traits)*
+
         #live_def
         impl #impl_generics #live_name #ty_generics #where_clause {
             #(#live_methods)*
@@ -622,11 +670,23 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
     let res_edit_script_mets =  
     if  edit_script_mets.is_empty() { quote!{} }
-    else { quote!{ impl #script_name { #(#edit_script_mets)* }}};
+    else { quote!{ 
+        impl #impl_generics #script_name #ty_generics #where_clause {
+            #(#edit_script_mets)* 
+        }
+    }};
+
+    let res_edit_script_trts =  
+    if  edit_script_trts.is_empty() { quote!{} }
+    else { quote!{ #(#edit_script_trts)* }};
 
     let res_edit_live_mets =  
     if  edit_live_mets.is_empty() { quote!{} }
-    else { quote!{ impl #live_name { #(#edit_live_mets)* }}};
+    else { quote!{ 
+        impl #impl_generics #live_name #ty_generics #where_clause { 
+            #(#edit_live_mets)* 
+        }
+    }};
 
     let res_edit_live_trts =  
     if  edit_live_trts.is_empty() { quote!{} }
@@ -634,8 +694,11 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
 
     let res_edit = quote!{
+
         #edit_script_def
         #res_edit_script_mets
+        #res_edit_script_trts
+
         #edit_live_def
         #res_edit_live_mets
         #res_edit_live_trts

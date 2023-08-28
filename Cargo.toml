@@ -1,9 +1,9 @@
 [package]
 name = "interthread"
-version = "1.1.1"
+version = "1.1.2"
 edition = "2021"
 description = "Auto implementation of the Actor Model"
-categories = ["Development tools", "Asynchronous"]
+categories = ["development-tools", "asynchronous"]
 license = "MIT OR Apache-2.0"
 author = "Simon Nour"
 repository = "https://github.com/NimonSour/interthread.git"

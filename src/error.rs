@@ -277,12 +277,6 @@ pub fn direct_send(cust_name: &syn::Ident) -> TokenStream {
     quote!{#msg}
 }
 
-pub static SCRIPT_NO_TRT: &'static str = "
-    The `actor`'s `Script struct` does not implement any traits. 
-    Consequently, the use of the `trt` argument for `script` is not applicable. If your intention is \
-to modify derived traits, consider using the `def` option instead.";
-
-
 pub fn trait_new_sig<T: quote::ToTokens>(ty:&T, exists: bool) -> (String,String){
     let actor_ty = quote!{#ty}.to_string();
     let note = format!("

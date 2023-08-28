@@ -62,7 +62,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.1"
+interthread = "1.1.2"
 oneshot     = "0.1.5" 
 ```
 
@@ -152,7 +152,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.1"
+interthread = "1.1.2"
 tokio = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -209,14 +209,14 @@ async fn main() {
 }
 ```
 
-A recent contribution from [maun](https://github.com/maun) has significantly empowered the [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) macro by introducing support for generic types.
+A contribution from [maun](https://github.com/maun) has significantly empowered the [`actor`](https://docs.rs/interthread/latest/interthread/attr.actor.html) macro by introducing support for generic types.
 
 ### Examples
 Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.1"
+interthread = "1.1.2"
 oneshot     = "0.1.5" 
 ```
 
@@ -314,7 +314,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.1"
+interthread = "1.1.2"
 oneshot     = "0.1.5" 
 ```
 
@@ -420,7 +420,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.1"
+interthread = "1.1.2"
 tokio = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -547,7 +547,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.1"
+interthread = "1.1.2"
 tokio = { version="1.28.2",features=["full"]}
 ```
 
@@ -661,7 +661,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.1"
+interthread = "1.1.2"
 oneshot     = "0.1.5" 
 ```
 

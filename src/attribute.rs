@@ -308,23 +308,19 @@ impl AAEdit {
         }
         
         else if meta.path.is_ident("trt"){
-            if sol {
-                return Err(meta.error(crate::error::SCRIPT_NO_TRT));
+
+            if meta.input.clone().to_string().is_empty() {
+                strct.2 = Some( Vec::new());
             } else {
+                if let Err(e) = meta.parse_nested_meta(|meta| {
 
-                // if ident
-                if meta.input.clone().to_string().is_empty() {
-                    strct.2 = Some( Vec::new());
-                } else {
-                    if let Err(e) = meta.parse_nested_meta(|meta| {
+                    parse_names(name,"trt",&mut strct.2,meta)
 
-                        parse_names(name,"trt",&mut strct.2,meta)
-
-                    }){
-                        return Err(e);
-                    }
+                }){
+                    return Err(e);
                 }
             }
+
         }
         else {
             let opts  = if sol { " `def` or `imp` " } else { " `def`,`imp` or `trt` " };

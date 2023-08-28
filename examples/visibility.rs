@@ -1,7 +1,7 @@
 pub struct MyActor {
     value: i8,
 }
-//  #[interthread::example(file="examples/visibility.rs")]  
+//  #[interthread::example(path="examples/visibility.rs")]  
 #[interthread::actor(channel=2,assoc=true)] // <-  this is it 
 impl MyActor {
 

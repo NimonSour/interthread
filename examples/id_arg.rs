@@ -2,7 +2,7 @@
 use std::thread::spawn;
 pub struct MyActor ;
 
-//  #[interthread::example(file="examples/id_arg.rs")]  
+//  #[interthread::example(path="examples/id_arg.rs")]  
 #[interthread::actor(channel=2, id=true)] 
 impl MyActor {
     pub fn new() -> Self { Self{} } 

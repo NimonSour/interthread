@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.1.1"
+//!interthread = "1.1.2"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -186,7 +186,6 @@
 //! 
 //! ```rust
 //! 
-//!#[derive(Debug)]
 //!pub enum MyActorScript {
 //!    Increment {},
 //!    AddNumber {
@@ -267,6 +266,20 @@
 //! gives the flexibility to customize and modify 
 //! the behavior of the `play` to suit any requared logic.
 //! 
+//! In addition the Debug trait is also implemented for the `script`struct.
+//!  
+//! ```rust
+//! impl std::fmt::Debug for MyActorScript {
+//!    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//!        match self {
+//!            MyActorScript::Increment { .. } => write!(f, "Increment"),
+//!            MyActorScript::AddNumber { .. } => write!(f, "AddNumber"),
+//!            MyActorScript::GetValue  { .. } => write!(f, "GetValue"),
+//!        }
+//!    }
+//! }
+//! ```
+//! 
 //! 
 //! # live
 //! A struct `ActorName + Live`, which serves as an interface/handler 
@@ -339,7 +352,7 @@
 //! # Panics
 //! 
 //! If the types used for input or output for actor methods 
-//! do not implement the `Send`, `Sync`, and `Debug` traits.
+//! do not implement the `Send`,`Sync` `'static`  traits.
 //! 
 //! Additionally, the actor object itself should implement 
 //! the `Send` trait, allowing it to be safely moved 

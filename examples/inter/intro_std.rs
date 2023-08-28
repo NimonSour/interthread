@@ -16,7 +16,6 @@ impl MyActor {
         self.value
     }
 }
-#[derive(Debug)]
 pub enum MyActorScript {
     Increment {},
     AddNumber { input: (i8), output: oneshot::Sender<i8> },
@@ -45,7 +44,16 @@ impl MyActorScript {
         eprintln!("MyActor end of life ...");
     }
 }
-#[derive(Clone, Debug)]
+impl std::fmt::Debug for MyActorScript {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            MyActorScript::Increment { .. } => write!(f, "Increment"),
+            MyActorScript::AddNumber { .. } => write!(f, "AddNumber"),
+            MyActorScript::GetValue { .. } => write!(f, "GetValue"),
+        }
+    }
+}
+#[derive(Clone)]
 pub struct MyActorLive {
     sender: std::sync::mpsc::SyncSender<MyActorScript>,
 }
