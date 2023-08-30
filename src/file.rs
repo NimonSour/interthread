@@ -54,23 +54,16 @@ pub fn expand_macros( path: &std::path::PathBuf, macs: &Vec<AAExpand>) -> (syn::
     (file,libr)
 }
 
+pub fn get_ident( meta: &syn::Meta ) -> Option<syn::Ident>{
+    meta.path().get_ident().map(|x| x.clone())
+}
+
 pub fn get_idents( attr: &Attribute ) -> Vec<syn::Ident> {
     let nested = 
     attr.parse_args_with(Punctuated::<Meta,Token![,]>::parse_terminated).unwrap();
     
     nested.into_iter().filter_map(|m|{
-
-        match m {
-            syn::Meta::Path(path) => {
-                path.get_ident().map(|x| x.clone())
-            }
-            syn::Meta::List(meta_list) => {
-                meta_list.path.get_ident().map(|x| x.clone())
-            }
-            syn::Meta::NameValue(meta_name_value) => {
-                meta_name_value.path.get_ident().map(|x| x.clone())
-            }
-        }
+        get_ident(&m)
     }).collect::<Vec<_>>()
 
 }
@@ -158,11 +151,14 @@ pub fn get_aaa( attr: Attribute ) -> ActorAttributeArguments {
     let mut aaa = ActorAttributeArguments::default();
     
     if let syn::Meta::List(_) = attr.meta{
-        if let Err(e) = attr.parse_nested_meta(|meta| aaa.parse(meta)){
-            let span = e.span();
-            let msg = format!("InternalError.'file::get_aaa'. {} ",e.to_string());
-            abort!( span, msg );
-        } 
+        let nested = 
+        attr.parse_args_with(Punctuated::<Meta,Token![,]>::parse_terminated).unwrap();
+        aaa.parse_nested(nested);
+        // if let Err(e) = attr.parse_nested_meta(|meta| aaa.parse(meta)){
+        //     let span = e.span();
+        //     let msg = format!("InternalError.'file::get_aaa'. {} ",e.to_string());
+        //     abort!( span, msg );
+        // } 
     }
     aaa
 }

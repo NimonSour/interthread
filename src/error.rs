@@ -106,7 +106,7 @@ pub fn met_new_not_instance<T: ToTokens>(sig: &syn::Signature, name: &T, bit: To
 
 pub fn unknown_attr_arg( aa: &str, ident: &syn::Ident ){
     
-    let msg = format!("Unknown option  -  {:?} for '{}' ", ident.to_string(),aa,);
+    let msg = format!("Unknown argument option  -  {:?} for '{}' ", ident.to_string(),aa,);
 
     match aa.to_string() {
 
@@ -118,7 +118,7 @@ pub fn unknown_attr_arg( aa: &str, ident: &syn::Ident ){
     }
 }
 
-pub fn error_name_type(n: syn::Ident, t: String ) -> String {
+pub fn error_name_type(n: &syn::Ident, t: &str ) -> String {
 
     return format!("Expected a  < {} >  value for attribute argument '{}'.", t, n.to_string() );
 }
@@ -192,6 +192,7 @@ pub static AVAIL_EDIT: &'static str = "
     'script'    ( 
                  def        
                  imp(name, ..)
+                 trt(name, ..)
                 )  
 
     'live'      ( 

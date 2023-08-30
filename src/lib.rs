@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.1.2"
+//!interthread = "1.1.3"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -1254,16 +1254,13 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 #[proc_macro_attribute]
 pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
     
-    let mac = attribute::AAExpand::Actor;
-    let act_item   = syn::parse_macro_input!(item as syn::Item);
+    let mac  = attribute::AAExpand::Actor;
+    let act_item = syn::parse_macro_input!(item as syn::Item);
 
     let mut aaa = attribute::ActorAttributeArguments::default();
-    if !attr.clone().to_string().is_empty(){
-        let aaa_parser  = 
-        syn::meta::parser(|meta| aaa.parse(meta));
-        syn::parse_macro_input!(attr with aaa_parser);
-        aaa.cross_check();
-    }
+    let nested  = syn::parse_macro_input!(attr with syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated); 
+    aaa.parse_nested(nested);
+    aaa.cross_check();
 
     check::channels_import( &aaa.lib );
 

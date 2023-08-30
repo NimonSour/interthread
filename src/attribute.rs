@@ -1,4 +1,5 @@
 use crate::error;
+use crate::file::get_ident;
 
 use std::path::PathBuf;
 use proc_macro2::Span;
@@ -261,80 +262,39 @@ pub struct AAEdit {
 }
 impl AAEdit {
 
-    pub fn parse(&mut self,  meta: syn::meta::ParseNestedMeta, sol: bool ) -> Result<(), syn::Error> {
+    pub fn parse_nested(&mut self, nested: syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>, sol: bool ){
         let (name,mut strct) = 
         if sol {("script",self.script.clone()) } else { ("live",self.live.clone())};
 
-        let parse_names = 
-        |    strct_name: &str, 
-         strct_prt_name: &str, 
-              strct_prt: &mut Option<Vec<syn::Ident>>, 
-                   meta: syn::meta::ParseNestedMeta,
-        | -> Result<(),syn::Error> {
+        for meta in nested.iter() {
 
-            if let Some(ident) = meta.path.get_ident(){
-                if strct_prt.is_some(){
-                    strct_prt.as_mut().map(|x| x.push(ident.clone()));
-                    return Ok(());
+            if meta.path().is_ident("def"){
+                strct.0 = true;
+            }
+            else if meta.path().is_ident("imp"){
+
+                if let Some(list) = get_list(meta, error::AVAIL_EDIT) {
+                    strct.1 = Some(list.iter().filter_map(|x| get_ident(x)).collect::<Vec<_>>());
                 } else {
-                    *strct_prt = Some( Vec::from([ident.clone()]));
-                    return Ok(());
-                }
-            } else {
-                let mot = if strct_prt_name == "imp" { "method"  } else { "trait" };
-                let msg = 
-                format!("Unsuported 'edit({}({}( ? )))' option! Expected a name of {} .",
-                strct_name, strct_prt_name, mot );
-                return Err(meta.error(msg));
-            }
-        };
-
-        if meta.path.is_ident("def"){
-            strct.0 = true;
-        }
-        else if meta.path.is_ident("imp"){
-            // if ident
-            if meta.input.clone().to_string().is_empty() {
-                strct.1 = Some( Vec::new());
-            } else {
-                if let Err(e) = meta.parse_nested_meta(|meta| {
-                    
-                    parse_names(name,"imp",&mut strct.1,meta)
-
-                }) {
-                    return Err(e); 
+                    strct.1 = Some( Vec::new());
                 }
             }
-        }
-        
-        else if meta.path.is_ident("trt"){
-
-            if meta.input.clone().to_string().is_empty() {
-                strct.2 = Some( Vec::new());
-            } else {
-                if let Err(e) = meta.parse_nested_meta(|meta| {
-
-                    parse_names(name,"trt",&mut strct.2,meta)
-
-                }){
-                    return Err(e);
+            
+            else if meta.path().is_ident("trt"){
+    
+                if let Some(list) = get_list(meta, error::AVAIL_EDIT) {
+                    strct.2 = Some(list.iter().filter_map(|x| get_ident(x)).collect::<Vec<_>>());
+                } else {
+                    strct.2 = Some( Vec::new());
                 }
             }
-
-        }
-        else {
-            let opts  = if sol { " `def` or `imp` " } else { " `def`,`imp` or `trt` " };
-            let msg = format!("Unsuported 'edit({}( ? ))' option! Expected options are {}.",name, opts);
-            return Err(meta.error(msg));
+            else {
+                let msg = format!("Unsuported 'edit({}( ? ))' option! Expected options are `def`,`imp` or `trt` .",name);
+                abort!(meta, msg);
+            }
         }
 
-        if sol {
-            self.script = strct;
-            return Ok(());
-        } else { 
-            self.live = strct;
-            return Ok(());
-        };
+        if sol { self.script = strct; } else { self.live = strct; };
 
     }
 
@@ -351,14 +311,14 @@ impl AAEdit {
 
         self.live.0 == true  && self.script.0 == true  &&
         self.live.1 == empty && self.script.1 == empty &&
-        self.live.2 == empty
+        self.live.2 == empty && self.script.1 == empty
     } 
 
     pub fn is_none(&self) -> bool {
 
         self.live.0 == false && self.script.0 == false &&
         self.live.1 == None  && self.script.1 == None  &&
-        self.live.2 == None
+        self.live.2 == None  && self.script.2 == None
     }  
 
 }
@@ -420,205 +380,180 @@ impl Default for ActorAttributeArguments {
 
 
 impl ActorAttributeArguments {
+       
+    pub fn parse_nested(&mut self, nested: syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>) {
+
+        for meta in nested.iter(){
+
+            if let Some(ident) = get_ident(meta) {
+
+                // NAME
+                if meta.path().is_ident("name"){
+
+                    match get_lit(meta) {
+                        syn::Lit::Str(val) => {  
+                            let str_name = val.value();
+
+                            if str_name == "".to_string() {
+                                abort!(&ident,"Attribute field 'name' is empty. Enter a name.") 
+                            }
+                            else {
+                                self.name = Some(format_ident!("{}",val.value()));
+                            } 
+                        },
+                        v => abort!(v, error::error_name_type( &ident, "str"); help=error::AVAIL_ACTOR ),
+                    }
+                }
+
+
+                // LIB
+                else if meta.path().is_ident("lib"){
+
+                    match get_lit(meta) {
+                        syn::Lit::Str(val) => {
+
+                            self.lib = AALib::from(&val);
+                        },
+                        v => abort!(v, error::error_name_type( &ident, "str"); help=error::AVAIL_ACTOR ),
+                    }
+                }
+
+                // ASSOC
+                else if meta.path().is_ident("assoc"){
+
+                    match meta {
+                        syn::Meta::Path(_) => { self.assoc = true; },
+                        _ => {
+                            match get_lit(meta) {
+                                syn::Lit::Bool(val) => { self.assoc = val.value(); },
+                                v => abort!(v, error::error_name_type( &ident, "bool"); help=error::AVAIL_ACTOR ),
+                            }
+                        },
+                    }
+                }
+
+
+                // CHANNEL
+                else if meta.path().is_ident("channel"){
+
+                    match get_lit(meta) {
+                        syn::Lit::Int(val) => { 
+                            self.channel = AAChannel::from(Either::R(val));
+                        },
+                        syn::Lit::Str(val) => {
+                            self.channel = AAChannel::from(Either::L(val));
+                        },
+                        v => abort!(v, error::error_name_type( &ident, "int | str"),; help=error::AVAIL_ACTOR ),
+                    }
+                }
+
+
+                // EDIT
+                else if meta.path().is_ident("edit"){
+                    
+
+                    if let Some(meta_list) = get_list( meta,error::AVAIL_EDIT ) {
+
+                        for edit_meta in meta_list.iter() {
+
+                            if edit_meta.path().is_ident("script"){
     
-    pub fn parse(&mut self, meta: syn::meta::ParseNestedMeta) -> Result<(), syn::Error> {
+                                if let Some(list) = get_list(edit_meta,error::AVAIL_EDIT ){
 
-        
-        if let Some(ident) = meta.path.get_ident() {
+                                    self.edit.parse_nested(list,true);
 
-            // NAME
-            if meta.path.is_ident("name"){
+                                } else {
+                                    self.edit.set_script_all();
+                                }
+                            } 
 
-                let  value = meta.value()?.parse::<syn::Lit>()?;
-                match value.clone() {
-                    syn::Lit::Str(val) => {  
-                        // self.name.0 = Some(val.clone());
-                        let str_name = val.value();
+                            else if edit_meta.path().is_ident("live"){
+                                
+                                if let Some(list) = get_list(edit_meta,error::AVAIL_EDIT ){
 
-                        if str_name == "".to_string() {
-                            abort!(ident,"Attribute field 'name' is empty. Enter a name.") 
+                                    self.edit.parse_nested(list,false);
+
+                                } else {
+                                    self.edit.set_live_all();
+                                }
+                            } 
+    
+                            // old args 
+                            else if  edit_meta.path().is_ident("direct") {
+                                abort!( meta, crate::error::OLD_DIRECT_ARG);
+                            }
+                            else if  edit_meta.path().is_ident("play") {
+                                abort!( meta, crate::error::OLD_PLAY_ARG);
+                            }
+                            // wrong opt
+                            else {
+                                abort!(edit_meta,"Unknown 'edit' option!";help=error::AVAIL_EDIT );
+                            } 
                         }
-                        else {
-                            self.name = Some(format_ident!("{}",val.value()));
-                        } 
-                        return Ok(());
-                    },
-                    v => abort!(v, error::error_name_type( ident.clone(), "str".into()); help=error::AVAIL_ACTOR ),
+                    } else {
+                        self.edit.set_script_all();
+                        self.edit.set_live_all();
+                    }
+
                 }
-            }
 
-            // LIB
-            else if meta.path.is_ident("lib"){
-
-                let  value = meta.value()?.parse::<syn::Lit>()?;
-
-                match value.clone() {
-                    syn::Lit::Str(val) => {
-                        // self.lib.0 = Some(val.clone()); 
-                        self.lib = AALib::from(&val);
-                        return Ok(());
-                    },
-                    v => abort!(v, error::error_name_type( ident.clone(), "str".into()),; help=error::AVAIL_ACTOR ),
+                // ID
+                else if meta.path().is_ident("id"){
+                    match meta {
+                        syn::Meta::Path(_) => { self.id = true; },
+                        _ => {
+                            match get_lit(meta) {
+                                syn::Lit::Bool(val) => { self.id = val.value(); },
+                                v => abort!(v, error::error_name_type( &ident, "bool"); help=error::AVAIL_ACTOR ),
+                            }
+                        }
+                    }
                 }
-            }
 
-            // STATIC
-            else if meta.path.is_ident("assoc"){
-                if meta.input.clone().to_string().is_empty() {
-                    // self.assoc.0 = Some(ident.clone());
-                    self.assoc = true;
-                } else {
-                    let  value = meta.value()?.parse::<syn::Lit>()?;
+                // FILE
+                else if meta.path().is_ident("file") {
+
+                    let value = get_lit(meta);
+
                     match value.clone() {
-                        syn::Lit::Bool(val) => { 
-                            // self.assoc.0 = Some(ident.clone());
-                            self.assoc = val.value();
-                            return Ok(());
+                        syn::Lit::Str(val) => {
+
+                            // the path needs to be checked first 
+                            let path = std::path::PathBuf::from(val.value());
+
+                            if path.exists() {
+                                // one only check 
+                                match crate::file::macro_file_count(&path) {
+                                    Ok((attr,attrs)) => {
+                                        self.file = Some(AAFile {
+                                                                    path: path.clone(),
+                                                                    attr,
+                                                                    attrs });
+                                    },
+                                    Err(e) => { abort!(value,e); },
+                                }
+                            }
+                            else {
+                                abort!(val, format!("Path - {:?} does not exists.",val.value())); 
+                            } 
                         },
-                        v => abort!(v, error::error_name_type( ident.clone(), "bool".into()); help=error::AVAIL_ACTOR ),
+                        _ => { abort!(value, error::error_name_type( &ident, "str"); help=error::AVAIL_ACTOR ) },
                     }
                 }
-            }
-          
-            // CHANNEL
-            else if meta.path.is_ident("channel"){
 
-                let  value = meta.value()?.parse::<syn::Lit>()?;
-
-                    // self.channel.0 = Some(value.clone());
-
-                match value {
-                    syn::Lit::Int(val) => { 
-                        self.channel = AAChannel::from(Either::R(val));
-                    },
-                    syn::Lit::Str(val) => {
-
-                        self.channel = AAChannel::from(Either::L(val));
-                    },
-                    v => abort!(v, error::error_name_type( ident.clone(), "int | str".into()),; help=error::AVAIL_ACTOR ),
+                // UNKNOWN ARGUMENT
+                else {
+                    error::unknown_attr_arg("actor",&ident )
                 }
-                return Ok(());
+            } else { 
+                abort!(meta,"Unknown configuration option!"; help=error::AVAIL_ACTOR); 
             }
 
-            // EDIT
-            else if meta.path.is_ident("edit"){
-                
-                if meta.input.clone().to_string().is_empty() {
-                    //if ident 
-                    self.edit.set_script_all();
-                    self.edit.set_live_all();
-                    return Ok(());
-                } 
-
-                else { 
-
-                    match meta.parse_nested_meta( |meta| {
-
-                        if meta.path.is_ident("script") {
-                            // if ident 
-                            if meta.input.clone().to_string().is_empty() {
-                                self.edit.set_script_all();
-                                return Ok(());
-                            } else {
-
-                                meta.parse_nested_meta(|meta|{
-                                    return self.edit.parse(meta,true)
-                                })
-                            }
-                        }
-
-                        else if  meta.path.is_ident("live") {
-                            // if ident 
-                            if meta.input.clone().to_string().is_empty() {
-                                self.edit.set_live_all();
-                                return Ok(());
-
-                            } else {
-
-                                meta.parse_nested_meta(|meta|{
-                                    return self.edit.parse(meta,false)
-                                })
-                            }
-                        }
-                        // old args 
-                        else if  meta.path.is_ident("direct") {
-                            return Err( meta.error(crate::error::OLD_DIRECT_ARG));
-                        }
-                        else if  meta.path.is_ident("play") {
-                            return Err( meta.error(crate::error::OLD_PLAY_ARG));
-                        }
-                        // wrong opt
-                        else { 
-                            return Err( meta.error("Unsuported edit option") );
-                        }
-                    }){
-                        Ok(_) => (),
-                        Err(e) => {
-                            let span   = e.span();
-                            let msg  = e.to_string();
-                            abort!(span,msg;help=error::AVAIL_EDIT );
-                        },
-                    }
-                }
-            }
-
-            // ID
-            else if meta.path.is_ident("id"){
-                if meta.input.clone().to_string().is_empty() {
-                    self.id = true;
-                } else {
-                    let  value = meta.value()?.parse::<syn::Lit>()?;
-                    match value.clone() {
-                        syn::Lit::Bool(val) => { 
-                            self.id = val.value();
-                            return Ok(());
-                        },
-                        v => abort!(v, error::error_name_type( ident.clone(), "bool".into()); help=error::AVAIL_ACTOR ),
-                    }
-                }
-            }
-            
-            // FILE
-            else if meta.path.is_ident("file") {
-
-                let value = meta.value()?.parse::<syn::Lit>()?;
-
-                match value.clone() {
-                    syn::Lit::Str(val) => {
-
-                        // the path needs to be checked first 
-                        let path = std::path::PathBuf::from(val.value());
-
-                        if path.exists() {
-                            // one only check 
-                            match crate::file::macro_file_count(&path) {
-                                Ok((attr,attrs)) => {
-                                    self.file = Some(AAFile {
-                                                                path: path.clone(),
-                                                                attr,
-                                                                attrs });
-                                    return Ok(());
-                                },
-                                Err(e) => { abort!(value,e); },
-                            }
-                        }
-                        else {
-                            abort!(val, format!("Path - {:?} does not exists.",val.value())); 
-                        } 
-                    },
-                    _ => {
-                        return Err( meta.error("Expected a  'str'  value for argument 'file'."));
-                    },
-                }
-            }
-
-            // UNKNOWN ARGUMENT
-            else {
-                error::unknown_attr_arg("actor",ident )
-            }
         }
-        Ok(())
+
+
     }
+
 
     pub fn cross_check(&self){
 
@@ -632,6 +567,34 @@ impl ActorAttributeArguments {
 } 
 
 
+pub fn get_list(meta: & syn::Meta, help: &str) -> Option<syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>> {
+    match meta {
+        syn::Meta::Path(_) => { None },
+        syn::Meta::List(meta_list) => { 
+            let list = 
+            meta_list.parse_args_with(syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated).unwrap();
+            Some(list) 
+        },
+        syn::Meta::NameValue(_) => { abort!(meta,"Expected a list!"; help=help) },
+    }
+}
+
+pub fn get_lit( meta: &syn::Meta ) -> syn::Lit {
+
+    let msg = "Expected a 'name = value' argument !";
+    match meta {
+        syn::Meta::NameValue(nv) => {
+            match &nv.value {
+                syn::Expr::Lit(expr_lit) => {
+                    expr_lit.lit.clone()
+                    
+                },
+                v => abort!(v, msg),
+            }
+        },
+        m => abort!(m, msg),
+    }
+}
 
 
 

@@ -62,7 +62,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.2"
+interthread = "1.1.3"
 oneshot     = "0.1.5" 
 ```
 
@@ -152,7 +152,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.2"
+interthread = "1.1.3"
 tokio = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -216,7 +216,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.2"
+interthread = "1.1.3"
 oneshot     = "0.1.5" 
 ```
 
@@ -314,7 +314,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.2"
+interthread = "1.1.3"
 oneshot     = "0.1.5" 
 ```
 
@@ -420,7 +420,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.2"
+interthread = "1.1.3"
 tokio = { version="1.28.2",features=["full"]}
 ```
 Filename: main.rs
@@ -547,7 +547,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.2"
+interthread = "1.1.3"
 tokio = { version="1.28.2",features=["full"]}
 ```
 
@@ -661,7 +661,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.2"
+interthread = "1.1.3"
 oneshot     = "0.1.5" 
 ```
 
