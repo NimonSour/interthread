@@ -55,8 +55,8 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         live_send_input,
         live_recv_output ) = channels( &aaa.lib, &aaa.channel, &cust_name, &ty_generics);
 
-    let mut script_fields = vec![];
-    let mut direct_arms   = vec![];
+    let mut script_fields   = vec![];
+    let mut direct_arms     = vec![];
     let mut debug_arms      = vec![];
     
     let mut live_def;
@@ -121,13 +121,13 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
     let new_vis = met_new.vis.clone();
 
-    let error_send = error::direct_send(&cust_name); 
-
     for method in actor_methods.clone() {
         
         let (mut sig, script_field_name) = method.get_sig_and_field_name();
         let await_call = await_token(sig.asyncness.is_some());
         method::to_async(&aaa.lib, &mut sig);
+
+        let error_send = error::direct_send(&script_name,&script_field_name);
 
         // Debug arm
         let add_arm = | debug_arms: &mut Vec<TokenStream>,ident: &Ident | {
@@ -157,7 +157,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                         #script_field_name { input: #args_ident,  output: send }
                     };
                     let direct_arm       = quote! {
-                        #script_name :: #arm_match => {send.send( actor.#ident #args_ident #await_call ).expect(#error_send);}
+                        #script_name :: #arm_match => {send.send( actor.#ident #args_ident #await_call ) #error_send ;}
                     };
                     direct_arms.push(direct_arm);
                     
@@ -242,7 +242,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                     };
         
                     let direct_arm = quote!{
-                        #script_name::#arm_match => {send.send(actor.#ident #args_ident #await_call).expect(#error_send);}
+                        #script_name::#arm_match => {send.send(actor.#ident #args_ident #await_call) #error_send ;}
                     };
                     direct_arms.push(direct_arm);
 

@@ -256,26 +256,24 @@ pub fn live_send_recv(cust_name: &syn::Ident, ) -> (TokenStream, TokenStream){
 pub fn live_guard(cust_name: &syn::Ident) -> TokenStream {
     let live_name  = &name::live(cust_name);
     let msg        = format!("'{live_name}::method'. Failed to unwrap MutexGuard!");
-    quote!{#msg}
+    quote!{ #msg }
 }
 
 pub fn play_guard(cust_name: &syn::Ident) -> TokenStream {
     let script_name = &name::script(cust_name);
-    let msg        = format!("'{script_name}::play::queuing'. Failed to unwrap MutexGuard!");
+    let msg = format!("'{script_name}::play::queuing'. Failed to unwrap MutexGuard!");
     quote!{#msg}
 }
 
 pub fn end_of_life(name: &syn::Ident) -> TokenStream {
-    let msg    = format!("{} end of life ...",&name.to_string());
-    quote!{
-        eprintln!(#msg);
-    }
+    let msg    = format!("{name} end of life ...");
+    quote!{ eprintln!(#msg); }
 }
 
-pub fn direct_send(cust_name: &syn::Ident) -> TokenStream {
-    let script_name = &name::script(cust_name);
-    let msg = format!("'{script_name}::direct.send'. Channel closed");
-    quote!{#msg}
+pub fn direct_send(script_name: &syn::Ident, variant: &syn::Ident) -> TokenStream {
+    let msg = format!("'{script_name}::{variant}.direct'. Sending on a closed channel.");
+    quote!{.unwrap_or_else(|_error| core::panic!( #msg ))}
+
 }
 
 pub fn trait_new_sig<T: quote::ToTokens>(ty:&T, exists: bool) -> (String,String){
