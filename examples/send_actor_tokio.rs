@@ -1,6 +1,5 @@
 
-use tokio::time::{sleep,Duration};
-use tokio::sync::oneshot::{self,Sender};
+use tokio::sync::oneshot::Sender;
 use std::sync::{Arc,Mutex};
 pub struct MyActor(Arc<Mutex<u32>>);
 // we use argument `id`
@@ -57,7 +56,7 @@ async fn main() {
     assert_eq!(actors[998] < actors[999], true);
 
     for i in (0..actors.len()).rev() {
-        println!("Inside");
+
         let target = actors.remove(i);
         if actors.iter().any(move |x| *x == target) {
             panic!("Actor Model Id's are not unique !")
