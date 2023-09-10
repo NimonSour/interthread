@@ -387,6 +387,8 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
             } 
         }));
 
+        // we need this function to return as much an id as it is possible
+        // the model will build some options on top of this fact 
         script_mets.push((format_ident!("debut"),
         quote!{
 
@@ -473,7 +475,8 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
     // PLAY
     {
-        let await_call  = direct_async_decl.as_ref().map(|_| quote!{.await});
+        let direct_await  = direct_async_decl.as_ref().map(|_| quote!{.await});
+        let recv_await=  play_async_decl.as_ref().map(|_| quote!{.await});
         let end_of_play = error::end_of_life(&actor_name); 
 
         // needs to be pushed into script_mets
@@ -488,8 +491,8 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                 };
                 quote! {
                     #new_vis #play_async_decl fn play ( #play_input_receiver mut actor: #actor_type #ty_generics ) {
-                        while let #ok_or_some (msg) = receiver.recv() #await_call {
-                            msg.direct ( &mut actor ) #await_call;
+                        while let #ok_or_some (msg) = receiver.recv() #recv_await {
+                            msg.direct ( &mut actor ) #direct_await;
                         }
                         #end_of_play
                     }
@@ -525,7 +528,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                         };
                         while let Some(msgs)  = queuing(){
                             for msg in msgs {
-                                msg.direct (&mut actor) #await_call;
+                                msg.direct (&mut actor) #direct_await;
                             }
                         }
                         #end_of_play
