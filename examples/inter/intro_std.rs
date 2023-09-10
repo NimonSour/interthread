@@ -29,11 +29,19 @@ impl MyActorScript {
             }
             MyActorScript::AddNumber { input: (num), output: send } => {
                 send.send(actor.add_number(num))
-                    .expect("'MyActorScript::direct.send'. Channel closed");
+                    .unwrap_or_else(|_error| {
+                        core::panic!(
+                            "'MyActorScript::AddNumber.direct'. Sending on a closed channel."
+                        )
+                    });
             }
             MyActorScript::GetValue { output: send } => {
                 send.send(actor.get_value())
-                    .expect("'MyActorScript::direct.send'. Channel closed");
+                    .unwrap_or_else(|_error| {
+                        core::panic!(
+                            "'MyActorScript::GetValue.direct'. Sending on a closed channel."
+                        )
+                    });
             }
         }
     }

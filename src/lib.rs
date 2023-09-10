@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.1.4"
+//!interthread = "1.1.5"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -1080,8 +1080,12 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///```
 /// # id
 /// 
+/// The generated code is designed to 
+/// compile successfully on Rust versions as early as 1.63.0.
+/// 
 /// If this argument is set to `true`, the following 
 /// additions and implementations are generated :
+/// 
 /// 
 /// Within the [`live`](index.html#live) struct definition, the following
 /// fields are generated:

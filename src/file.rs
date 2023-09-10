@@ -154,11 +154,6 @@ pub fn get_aaa( attr: Attribute ) -> ActorAttributeArguments {
         let nested = 
         attr.parse_args_with(Punctuated::<Meta,Token![,]>::parse_terminated).unwrap();
         aaa.parse_nested(nested);
-        // if let Err(e) = attr.parse_nested_meta(|meta| aaa.parse(meta)){
-        //     let span = e.span();
-        //     let msg = format!("InternalError.'file::get_aaa'. {} ",e.to_string());
-        //     abort!( span, msg );
-        // } 
     }
     aaa
 }

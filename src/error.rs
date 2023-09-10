@@ -2,8 +2,10 @@ use crate::name;
 use quote::{quote,ToTokens};
 use proc_macro_error::abort;
 use proc_macro2::TokenStream;
+use proc_macro::Span;
 
-pub fn met_new_note_help<T: ToTokens>(name: &T) -> (String, String)  {
+
+pub fn met_new_note_help<T: ToTokens>(name: &T) -> (String,String) {
     let name = quote!{#name}.to_string();
 
     let note = format!(
@@ -40,7 +42,6 @@ pub fn met_new_note_help<T: ToTokens>(name: &T) -> (String, String)  {
                  -> custom::module::Result<{name}, E>
 
     ");
-
     return (note,help);
 }
 
@@ -103,6 +104,16 @@ pub fn met_new_not_instance<T: ToTokens>(sig: &syn::Signature, name: &T, bit: To
     let (note,help) = crate::error::met_new_note_help(name);
     (msg,note,help)
 } 
+
+pub fn abort_async_no_lib(name: &syn::Ident, met: &crate::method::ActorMethod){
+
+    let (sig,_ ) = met.get_sig_and_field_name();
+    let sig = quote!{#sig}.to_string();
+    let msg = format!("Actor {name} has 'async' methods but the runtime (lib) is not specified. \
+    Method signature - '{sig}'.");
+    abort!( Span::call_site(), msg; help=crate::error::AVAIL_LIB );
+}
+
 
 pub fn unknown_attr_arg( aa: &str, ident: &syn::Ident ){
     

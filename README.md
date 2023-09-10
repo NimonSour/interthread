@@ -62,7 +62,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.4"
+interthread = "1.1.5"
 oneshot     = "0.1.5" 
 ```
 
@@ -152,8 +152,8 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.4"
-tokio = { version="1.28.2",features=["full"]}
+interthread = "1.1.5"
+tokio = { version="1.32.0",features=["full"]}
 ```
 Filename: main.rs
 
@@ -216,7 +216,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.4"
+interthread = "1.1.5"
 oneshot     = "0.1.5" 
 ```
 
@@ -232,7 +232,7 @@ pub struct MaunActor<A, B, C> {
 
 
 #[interthread::actor(channel=2)]
-impl<A, B, C>  MaunActor <A, B, C>
+impl<A, B, C> MaunActor <A, B, C>
 where
     A: ToString,
     B: ToString,
@@ -314,7 +314,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.4"
+interthread = "1.1.5"
 oneshot     = "0.1.5" 
 ```
 
@@ -420,8 +420,8 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.4"
-tokio = { version="1.28.2",features=["full"]}
+interthread = "1.1.5"
+tokio = { version="1.32.0",features=["full"]}
 ```
 Filename: main.rs
 ```rust
@@ -548,7 +548,7 @@ Filename: Cargo.toml
 ```text
 [dependencies]
 interthread = "1.1.4"
-tokio = { version="1.28.2",features=["full"]}
+tokio = { version="1.32.0",features=["full"]}
 ```
 
 ### Examples
@@ -570,13 +570,6 @@ impl MyActor {
         // clone the value of Actor 
         let value = Arc::clone(&self.0);
         tokio::spawn(async move {
-            // I prefer to initialize them like this,
-            // since they are competing with each other
-            // to obtain the unique ID.
-            // but if you commentout this "sleep" 
-            // statement it will work anyway
-            sleep(Duration::from_millis(val as u64)).await;
-
             //create actor
             let actor = MyActorLive::new();
 
@@ -641,10 +634,11 @@ async fn main(){
 
 
     // check if they have unique Ids 
-    for i in (actors.len() - 1) ..0{
+    for i in (0..actors.len()).rev() {
+        
         let target = actors.remove(i);
-        if actors.iter().any(move |x| *x == target){
-            println!("ActorModel Ids are not unique")
+        if actors.iter().any(move |x| *x == target) {
+            panic!("Actor Model Id's are not unique !")
         }
     }
     eprintln!(" * end of program * ");
