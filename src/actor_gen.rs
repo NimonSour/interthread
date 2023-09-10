@@ -8,7 +8,7 @@ use proc_macro_error::abort;
 use std::boxed::Box;
 use syn::{Ident,Signature,Item,Type,Visibility };
 use quote::{quote,format_ident};
-use proc_macro2::{Span,TokenStream};
+use proc_macro2::TokenStream;
 
 pub fn live_static_method( 
     actor_name: &Ident,
@@ -676,7 +676,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         #res_edit_live_mets
         #res_edit_live_trts
     };
-    
+
     (res_code, res_edit)
 
 }
