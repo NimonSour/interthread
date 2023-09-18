@@ -388,7 +388,8 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         }));
 
         // we need this function to return as much an id as it is possible
-        // the model will build some options on top of this fact 
+        // the model will build some options on top of this "id"
+        // it MUST be unique 
         script_mets.push((format_ident!("debut"),
         quote!{
 

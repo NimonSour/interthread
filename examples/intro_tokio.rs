@@ -3,7 +3,7 @@ pub struct MyActor {
     value: i8,
 }
 
-#[interthread::actor(channel=2,lib="tokio")] // <-  one line )
+#[interthread::actor(channel=2,lib="tokio",id)] // <-  one line )
 impl MyActor {
 
     pub fn new( v: i8 ) -> Self {
@@ -23,6 +23,7 @@ impl MyActor {
     }
 }
 
+//  #[interthread::example(path="examples/intro_tokio.rs")]  
 
 #[tokio::main]
 async fn main() {
