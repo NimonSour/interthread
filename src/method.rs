@@ -16,6 +16,15 @@ pub enum ActorMethod {
 
 impl ActorMethod {
 
+    pub fn get_mut_sig(&mut self) -> &mut Signature {
+        match self {
+            ActorMethod::Io   { sig,..} => sig,
+            ActorMethod::I    { sig,..} => sig, 
+            ActorMethod::O    { sig,..} => sig, 
+            ActorMethod::None { sig,..} => sig,
+        }
+    }
+
     pub fn get_sig_and_field_name(&self) -> (Signature, Ident) {
         let (sig,name) = match self {
 
@@ -58,6 +67,10 @@ pub struct ActorMethodNew {
 }
 
 impl ActorMethodNew {
+
+    pub fn get_mut_sig(&mut self) -> &mut Signature {
+        &mut self.new_sig
+    }
 
     pub fn try_new( met: ActorMethod, new_sig: Signature,  res_opt: Option<bool> ) -> Option<Self>{
         
@@ -334,7 +347,6 @@ pub fn get_methods( actor_type: &syn::Type, item: Item, stat:bool ) -> (Vec<Acto
 
     // use item_vis for `group` 
     let (_item_vis,sigs) = get_sigs(&item);
-
 
     for (vis,sig) in sigs {
 

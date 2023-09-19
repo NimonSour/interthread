@@ -1,111 +1,177 @@
 
-use syn::{Generics,WherePredicate,Ident,Token,WhereClause,ImplGenerics,TypeGenerics, TypeParamBound,punctuated::Punctuated};
+use syn::{Generics,WherePredicate,Ident,Signature,Token,WhereClause,ImplGenerics,TypeGenerics, TypeParamBound,punctuated::Punctuated};
 use proc_macro_error::abort;
 use quote::quote;
 
-
-fn get_pred_bounds( pred: &mut WherePredicate ) -> Option<(&Ident, &mut Punctuated<TypeParamBound,Token![+]>)>{
+fn get_where_pred_bounds( pred: WherePredicate ) -> Option<(Ident, Punctuated<TypeParamBound,Token![+]>)>{
     match pred {
         syn::WherePredicate::Type(pred_type) => {
-            let ident = match &pred_type.bounded_ty {
+            match &pred_type.bounded_ty {
                 syn::Type::Path(type_path) => {
-                    match type_path.path.get_ident(){
-                       Some(idnt) => idnt,
-                       None => abort!(type_path,"Internal Error.'generics::get_pred_bounds'.The path is not an ident !"),  
+                    if let Some(ident) = type_path.path.get_ident(){
+                        return Some((ident.clone(),pred_type.bounds.clone()));
                     }
+                    return None;  
                 },
-                _ => { abort!(proc_macro2::Span::call_site(), "Internal Error.'generics::get_pred_bounds'. Expected a path !"); },   
+                _ => return None,   
             };
-            let bounds = &mut pred_type.bounds;
-            Some((ident,bounds))
         },
-        _ => None,
+        _ => return None,
     }
 }
 
-fn generate_where_clause(ident_list: &Vec<Ident>) -> WhereClause {
-    match syn::parse2::<syn::WhereClause>(quote!{
-        where #( #ident_list : Send + Sync + 'static ),*
+
+fn model_bounds() -> Punctuated<TypeParamBound, Token![+]>{
+    let where_clause = match syn::parse2::<syn::WhereClause>(quote!{
+        where T : Send + Sync + 'static,
     }) {
         Ok( v ) => v,
         Err(e)        => {
             let msg = format!("Internal Error.'generics::generate_where_clause'. {}!",e);
             abort!(proc_macro2::Span::call_site(),msg );
         },
+    };
+
+    let pred = where_clause.predicates.first().unwrap().clone();
+    let (_, bounds) = get_where_pred_bounds(pred).unwrap();
+    bounds
+}
+
+
+fn include_set<T,P>(this: &mut Punctuated<T,P>, other: &Punctuated<T,P> )
+    where 
+    T: PartialEq + Clone,
+    P: Default,
+    {
+    for typ in other{
+        if !this.iter().any(|t| t.eq(typ)){
+            this.push(typ.clone());
+        }
+    }
+} 
+
+
+fn take_gen_param_ident_bounds( gen: &mut Generics ) -> Option<Vec<(Ident,Punctuated<TypeParamBound, Token![+]>)>>{
+    
+    let mut coll = Vec::new();
+
+    if gen.params.is_empty(){ 
+        return None; 
+    } else {
+
+        let gen_params = gen.params.clone();
+        gen.params.clear();
+
+        for gen_param in gen_params {
+
+            match &gen_param {
+                syn::GenericParam::Type(type_param) => {
+                    coll.push((type_param.ident.clone(),type_param.bounds.clone()));
+                },
+                _ => { gen.params.push(gen_param) },
+            }
+        }
+
+        if coll.is_empty() {
+
+            return None;
+
+        } else { 
+
+            if  let Some(predicates) = gen.where_clause.as_ref().map(|w| w.predicates.clone()){
+                gen.where_clause.as_mut().map(|w| w.predicates.clear());
+
+                for pred in predicates { 
+                    if let Some((ident, bounds)) = get_where_pred_bounds(pred.clone()){
+
+                        if let Some(pos) = coll.iter().position(|x| x.0.eq(&ident)){
+                            include_set( &mut coll[pos].1, &bounds);
+                            continue;
+                        } 
+                        // the types which are declared at a block level
+                        // are pusheed back to WhereClause
+                        // ? are there other cases ?
+                    } 
+                    gen.where_clause.as_mut().map(|w| w.predicates.push(pred));
+                }
+            }
+            return Some(coll);
+        }
     }
 }
 
-fn  get_ty_param_idents( gen: &Generics ) -> Vec<Ident> {
 
-    gen.params.iter().filter_map(|x| 
-        match x {
-            syn::GenericParam::Type(type_param) => {
-                Some(type_param.ident.clone())
-            },
-            _ => None,
+pub fn take_generics( sigs: Vec<&mut Signature>) -> Vec<(Ident,Punctuated<TypeParamBound, Token![+]>)> {
+
+    let mut coll : Vec<(Ident,Punctuated<_,_>)> = Vec::new();
+
+    for sig in sigs {
+
+        if let Some( params) = take_gen_param_ident_bounds(&mut sig.generics){           
+            push_include( &mut coll,params );
         }
-    ).collect::<Vec<_>>()
-
+    }
+    return coll
 }
 
 
-pub fn get_parts(generics: &Option<Generics>) -> (Option<ImplGenerics>,Option<TypeGenerics>,Option<WhereClause>) {
+fn push_include( this: &mut Vec<(Ident,Punctuated<TypeParamBound, Token![+]>)> , 
+                other: Vec<(Ident,Punctuated<TypeParamBound, Token![+]>)> ) {
 
-    if let Some(gen) = generics{
+    for (ident,bounds) in other {
+        if let Some(pos) = this.iter().position(|x| x.0.eq(&ident)){
+            include_set( &mut this[pos].1, &bounds);
+        } else {
+            this.push((ident,bounds))
+        }
+    }
+}
 
+
+pub fn get_parts<'a>(generics: &'a mut Option<Generics>, methods: Vec<&mut Signature>) -> (Option<ImplGenerics<'a>>,Option<TypeGenerics<'a>>,Option<WhereClause>) {
+    
+    // we don't need this condition 
+    // if returning generics from all syn::Item s
+
+    if let Some(gen) = generics {
+        
+        let mut meth_bounds = take_generics(methods);
+
+        if let Some(actor_bounds) = take_gen_param_ident_bounds(gen){
+            push_include( &mut meth_bounds, actor_bounds);
+        } 
+
+        if !meth_bounds.is_empty(){
+
+            let mut where_clause = match &gen.where_clause {
+                Some(w) => w.clone(),
+                None => {
+                    syn::WhereClause {
+                        where_token: <syn::Token![where]>::default(),
+                        predicates: syn::punctuated::Punctuated::new(),
+                    }
+                }
+            };
+
+            let model_bounds = model_bounds();
+            for (ident, mut bounds) in meth_bounds {
+                include_set(&mut bounds,&model_bounds);
+
+                where_clause.predicates.push(syn::parse_quote! {
+                    #ident: #bounds
+                });
+                gen.params.push(syn::parse_quote! {#ident} );
+            }
+
+            gen.where_clause = Some(where_clause);
+        } 
         let (impl_generics, ty_generics, mut where_clause) = gen.split_for_impl();
         
-        if !gen.params.is_empty(){
-    
-            let idents = get_ty_param_idents(gen);
-    
-            if !idents.is_empty() {
-    
-                let mut inter_where_clause = generate_where_clause(&idents);
-            
-                let mut live_pred = 
-                inter_where_clause.predicates.iter_mut().filter_map(|x| get_pred_bounds(x)).collect::<Vec<_>>();
-            
-                if let Some(actor_where_clause) = where_clause {
-                    let mut new_where_clause = actor_where_clause.clone();
-            
-                    for pred in new_where_clause.predicates.iter_mut(){
-            
-                        if let Some((name,bounds)) = get_pred_bounds(pred){
-    
-                            // position name in live_pred
-                            if let Some(pos) = live_pred.iter().position(|x| x.0.eq(name)){
-                                let (_,live_bounds) = live_pred.remove(pos);
-                                for bnd in live_bounds {
-                                    if !bounds.iter().any(|b| b.eq(&bnd)){
-                                        bounds.push(bnd.clone());
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    // push leftover predicates if any
-                    for (type_param_name,bounds) in live_pred{
-    
-                        new_where_clause.predicates.push(syn::parse_quote! {
-                            #type_param_name: #bounds
-                        });
-                    }
-                    return (Some(impl_generics), Some(ty_generics), Some(new_where_clause));
-    
-                } else {
-                    return (Some(impl_generics), Some(ty_generics), Some(inter_where_clause));
-                }
-            }
-        }
-        let where_clause = where_clause.as_mut().map(|x| x.clone());
-        return (Some(impl_generics), Some(ty_generics), where_clause);
-
+        return (Some(impl_generics), Some(ty_generics), where_clause.as_mut().map(|x| x.clone()));
+        
+        
     } else {
         return (None,None,None);
     }
-
 }
-
-
 
