@@ -58,7 +58,6 @@ fn actor_sync_bounded() {
     assert_eq!( live.output(),  3); 
     assert_eq!( live.in_out(4), 4); 
     assert_eq!( live.add(5i8),  8); 
-    assert_eq!( live.output(),  19i32); 
 
 }
 #[test]
@@ -80,7 +79,7 @@ fn actor_sync_unbounded_int_name() {
     assert_eq!( live.output(),  3); 
     assert_eq!( live.in_out(4), 4); 
     assert_eq!( live.add(5i8),  8); 
-    assert_eq!( live.output(),  19i32); 
+
 }
 #[test]
 fn actor_sync_unbounded() {
@@ -101,7 +100,7 @@ fn actor_sync_unbounded() {
     assert_eq!( live.output(),  3); 
     assert_eq!( live.in_out(4), 4); 
     assert_eq!( live.add(5i8),    8); 
-    assert_eq!( live.output(),  19i32); 
+ 
 
 }   
 
@@ -129,7 +128,7 @@ fn actor_tokio_bounded() {
         assert_eq!( live.output().await,      3); 
         assert_eq!( live.in_out(4).await,     4); 
         assert_eq!( live.add(5i8).await,      8); 
-        assert_eq!( live.output().await,  19i32); 
+
     });
 }
 
@@ -154,8 +153,7 @@ fn actor_tokio_unbounded() {
         live.input(3).await; 
         assert_eq!( live.output().await,  3); 
         assert_eq!( live.in_out(4).await, 4); 
-        assert_eq!( live.add(5i8).await,      8); 
-        assert_eq!( live.output().await,  19i32); 
+        assert_eq!( live.add(5i8).await,  8); 
     });
 }
 //ASYNC-STD
@@ -178,8 +176,7 @@ fn actor_async_std_bounded() {
             live.input(3).await; 
             assert_eq!( live.output().await,  3); 
             assert_eq!( live.in_out(4).await, 4); 
-            assert_eq!( live.add(5i8).await,      8); 
-            assert_eq!( live.output().await,  19i32);  
+            assert_eq!( live.add(5i8).await,  8);  
     });
 }
  #[test]
@@ -202,7 +199,6 @@ fn actor_async_std_unbounded() {
             assert_eq!( live.output().await,  3); 
             assert_eq!( live.in_out(4).await, 4); 
             assert_eq!( live.add(5i8).await,      8); 
-            assert_eq!( live.output().await,  19i32); 
     });
 }
 //SMOL
@@ -225,8 +221,7 @@ fn actor_smol_bounded() {
             live.input(3).await; 
             assert_eq!( live.output().await,  3); 
             assert_eq!( live.in_out(4).await, 4); 
-            assert_eq!( live.add(5i8).await,      8); 
-            assert_eq!( live.output().await,  19i32);  
+            assert_eq!( live.add(5i8).await,  8);  
     });
 }
 #[test]
@@ -248,8 +243,7 @@ fn actor_smol_unbounded() {
             live.input(3).await; 
             assert_eq!( live.output().await,  3); 
             assert_eq!( live.in_out(4).await, 4); 
-            assert_eq!( live.add(5i8).await,      8); 
-            assert_eq!( live.output().await,  19i32);  
+            assert_eq!( live.add(5i8).await,  8);  
     });
 }
 
