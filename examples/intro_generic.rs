@@ -1,11 +1,11 @@
 
 // BAD GENERIC ACTOR
 /*
-pub struct Actor<T> {
+pub struct MaunActor<T> {
     value: T,
 }
 #[interthread::actor(channel=2)]
-impl<T> Actor<T>
+impl<T> MaunActor<T>
 where
     T: std::ops::AddAssign + Copy,
 {
@@ -24,12 +24,12 @@ where
 
 
 // GOOD GENERIC ACTOR
-pub struct Actor<T> {
+pub struct MaunActor<T> {
     value: T,
 }
 #[interthread::actor(channel=2,
     edit( live( imp( add_number))))]
-impl<T> Actor<T>
+impl<T> MaunActor<T>
 where
     T: std::ops::AddAssign + Copy,
 {
@@ -37,24 +37,27 @@ where
         Self { value: v }
     }
     pub fn add_number(&mut self, num: T) {
-        self.value += num.into();
+        self.value += num;
     }
     pub fn get_value(&self) -> T {
         self.value
     }
 }
 
+
 //++++++++++++++++++[ Interthread  Write to File ]+++++++++++++++++//
-// Object Name   : Actor  
-// Initiated By  : #[interthread::actor(channel=2,file="examples/intro_generic.rs",edit(live(imp(add_number))))]  
+// Object Name   : MaunActor  
+// Initiated By  : #[interthread::actor(channel=2,file="path/to/this/file.rs",edit(live(imp(add_number))))]  
 
 
-impl<T> ActorLive<T>
+impl<T> MaunActorLive<T>
 where
     T: std::ops::AddAssign + Copy + Send + Sync + 'static,
 {
+    // pub fn add_number(&mut self, num: T) {
     pub fn add_number<I: Into<T>>(&mut self, num:I) {
-        let msg = ActorScript::AddNumber {
+        let msg = MaunActorScript::AddNumber {
+            // input: (num),
             input: (num.into()),
         };
         let _ = self
@@ -67,12 +70,9 @@ where
 // *///.............[ Interthread  End of Write  ].................//
 
 
-
-// #[interthread::example(main(path="examples/intro_generic.rs"))]
-
 fn main() {
 
-    let actor = ActorLive::new(0u128);
+    let actor = MaunActorLive::new(0u128);
 
     let mut actor_a = actor.clone();
     let mut actor_b = actor.clone();
@@ -90,4 +90,3 @@ fn main() {
 
     assert_eq!(actor.get_value(), 2_u128)
 }
-

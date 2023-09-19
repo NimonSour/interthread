@@ -60,17 +60,16 @@ fn main() {
     let one_h = std::thread::spawn( move || { 
         one.set_a("I'm a generic".to_string());
     });
+    let _ = one_h.join();
 
     let two_h = std::thread::spawn( move || {
         two.set_b(" actor - ");
     });
+    let _ = two_h.join();
 
     let thr_h = std::thread::spawn( move || {
         thr.set_c('😀');
     });
-
-    let _ = one_h.join();
-    let _ = two_h.join();
     let _ = thr_h.join();
 
 

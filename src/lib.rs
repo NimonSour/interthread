@@ -269,15 +269,15 @@
 //! In addition the Debug trait is also implemented for the `script`struct.
 //!  
 //! ```rust
-//! impl std::fmt::Debug for MyActorScript {
+//!impl std::fmt::Debug for MyActorScript {
 //!    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 //!        match self {
-//!            MyActorScript::Increment { .. } => write!(f, "Increment"),
-//!            MyActorScript::AddNumber { .. } => write!(f, "AddNumber"),
-//!            MyActorScript::GetValue  { .. } => write!(f, "GetValue"),
+//!            MyActorScript::Increment { .. } => write!(f, "MyActorScript::Increment"),
+//!            MyActorScript::AddNumber { .. } => write!(f, "MyActorScript::AddNumber"),
+//!            MyActorScript::GetValue { .. } => write!(f, "MyActorScript::GetValue"),
 //!        }
 //!    }
-//! }
+//!}
 //! ```
 //! 
 //! 

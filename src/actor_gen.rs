@@ -131,7 +131,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         // Debug arm
         let add_arm = | debug_arms: &mut Vec<TokenStream>,ident: &Ident | {
 
-            let str_field_name = ident.to_string();
+            let str_field_name = format!("{}::{}",script_name.to_string() ,ident.to_string());
 
             let debug_arm = quote! {
                 #script_name :: #script_field_name {..} => write!(f, #str_field_name),
