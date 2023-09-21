@@ -15,7 +15,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.6"
+interthread = "1.1.7"
 oneshot     = "0.1.5" 
 ```
 
@@ -92,7 +92,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.6"
+interthread = "1.1.7"
 tokio = { version="1.32.0",features=["full"]}
 ```
 
@@ -165,7 +165,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.6"
+interthread = "1.1.7"
 oneshot     = "0.1.5" 
 ```
 
@@ -266,7 +266,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.6"
+interthread = "1.1.7"
 oneshot     = "0.1.5" 
 ```
 
@@ -349,13 +349,13 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.1.6"
+interthread = "1.1.7"
 oneshot     = "0.1.5" 
 ```
 
 Filename: main.rs
 ```rust
-#[derive(Debug)]
+
 pub struct Dog(String);
 
 impl Dog {
@@ -364,7 +364,6 @@ impl Dog {
     }
 }
 
-#[derive(Debug)]
 pub struct Cat(String);
 
 impl Cat {
@@ -373,7 +372,6 @@ impl Cat {
     }
 }
 
-#[derive(Debug)]
 pub enum Pet {
     Dog(Dog),
     Cat(Cat),

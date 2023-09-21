@@ -1,7 +1,7 @@
 
 
 
-#[derive(Debug)]
+
 pub struct Dog(String);
 
 impl Dog {
@@ -10,7 +10,7 @@ impl Dog {
     }
 }
 
-#[derive(Debug)]
+
 pub struct Cat(String);
 
 impl Cat {
@@ -19,7 +19,7 @@ impl Cat {
     }
 }
 
-#[derive(Debug)]
+
 pub enum Pet {
     Dog(Dog),
     Cat(Cat),
