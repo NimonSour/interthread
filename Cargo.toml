@@ -1,6 +1,6 @@
 [package]
 name = "interthread"
-version = "1.1.6"
+version = "1.1.7"
 edition = "2021"
 description = "Auto implementation of the Actor Model"
 categories = ["development-tools", "asynchronous"]
