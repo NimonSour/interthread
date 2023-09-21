@@ -681,9 +681,8 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// #[interthread::actor( 
 ///   
-///     channel = "inter"    ✔
-///          0 || "unbounded" 
-///               8 
+///     channel = 0          ✔ 
+///               n (usize) 
 /// 
 ///     lib     = "std"      ✔
 ///               "smol"
@@ -724,19 +723,12 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// # channel
 ///
 /// The `channel` argument specifies the type of channel. 
-///
-/// - `"inter"` (default)  
-/// - `"unbounded"` or `0` 
-/// - `8` ( [`usize`] buffer size)
-/// > **Note:** The default `"inter"` option is experimental 
-/// and primarily intended for experimentation purposes, 
-/// specifically with the `lib = "std"` setting. 
-/// It is recommended to avoid using this option 
-/// unless you need it.
-/// 
+///   
+/// - `0`  (default)
+/// - `n` ( [`usize`] buffer size)
 /// The two macros
 /// ```rust
-/// #[actor(channel="unbounded")]
+/// #[actor]
 /// ```
 /// and
 /// ```rust

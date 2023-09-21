@@ -3,21 +3,9 @@
 
 use interthread::actor as life;
 //STD INTER
+
 #[test]
-fn actor_sync_inter_str() {
-    pub struct Actor(i8);
-    #[life(channel="inter")]
-    impl Actor {
-        pub fn new() -> Self{Self(0)}
-        pub fn input(&mut self, v:i8){self.0 = v}
-        pub fn output(&self)->i8{self.0}
-        pub fn in_out(&self,v:i8)->i8{v}
-        pub fn add(&mut self, v:i8) -> i8{self.0 += v;self.0}
-    }
-    let _live = ActorLive::new();
-}
-#[test]
-fn actor_sync_inter() {
+fn actor_sync_unbound_default() {
     pub struct Actor(i8);
     #[life]
     impl Actor {
@@ -32,6 +20,20 @@ fn actor_sync_inter() {
     assert_eq!( live.output(),  3); 
     assert_eq!( live.in_out(4), 4); 
     assert_eq!( live.add(5),    8); 
+}
+
+#[test]
+fn actor_sync_unbounded_int() {
+    pub struct Actor(i8);
+    #[life(channel=0, name="MyActor")]
+    impl Actor {
+        pub fn new() -> Self{Self(0)}
+        pub fn input(&mut self, v:i8){self.0 = v}
+        pub fn output(&self)->i8{self.0}
+        pub fn in_out(&self,v:i8)->i8{v}
+        pub fn add(&mut self, v:i8) -> i8{self.0 += v;self.0}
+    }
+    let _live = MyActorLive::new();
 }
 //STD
 #[test]
@@ -51,36 +53,7 @@ fn actor_sync_bounded() {
     assert_eq!( live.in_out(4), 4); 
     assert_eq!( live.add(5),    8); 
 }
-#[test]
-fn actor_sync_unbounded_int_name() {
-    pub struct Actor(i8);
-    #[life(channel=0, name="MyActor")]
-    impl Actor {
-        pub fn new() -> Self{Self(0)}
-        pub fn input(&mut self, v:i8){self.0 = v}
-        pub fn output(&self)->i8{self.0}
-        pub fn in_out(&self,v:i8)->i8{v}
-        pub fn add(&mut self, v:i8) -> i8{self.0 += v;self.0}
-    }
-    let _live = MyActorLive::new();
-}
-#[test]
-fn actor_sync_unbounded() {
-    pub struct Actor(i8);
-    #[life(channel="unbounded")]
-    impl Actor {
-        pub fn new() -> Self{Self(0)}
-        pub fn input(&mut self, v:i8){self.0 = v}
-        pub fn output(&self)->i8{self.0}
-        pub fn in_out(&self,v:i8)->i8{v}
-        pub fn add(&mut self, v:i8) -> i8{self.0 += v;self.0}
-    }
-    let mut live = ActorLive::new();
-    live.input(3); 
-    assert_eq!( live.output(),  3); 
-    assert_eq!( live.in_out(4), 4); 
-    assert_eq!( live.add(5),    8); 
-}   
+ 
 
 // TOKIO
 #[test]
@@ -109,7 +82,7 @@ fn actor_tokio_bounded() {
 #[test]
 fn actor_tokio_unbounded() {
     pub struct Actor(i8);
-    #[life(channel="unbounded",lib="tokio")]
+    #[life(lib="tokio")]
     impl Actor {
         pub fn new() -> Self{Self(0)}
         pub fn input(&mut self, v:i8){self.0 = v}
@@ -150,7 +123,7 @@ fn actor_async_std_bounded() {
  #[test]
 fn actor_async_std_unbounded() {
     pub struct Actor(i8);
-    #[life(channel="unbounded",lib="async_std")]
+    #[life(lib="async_std")]
     impl Actor {
         pub fn new() -> Self{Self(0)}
         pub fn input(&mut self, v:i8){self.0 = v}
@@ -189,7 +162,7 @@ fn actor_smol_bounded() {
 #[test]
 fn actor_smol_unbounded() {
     pub struct Actor(i8);
-    #[life(channel="unbounded",lib="smol")]
+    #[life(lib="smol")]
     impl Actor {
         pub fn new() -> Self{Self(0)}
         pub fn input(&mut self, v:i8){self.0 = v}

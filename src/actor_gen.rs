@@ -335,14 +335,15 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
         let (init_actor, play_args) = {
             let id_debut_name = if aaa.id {quote!{ ,debut,name}} else {quote!{}};
-            match  aaa.channel {
-                AAChannel::Inter => {
-                    ( quote!{ Self{ queue: queue.clone(), condvar: condvar.clone() #id_debut_name } }, quote!{ queue, condvar, actor  } )
-                },
-                _  => {
-                    ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, actor } )
-                },
-            }
+            ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, actor } )
+            // match  aaa.channel {
+            //     AAChannel::Inter => {
+            //         ( quote!{ Self{ queue: queue.clone(), condvar: condvar.clone() #id_debut_name } }, quote!{ queue, condvar, actor  } )
+            //     },
+            //     _  => {
+            //         ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, actor } )
+            //     },
+            // }
         };
 
         let spawn = live_new_spawn(play_args);
@@ -493,10 +494,12 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         let end_of_play = error::end_of_life(&actor_name); 
 
         // needs to be pushed into script_mets
-        let play_method = match aaa.channel {
+        let play_method = {
+        
+        //  match aaa.channel {
 
-            AAChannel::Unbounded |
-            AAChannel::Buffer(_) => {
+            // AAChannel::Unbounded |
+            // AAChannel::Buffer(_) => {
 
                 let ok_or_some = match aaa.lib {
                     AALib::Tokio => quote!{Some},
@@ -510,44 +513,45 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
                         #end_of_play
                     }
                 }
-            },
 
-            AAChannel::Inter => {
-                //impl drop for live while here
-                live_trts.push((format_ident!("Drop"),
-                quote!{
-                    impl #ty_generics Drop for #live_name #ty_generics #where_clause {
-                        fn drop(&mut self){
-                            self.condvar.notify_one();
-                        }
-                    }
-                }));
+            // },
 
-                let error_msg = error::play_guard(&actor_name);
+            // AAChannel::Inter => {
+            //     //impl drop for live while here
+            //     live_trts.push((format_ident!("Drop"),
+            //     quote!{
+            //         impl #ty_generics Drop for #live_name #ty_generics #where_clause {
+            //             fn drop(&mut self){
+            //                 self.condvar.notify_one();
+            //             }
+            //         }
+            //     }));
 
-                quote!{
-                    #new_vis #play_async_decl fn play ( #play_input_receiver mut actor: #actor_type #actor_ty_generics ) {
+            //     let error_msg = error::play_guard(&actor_name);
 
-                        let queuing = || -> Option<Vec< #script_name #ty_generics>> {
-                            let mut guard = queue.lock().expect(#error_msg);
-                            while guard.as_ref().unwrap().is_empty() {
-                                if std::sync::Arc::strong_count(&queue) > 1{
-                                    guard = condvar.wait(guard).expect(#error_msg);
-                                } else { return None }
-                            }
-                            let income = guard.take();
-                            *guard = Some(vec![]);
-                            income
-                        };
-                        while let Some(msgs)  = queuing(){
-                            for msg in msgs {
-                                msg.direct (&mut actor) #direct_await;
-                            }
-                        }
-                        #end_of_play
-                    }
-                }
-            },
+            //     quote!{
+            //         #new_vis #play_async_decl fn play ( #play_input_receiver mut actor: #actor_type #actor_ty_generics ) {
+
+            //             let queuing = || -> Option<Vec< #script_name #ty_generics>> {
+            //                 let mut guard = queue.lock().expect(#error_msg);
+            //                 while guard.as_ref().unwrap().is_empty() {
+            //                     if std::sync::Arc::strong_count(&queue) > 1{
+            //                         guard = condvar.wait(guard).expect(#error_msg);
+            //                     } else { return None }
+            //                 }
+            //                 let income = guard.take();
+            //                 *guard = Some(vec![]);
+            //                 income
+            //             };
+            //             while let Some(msgs)  = queuing(){
+            //                 for msg in msgs {
+            //                     msg.direct (&mut actor) #direct_await;
+            //                 }
+            //             }
+            //             #end_of_play
+            //         }
+            //     }
+            // },
         };
         script_mets.push(( format_ident!("play"), play_method ));
     }
@@ -825,34 +829,34 @@ pub fn channels( lib: &AALib,
                 },
             }
         },
-        AAChannel::Inter  => {
+        // AAChannel::Inter  => {
 
-            live_field_sender   = quote!{ 
-                queue: std::sync::Arc<std::sync::Mutex<Option<Vec<#type_ident #generics>>>>,
-                condvar:                       std::sync::Arc<std::sync::Condvar>,
-            };
-            play_input_receiver = quote!{ 
-                queue: std::sync::Arc<std::sync::Mutex<Option<Vec<#type_ident #generics>>>>,
-                condvar:                       std::sync::Arc<std::sync::Condvar>,
-            };
-            new_live_send_recv  = quote!{ 
-                let queue       = std::sync::Arc::new(std::sync::Mutex::new(Some(vec![])));
-                let condvar     = std::sync::Arc::new(std::sync::Condvar::new());
-            };
+        //     live_field_sender   = quote!{ 
+        //         queue: std::sync::Arc<std::sync::Mutex<Option<Vec<#type_ident #generics>>>>,
+        //         condvar:                       std::sync::Arc<std::sync::Condvar>,
+        //     };
+        //     play_input_receiver = quote!{ 
+        //         queue: std::sync::Arc<std::sync::Mutex<Option<Vec<#type_ident #generics>>>>,
+        //         condvar:                       std::sync::Arc<std::sync::Condvar>,
+        //     };
+        //     new_live_send_recv  = quote!{ 
+        //         let queue       = std::sync::Arc::new(std::sync::Mutex::new(Some(vec![])));
+        //         let condvar     = std::sync::Arc::new(std::sync::Condvar::new());
+        //     };
 
-            let error_msg = error::live_guard(cust_name);
-            live_send_input     =  quote!{
-                {
-                    let mut guard = self.queue.lock().expect(#error_msg);
+        //     let error_msg = error::live_guard(cust_name);
+        //     live_send_input     =  quote!{
+        //         {
+        //             let mut guard = self.queue.lock().expect(#error_msg);
         
-                    guard.as_mut()
-                    .map(|s| s.push(msg));
-                }
-                self.condvar.notify_one();
-            };
+        //             guard.as_mut()
+        //             .map(|s| s.push(msg));
+        //         }
+        //         self.condvar.notify_one();
+        //     };
 
-            live_recv_output     =  quote!{recv.recv().expect(#error_live_recv)};
-        },
+        //     live_recv_output     =  quote!{recv.recv().expect(#error_live_recv)};
+        // },
     }
 
     

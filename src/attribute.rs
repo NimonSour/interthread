@@ -7,13 +7,13 @@ use proc_macro_error::abort;
 use quote::format_ident;
 
 
-#[derive(Debug, Eq, PartialEq, Clone, Copy)]
-pub enum Either<L, R> {
-    L(L),
-    R(R),
-}
+// #[derive(Debug, Eq, PartialEq, Clone, Copy)]
+// pub enum Either<L, R> {
+//     L(L),
+//     R(R),
+// }
 
-fn to_usize(value: syn::LitInt) -> usize {
+fn to_usize(value: &syn::LitInt) -> usize {
         
     let msg  = format!("Expected a positive integer 1..{:?}.", usize::MAX );
     value.base10_parse::<usize>()
@@ -215,41 +215,11 @@ pub enum AAChannel {
 
     Unbounded,
     Buffer(syn::LitInt),
-    Inter,
-}
-
-impl AAChannel {
-
-    pub fn from( arg: Either<syn::LitStr,syn::LitInt> ) -> Self {
-    
-        match arg {
-            Either::L( s) => {
-                match s.value() {
-                    val if val == "unbounded".to_string()   => return AAChannel::Unbounded,
-                    val if val == "inter".to_string()       => return AAChannel::Inter,
-                    val => {
-                        let msg = format!("Unknown option  -  {:?} for 'channel' ", val);
-                        abort!( s, msg; help=error::AVAIL_CHANNEL );
-                    },
-                }
-            },
-
-            Either::R( i) => {
-                let value = to_usize(i.clone());
-                if value == 0 { 
-                    return AAChannel::Unbounded; 
-                } 
-                else { 
-                    return AAChannel::Buffer(i);
-                }
-            },
-        }
-    }
 }
 
 impl Default for AAChannel {
     fn default() -> Self {
-        AAChannel::Inter
+        AAChannel::Unbounded
     }
 }
 
@@ -438,12 +408,12 @@ impl ActorAttributeArguments {
 
                     match get_lit(meta) {
                         syn::Lit::Int(val) => { 
-                            self.channel = AAChannel::from(Either::R(val));
+                            let value = to_usize(&val);
+                            if value > 0 {
+                                self.channel = AAChannel::Buffer(val.clone());
+                            }
                         },
-                        syn::Lit::Str(val) => {
-                            self.channel = AAChannel::from(Either::L(val));
-                        },
-                        v => abort!(v, error::error_name_type( &ident, "int | str"),; help=error::AVAIL_ACTOR ),
+                        v => abort!(v, error::error_name_type( &ident, "Int (usize)"),; help=error::AVAIL_ACTOR ),
                     }
                 }
 

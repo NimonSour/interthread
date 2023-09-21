@@ -1,23 +1,9 @@
 
 use interthread::actor as life;
-//STD INTER
-#[test]
-fn actor_sync_inter_str() {
-    pub struct Actor<T>(T);
-    #[life(channel="inter",id)]
-    impl <T:Clone> Actor <T> {
 
-        pub fn new(v:T) -> Self{Self(v)}
-        pub fn input(&mut self, v:T){self.0 = v}
-        pub fn output(&self)->T{self.0.clone()}
-        pub fn in_out(&self,v:T)->T{v}
-    }
-    let live = ActorLive::new(84);
-    assert_eq!( live.output(),  84); 
-}
 
 #[test]
-fn actor_sync_inter() {
+fn actor_sync_unbound_default() {
     pub struct Actor<T>(T);
     #[life(id)]
     impl <T:Clone> Actor <T> 
@@ -36,6 +22,23 @@ fn actor_sync_inter() {
     assert_eq!( live.in_out(4), 4); 
     assert_eq!( live.add(5),    8); 
 }
+
+#[test]
+fn actor_sync_unbounded_int() {
+    pub struct Actor<T>(T);
+    #[life(channel=0, name="MyActor",id)]
+    impl <T:Clone> Actor <T> 
+      where T: core::ops::AddAssign,
+    {
+        pub fn new(v:T) -> Self{Self(v)}
+        pub fn input(&mut self, v:T){self.0 = v}
+        pub fn output(&self)->T{self.0.clone()}
+        pub fn in_out(&self,v:T)->T{v}
+        pub fn add(&mut self, v:T) -> T{self.0 += v;self.0.clone()}
+    }
+    let _live = MyActorLive::new(0);
+}
+
 //STD
 #[test]
 fn actor_sync_bounded() {
@@ -56,40 +59,7 @@ fn actor_sync_bounded() {
     assert_eq!( live.in_out(4), 4); 
     assert_eq!( live.add(5),    8); 
 }
-#[test]
-fn actor_sync_unbounded_int_name() {
-    pub struct Actor<T>(T);
-    #[life(channel=0, name="MyActor",id)]
-    impl <T:Clone> Actor <T> 
-      where T: core::ops::AddAssign,
-    {
-        pub fn new(v:T) -> Self{Self(v)}
-        pub fn input(&mut self, v:T){self.0 = v}
-        pub fn output(&self)->T{self.0.clone()}
-        pub fn in_out(&self,v:T)->T{v}
-        pub fn add(&mut self, v:T) -> T{self.0 += v;self.0.clone()}
-    }
-    let _live = MyActorLive::new(0);
-}
-#[test]
-fn actor_sync_unbounded() {
-    pub struct Actor<T>(T);
-    #[life(channel="unbounded",id)]
-    impl <T:Clone> Actor <T> 
-      where T: core::ops::AddAssign,
-    {
-        pub fn new(v:T) -> Self{Self(v)}
-        pub fn input(&mut self, v:T){self.0 = v}
-        pub fn output(&self)->T{self.0.clone()}
-        pub fn in_out(&self,v:T)->T{v}
-        pub fn add(&mut self, v:T) -> T{self.0 += v;self.0.clone()}
-    }
-    let mut live = ActorLive::new(0);
-    live.input(3); 
-    assert_eq!( live.output(),  3); 
-    assert_eq!( live.in_out(4), 4); 
-    assert_eq!( live.add(5),    8); 
-}   
+ 
 
 // TOKIO
 #[test]
@@ -120,7 +90,7 @@ fn actor_tokio_bounded() {
 #[test]
 fn actor_tokio_unbounded() {
     pub struct Actor<T>(T);
-    #[life(channel="unbounded",lib="tokio",id)]
+    #[life(channel= 0,lib="tokio",id)]
     impl <T:Clone> Actor <T> 
       where T: core::ops::AddAssign + std::fmt::Debug,
     {
@@ -165,7 +135,7 @@ fn actor_async_std_bounded() {
  #[test]
 fn actor_async_std_unbounded() {
     pub struct Actor<T>(T);
-    #[life(channel="unbounded",lib="async_std",id)]
+    #[life(channel=0,lib="async_std",id)]
     impl <T:Clone> Actor <T> 
       where T: core::ops::AddAssign + std::fmt::Debug,
     {
@@ -208,7 +178,7 @@ fn actor_smol_bounded() {
 #[test]
 fn actor_smol_unbounded() {
     pub struct Actor<T>(T);
-    #[life(channel="unbounded",lib="smol",id)]
+    #[life(channel=0,lib="smol",id)]
     impl <T:Clone> Actor <T> 
       where T: core::ops::AddAssign + std::fmt::Debug,
     {

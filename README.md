@@ -203,7 +203,7 @@ impl Actor
 
 
 //++++++++++++++++++[ Interthread  Write to File ]+++++++++++++++++//
-// Object Name   : MaunActor  
+// Object Name   : Actor  
 // Initiated By  : #[interthread::actor(channel=2,file="path/to/this/file.rs",edit(live(imp(concat))))]  
 
 

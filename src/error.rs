@@ -182,19 +182,6 @@ pub static AVAIL_LIB:&'static str = "
 *  -  default
 ";
 
-pub static AVAIL_CHANNEL: &'static str ="
-\navailable 'channel' options:
-
-   Option             Type
-
-*  \"inter\"          str
-   0 | \"unbounded\"  str|int
-   8                  int
-
-
-*  -  default
-";
-
 pub static AVAIL_EDIT: &'static str = "
 \navailable 'edit' options:
          
@@ -227,9 +214,8 @@ a statement just `edit` implies `edit(live,script)` !
 pub static AVAIL_ACTOR: &'static str = "
 #[interthread::actor( 
     
-    channel = \"inter\" *
-              \"unbounded\" || 0
-               8 
+    channel = 0 * 
+              n (usize)
 
         lib = \"std\" *
               \"smol\"
@@ -262,18 +248,6 @@ pub fn live_send_recv(cust_name: &syn::Ident, ) -> (TokenStream, TokenStream){
     let send_msg = format!("'{live_name}::method.send'. Channel is closed!");
     let recv_msg = format!("'{live_name}::method.recv'. Channel is closed!");
     (quote!{#send_msg},quote!{#recv_msg})
-}
-
-pub fn live_guard(cust_name: &syn::Ident) -> TokenStream {
-    let live_name  = &name::live(cust_name);
-    let msg        = format!("'{live_name}::method'. Failed to unwrap MutexGuard!");
-    quote!{ #msg }
-}
-
-pub fn play_guard(cust_name: &syn::Ident) -> TokenStream {
-    let script_name = &name::script(cust_name);
-    let msg = format!("'{script_name}::play::queuing'. Failed to unwrap MutexGuard!");
-    quote!{#msg}
 }
 
 pub fn end_of_life(name: &syn::Ident) -> TokenStream {
