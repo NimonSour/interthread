@@ -1,5 +1,5 @@
 
-use syn::{Generics,WherePredicate,Ident,Signature,Token,WhereClause,ImplGenerics,TypeGenerics, TypeParamBound,punctuated::Punctuated};
+use syn::{Generics,WherePredicate,Ident,Signature,Token,TypeParamBound,punctuated::Punctuated};
 use proc_macro_error::abort;
 use quote::quote;
 
@@ -128,12 +128,12 @@ fn push_include( this: &mut Vec<(Ident,Punctuated<TypeParamBound, Token![+]>)> ,
 }
 
 
-pub fn get_parts<'a>(generics: &'a mut Option<Generics>, methods: Vec<&mut Signature>) -> (Option<ImplGenerics<'a>>,Option<TypeGenerics<'a>>,Option<WhereClause>) {
+pub fn get_parts(gen: &mut Generics, methods: Vec<&mut Signature>) {//-> (Option<ImplGenerics<'a>>,Option<TypeGenerics<'a>>,Option<WhereClause>) {
     
     // we don't need this condition 
     // if returning generics from all syn::Item s
 
-    if let Some(gen) = generics {
+    // if let Some(gen) = generics {
         
         let mut meth_bounds = take_generics(methods);
 
@@ -165,13 +165,15 @@ pub fn get_parts<'a>(generics: &'a mut Option<Generics>, methods: Vec<&mut Signa
 
             gen.where_clause = Some(where_clause);
         } 
-        let (impl_generics, ty_generics, mut where_clause) = gen.split_for_impl();
+
+        // gen
+        // let (impl_generics, ty_generics, mut where_clause) = gen.split_for_impl();
         
-        return (Some(impl_generics), Some(ty_generics), where_clause.as_mut().map(|x| x.clone()));
+        // return (Some(impl_generics), Some(ty_generics), where_clause.as_mut().map(|x| x.clone()));
         
         
-    } else {
-        return (None,None,None);
-    }
+    // } else {
+    //     return (None,None,None);
+    // }
 }
 

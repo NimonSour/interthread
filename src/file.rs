@@ -101,24 +101,24 @@ pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<(Attribute, Vec<A
                 }
             },
 
-            syn::Item::Trait( item_trait) => {
-                for attr in &item_trait.attrs.clone() {
-                    if use_macro_actor.is(attr){
-                        if check_file_arg(attr){
-                            loc.push((attr.clone(),item_trait.attrs.clone()));
-                        }
-                    }
-                }
-            },
-            syn::Item::Fn(item_fn) => {
-                for attr in &item_fn.attrs.clone() {
-                    if use_macro_group.is(attr){
-                        if check_file_arg(attr){
-                            loc.push((attr.clone(),item_fn.attrs.clone()));
-                        }
-                    }
-                } 
-            },
+            // syn::Item::Trait( item_trait) => {
+            //     for attr in &item_trait.attrs.clone() {
+            //         if use_macro_actor.is(attr){
+            //             if check_file_arg(attr){
+            //                 loc.push((attr.clone(),item_trait.attrs.clone()));
+            //             }
+            //         }
+            //     }
+            // },
+            // syn::Item::Fn(item_fn) => {
+            //     for attr in &item_fn.attrs.clone() {
+            //         if use_macro_group.is(attr){
+            //             if check_file_arg(attr){
+            //                 loc.push((attr.clone(),item_fn.attrs.clone()));
+            //             }
+            //         }
+            //     } 
+            // },
 
             syn::Item::Use( item_use ) => {
                 if let Some(itm_use) = use_macro_actor.update(item_use){
@@ -169,20 +169,25 @@ pub fn expand_macro( mut file: syn::File, mac: &AAExpand  ) -> (syn::File, AALib
         use_example.exclude_self_macro(item);
         match item {
 
-            syn::Item::Impl( impl_block) => {
+            syn::Item::Impl( item_impl) => {
 
-                if impl_block.attrs.iter().any(|x| use_macro.is(x)){
+                if item_impl.attrs.iter().any(|x| use_macro.is(x)){
 
-                    for attr in &impl_block.attrs.clone() {
+                    for attr in &item_impl.attrs.clone() {
                         if use_macro.is(attr){
                             let aaa = get_aaa( attr.clone());
                             // get lib 
                             lib = aaa.lib.clone();
                             // exclude self macro 
-                            use_macro.exclude_self_macro(item);
+                            // use_macro.exclude_self_macro(item);
+                            // let attrs = item_impl.attrs.clone();
+                            // let new_attrs = use_macro.exclude(&attrs); 
+                            // generate code
+                            item_impl.attrs = use_macro.exclude(&item_impl.attrs.clone());
+                            // let _ = std::mem::replace(&mut item_impl.attrs, use_macro.exclude(&(item_impl.attrs.clone()))); 
                             // generate code
                             let (code,_) = 
-                            actor_gen::actor_macro_generate_code( aaa, item.clone(), &mac );
+                            actor_gen::actor_macro_generate_code( aaa, item_impl.clone(), &mac,None );
 
                             let f = code_to_file(code);
                             new_items_file.push(f.items);
@@ -194,45 +199,45 @@ pub fn expand_macro( mut file: syn::File, mac: &AAExpand  ) -> (syn::File, AALib
                 }
             },
 
-            syn::Item::Trait(item_trait)  => {
-                if item_trait.attrs.iter().any(|x| use_macro.is(x)){
+            // syn::Item::Trait(item_trait)  => {
+            //     if item_trait.attrs.iter().any(|x| use_macro.is(x)){
 
-                    for attr in &item_trait.attrs.clone() {
-                        if use_macro.is(attr){
+            //         for attr in &item_trait.attrs.clone() {
+            //             if use_macro.is(attr){
                            
-                            let aaa = get_aaa( attr.clone());
-                            //get lib 
-                            lib = aaa.lib.clone();
-                            //exclude self macro 
-                            use_macro.exclude_self_macro(item);
-                            //generate code
-                            let (code,_) = 
-                            actor_gen::actor_macro_generate_code( aaa, item.clone(), &mac );
+            //                 let aaa = get_aaa( attr.clone());
+            //                 //get lib 
+            //                 lib = aaa.lib.clone();
+            //                 //exclude self macro 
+            //                 use_macro.exclude_self_macro(item);
+            //                 //generate code
+            //                 let (code,_) = 
+            //                 actor_gen::actor_macro_generate_code( aaa, item.clone(), &mac );
 
-                            let f = code_to_file(code);
-                            new_items_file.push(f.items);
-                            continue 'f1; 
+            //                 let f = code_to_file(code);
+            //                 new_items_file.push(f.items);
+            //                 continue 'f1; 
 
-                        }
-                    }
-                } else { 
-                    new_items_file.push( vec![item.clone()] ); 
-                }
-            },
+            //             }
+            //         }
+            //     } else { 
+            //         new_items_file.push( vec![item.clone()] ); 
+            //     }
+            // },
 
-            syn::Item::Fn( item_fn) => {
-                if item_fn.attrs.iter().any(|x| use_macro.is(x)){
+            // syn::Item::Fn( item_fn) => {
+            //     if item_fn.attrs.iter().any(|x| use_macro.is(x)){
 
-                    for attr in &item_fn.attrs.clone() {
-                        if use_macro.is(attr){
+            //         for attr in &item_fn.attrs.clone() {
+            //             if use_macro.is(attr){
 
-                            todo!("Group not implemented yet");
-                        }
-                    }
-                } else { 
-                    new_items_file.push( vec![item.clone()] ); 
-                }
-            },
+            //                 todo!("Group not implemented yet");
+            //             }
+            //         }
+            //     } else { 
+            //         new_items_file.push( vec![item.clone()] ); 
+            //     }
+            // },
 
             syn::Item::Use(item_use) => {
                 

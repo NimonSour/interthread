@@ -6,7 +6,7 @@ use crate::generics;
 
 use proc_macro_error::abort;
 use std::boxed::Box;
-use syn::{Ident,Signature,Item,Type,Visibility };
+use syn::{Ident,Signature,ItemImpl,Type,Visibility };
 use quote::{quote,format_ident};
 use proc_macro2::TokenStream;
 
@@ -30,7 +30,7 @@ pub fn live_static_method(
 
 
 // returns  (code,edit) TokenStreams 
-pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac: &AAExpand ) -> (TokenStream, TokenStream){
+pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item_impl: ItemImpl, mac: &AAExpand, mut new_vis: Option<Visibility> ) -> (TokenStream, TokenStream){
     
     let mut script_def;
     let mut script_mets = vec![];
@@ -48,40 +48,41 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
     let (actor_name,
         actor_type,
-        generics) = name::get_name_and_type(mac,&item,);
+        generics) = name::get_ident_type_generics(&item_impl);
     
 
 
     let ( mut actor_methods, 
-          met_new) =
-         method::get_methods( &actor_type,item.clone(),aaa.assoc );
+          mut met_new) =
+         method::get_methods( &actor_type,item_impl.clone(),aaa.assoc ,&mac);
+
 
     
-    let mut met_new = if met_new.is_none() {
-        if method::is_trait(&actor_type) {
-            let (msg,note) = error::trait_new_sig(&actor_type,false);
-            abort!(item,msg;note=note);
-        } else {
-            let msg = format!("Can not find public/restricted  method `new` or `try_new` for {:?} object.",actor_name.to_string());
-            let (note,help) = error::met_new_note_help(&actor_name);
-            abort!(item,msg;note=note;help=help);
-        }
-    } else { met_new.unwrap() };
-    
     let mut model_generics = generics.clone();
-    
-    let actor_ty_generics  = 
-    generics.as_ref().map(|x| x.split_for_impl().1); 
+    let actor_ty_generics  = generics.split_for_impl().1;
 
     let ( impl_generics,
             ty_generics,
            where_clause ) = {
 
         let mut sigs = actor_methods.iter_mut().map(|m| m.get_mut_sig()).collect::<Vec<_>>();
-        sigs.push(met_new.get_mut_sig());
-        generics::get_parts( &mut model_generics, sigs)
+
+        if met_new.is_some() {
+            let mut mn = met_new.unwrap();
+            sigs.push(mn.get_mut_sig());
+            generics::get_parts( &mut model_generics, sigs);
+
+            met_new = Some(mn);
+
+        } else {
+            generics::get_parts( &mut model_generics, sigs);
+        }
+        model_generics.split_for_impl()
+
     };
     
+
+
     // Giving a new name if specified 
     let cust_name   = if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { actor_name.clone() }; 
     
@@ -117,7 +118,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
             _ => { Some(quote!{async}) },
         };
 
-    let new_vis = met_new.vis.clone();
+
 
     for method in actor_methods.clone() {
         
@@ -307,7 +308,21 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
 
     // METHOD NEW
-    { 
+
+    if AAExpand::Actor.eq(mac) { 
+
+        if met_new.is_none() {
+
+            let msg = format!("Can not find public/restricted  method `new` or `try_new` for {:?} object.",actor_name.to_string());
+            let (note,help) = error::met_new_note_help(&actor_name);
+            abort!(item_impl,msg;note=note;help=help);
+
+        }
+        
+        // Change visibility of model methods 
+        new_vis = met_new.as_ref().map(|m| m.vis.clone());
+
+        let met_new         = met_new.unwrap();
         let new_sig             = &met_new.new_sig;
         let func_new_name           = &new_sig.ident;
         let (args_ident, _ )   = method::arguments_ident_type(&met_new.get_arguments());
@@ -336,18 +351,10 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         let (init_actor, play_args) = {
             let id_debut_name = if aaa.id {quote!{ ,debut,name}} else {quote!{}};
             ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, actor } )
-            // match  aaa.channel {
-            //     AAChannel::Inter => {
-            //         ( quote!{ Self{ queue: queue.clone(), condvar: condvar.clone() #id_debut_name } }, quote!{ queue, condvar, actor  } )
-            //     },
-            //     _  => {
-            //         ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, actor } )
-            //     },
-            // }
         };
 
         let spawn = live_new_spawn(play_args);
-        let turbofish = ty_generics.as_ref().map(|x| x.as_turbofish());
+        let turbofish = ty_generics.as_turbofish();
         let (id_debut,id_name)  =  
         if aaa.id {
             (quote!{let debut =  #script_name #turbofish ::debut();},
@@ -493,65 +500,21 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
         let recv_await=  play_async_decl.as_ref().map(|_| quote!{.await});
         let end_of_play = error::end_of_life(&actor_name); 
 
-        // needs to be pushed into script_mets
+
         let play_method = {
         
-        //  match aaa.channel {
-
-            // AAChannel::Unbounded |
-            // AAChannel::Buffer(_) => {
-
-                let ok_or_some = match aaa.lib {
-                    AALib::Tokio => quote!{Some},
-                    _ => quote!{Ok}
-                };
-                quote! {
-                    #new_vis #play_async_decl fn play ( #play_input_receiver mut actor: #actor_type #actor_ty_generics ) {
-                        while let #ok_or_some (msg) = receiver.recv() #recv_await {
-                            msg.direct ( &mut actor ) #direct_await;
-                        }
-                        #end_of_play
+            let ok_or_some = match aaa.lib {
+                AALib::Tokio => quote!{Some},
+                _ => quote!{Ok}
+            };
+            quote! {
+                #new_vis #play_async_decl fn play ( #play_input_receiver mut actor: #actor_type #actor_ty_generics ) {
+                    while let #ok_or_some (msg) = receiver.recv() #recv_await {
+                        msg.direct ( &mut actor ) #direct_await;
                     }
+                    #end_of_play
                 }
-
-            // },
-
-            // AAChannel::Inter => {
-            //     //impl drop for live while here
-            //     live_trts.push((format_ident!("Drop"),
-            //     quote!{
-            //         impl #ty_generics Drop for #live_name #ty_generics #where_clause {
-            //             fn drop(&mut self){
-            //                 self.condvar.notify_one();
-            //             }
-            //         }
-            //     }));
-
-            //     let error_msg = error::play_guard(&actor_name);
-
-            //     quote!{
-            //         #new_vis #play_async_decl fn play ( #play_input_receiver mut actor: #actor_type #actor_ty_generics ) {
-
-            //             let queuing = || -> Option<Vec< #script_name #ty_generics>> {
-            //                 let mut guard = queue.lock().expect(#error_msg);
-            //                 while guard.as_ref().unwrap().is_empty() {
-            //                     if std::sync::Arc::strong_count(&queue) > 1{
-            //                         guard = condvar.wait(guard).expect(#error_msg);
-            //                     } else { return None }
-            //                 }
-            //                 let income = guard.take();
-            //                 *guard = Some(vec![]);
-            //                 income
-            //             };
-            //             while let Some(msgs)  = queuing(){
-            //                 for msg in msgs {
-            //                     msg.direct (&mut actor) #direct_await;
-            //                 }
-            //             }
-            //             #end_of_play
-            //         }
-            //     }
-            // },
+            }
         };
         script_mets.push(( format_ident!("play"), play_method ));
     }
@@ -644,7 +607,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item: Item, mac:
 
     let res_code = quote! {
 
-        #item
+        #item_impl
 
         #script_def
         impl #impl_generics #script_name #ty_generics #where_clause {
@@ -732,7 +695,7 @@ pub fn edit_select(edit_idents: Option<Vec<Ident>>,
 pub fn channels( lib: &AALib,
              channel: &AAChannel,
            cust_name: &Ident,
-            generics: &Option<syn::TypeGenerics<'_>>) -> ( 
+            generics: &syn::TypeGenerics<'_>) -> ( 
                                     TokenStream,
                                     TokenStream,
                                     TokenStream,
@@ -797,7 +760,7 @@ pub fn channels( lib: &AALib,
                 },
             }
         },
-        AAChannel::Buffer(val)    => {
+        AAChannel::Buffer(val)  => {
 
             match  lib { 
 
@@ -829,34 +792,6 @@ pub fn channels( lib: &AALib,
                 },
             }
         },
-        // AAChannel::Inter  => {
-
-        //     live_field_sender   = quote!{ 
-        //         queue: std::sync::Arc<std::sync::Mutex<Option<Vec<#type_ident #generics>>>>,
-        //         condvar:                       std::sync::Arc<std::sync::Condvar>,
-        //     };
-        //     play_input_receiver = quote!{ 
-        //         queue: std::sync::Arc<std::sync::Mutex<Option<Vec<#type_ident #generics>>>>,
-        //         condvar:                       std::sync::Arc<std::sync::Condvar>,
-        //     };
-        //     new_live_send_recv  = quote!{ 
-        //         let queue       = std::sync::Arc::new(std::sync::Mutex::new(Some(vec![])));
-        //         let condvar     = std::sync::Arc::new(std::sync::Condvar::new());
-        //     };
-
-        //     let error_msg = error::live_guard(cust_name);
-        //     live_send_input     =  quote!{
-        //         {
-        //             let mut guard = self.queue.lock().expect(#error_msg);
-        
-        //             guard.as_mut()
-        //             .map(|s| s.push(msg));
-        //         }
-        //         self.condvar.notify_one();
-        //     };
-
-        //     live_recv_output     =  quote!{recv.recv().expect(#error_live_recv)};
-        // },
     }
 
     

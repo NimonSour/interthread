@@ -261,52 +261,52 @@ pub fn direct_send(script_name: &syn::Ident, variant: &syn::Ident) -> TokenStrea
 
 }
 
-pub fn trait_new_sig<T: quote::ToTokens>(ty:&T, exists: bool) -> (String,String){
-    let actor_ty = quote!{#ty}.to_string();
-    let note = format!("
-    Using the `actor` macro with a `trait` block is not as flexible \
-    as when it is applied to an `impl` block. \n
-    The `trait` must include a specific signature for the `new` \
-    initiation function: \n \t
-    fn new(s: Self) -> Self
-    This signature, is the only available initiation signature \
-    that the macro will consider for its functionality.
-    \n"); 
-    let msg = 
-    if exists {
-        format!("Expected signature `fn new (s:Self) -> Self` for {} ! \n",actor_ty)
-    } else {
-        format!("Expected signature `fn new (s:Self) -> Self` for {} not found !\n",actor_ty)
-    };
-    (msg,note)
-}
+// pub fn trait_new_sig<T: quote::ToTokens>(ty:&T, exists: bool) -> (String,String){
+//     let actor_ty = quote!{#ty}.to_string();
+//     let note = format!("
+//     Using the `actor` macro with a `trait` block is not as flexible \
+//     as when it is applied to an `impl` block. \n
+//     The `trait` must include a specific signature for the `new` \
+//     initiation function: \n \t
+//     fn new(s: Self) -> Self
+//     This signature, is the only available initiation signature \
+//     that the macro will consider for its functionality.
+//     \n"); 
+//     let msg = 
+//     if exists {
+//         format!("Expected signature `fn new (s:Self) -> Self` for {} ! \n",actor_ty)
+//     } else {
+//         format!("Expected signature `fn new (s:Self) -> Self` for {} not found !\n",actor_ty)
+//     };
+//     (msg,note)
+// }
 
 
-pub fn item_vis() -> (String,String){
-    //"The macros 'actor' and 'group' require the object itself and its \
-    // - `fn` block: `fn`'s visibility itself
-    let note = format!("The macro 'actor' require the object itself and its \
-    methods to have explicit visibility (public or restricted) if they are intended \
-    to be considered.
+// pub fn item_vis() -> (String,String){
+//     //"The macros 'actor' and 'group' require the object itself and its \
+//     // - `fn` block: `fn`'s visibility itself
+//     let note = format!("The macro 'actor' require the object itself and its \
+//     methods to have explicit visibility (public or restricted) if they are intended \
+//     to be considered.
     
-    The macros adhere to Rust's principles, where private functions are regarded as internal \
-    helper functions, not intended for external use beyond the object body.
+//     The macros adhere to Rust's principles, where private functions are regarded as internal \
+//     helper functions, not intended for external use beyond the object body.
     
-    The visibility level of the newly generated Actor Model types will \
-    be preserved and applied from : \n 
-    - `impl`  block: function `new` \n 
-    - `trait` block: `trait`'s visibility itself ( which is the same as `new` function ) 
+//     The visibility level of the newly generated Actor Model types will \
+//     be preserved and applied from : \n 
+//     - `impl`  block: function `new` \n 
+//     - `trait` block: `trait`'s visibility itself ( which is the same as `new` function ) 
      
-    Please ensure that the required visibility specifications are followed to use the 'actor' \
-    macro effectively.\n") ;
+//     Please ensure that the required visibility specifications are followed to use the 'actor' \
+//     macro effectively.\n") ;
 
-    let help = format!("If a private Actor Model is desired, it is recommended to begin with \
-    public visibility and then manually adjust visibility using the 'edit' option or \
-    the macro 'example' to modify the types created by the macro.");
+//     let help = format!("If a private Actor Model is desired, it is recommended to begin with \
+//     public visibility and then manually adjust visibility using the 'edit' option or \
+//     the macro 'example' to modify the types created by the macro.");
 
 
-    (note,help)
-}
+//     (note,help)
+// }
 
 // temp error new args 
 pub static OLD_DIRECT_ARG: &'static str = "

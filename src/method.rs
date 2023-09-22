@@ -1,7 +1,7 @@
 use crate::error::{self,met_new_found};
-use crate::attribute::AALib;
+use crate::attribute::{AALib,AAExpand};
 
-use syn::{Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,Receiver,Item,Token};
+use syn::{Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Receiver,Token};
 use proc_macro_error::abort;
 use proc_macro2::{TokenStream,Span};
 use quote::{quote,format_ident};
@@ -108,6 +108,8 @@ impl ActorMethodNew {
         
 }
 
+
+
 pub fn replace<T, O, N>(ty: &T, old: &O, new: &N) -> T
 where
     T: syn::parse::Parse + quote::ToTokens,
@@ -129,17 +131,19 @@ where
     abort!(Span::call_site(), msg);
 }
 
-pub fn is_trait(ty: &Type) -> bool {
-    match ty {
-        syn::Type::ImplTrait(_) => true,
-        _ => false,
-    }
-}
+// pub fn is_trait(ty: &Type) -> bool {
+//     match ty {
+//         syn::Type::ImplTrait(_) => true,
+//         _ => false,
+//     }
+// }
 pub fn get_new_sig( sig: &Signature, ty: &Type) -> Signature {
 
-    let ty_name = if is_trait(ty)  { 
-        quote!{#ty + Send + 'static}.to_string() 
-    } else { quote!{#ty}.to_string() };
+    // let ty_name = if is_trait(ty)  { 
+    //     quote!{#ty + Send + 'static}.to_string() 
+    // } else { quote!{#ty}.to_string() };
+
+    let ty_name = quote!{#ty}.to_string() ;
     let mut signature = replace(sig, "Self",&ty_name);
     signature.output = replace(&sig.output,&ty_name,"Self");
     signature
@@ -162,7 +166,7 @@ fn check_self_return( sig: &Signature, ty_name: &Type ) -> (Signature,Option<boo
             else if ty_name.eq(ty_path) { 
                 return (get_new_sig(sig,ty_name), None);
             }
-            if !is_trait(ty_name){
+            // if !is_trait(ty_name){
 
                 match ty_path.as_ref(){ 
                     Type::Path( p ) => {
@@ -221,10 +225,10 @@ fn check_self_return( sig: &Signature, ty_name: &Type ) -> (Signature,Option<boo
                         abort!(bit,msg;note=note;help=help);
                     },
                 }
-            } else {
-                let ( msg, note ) = error::trait_new_sig(ty_name,true);
-                abort!(sig,msg;note=note);
-            }
+            // } else {
+            //     let ( msg, note ) = error::trait_new_sig(ty_name,true);
+            //     abort!(sig,msg;note=note);
+            // }
         },
         
         bit => { 
@@ -271,104 +275,115 @@ fn is_vis( v: &Visibility ) -> bool {
     }
 }
 
-fn get_sigs(item: &syn::Item) -> (Option<Visibility>, Vec<(Visibility,Signature)>){
-    let mut res :(Option<Visibility>, Vec<(Visibility,Signature)>) = (None,Vec::new());
+// fn get_sigs(item_impl: &syn::ItemImpl) -> (Option<Visibility>, Vec<(Visibility,Signature)>){
+//     let mut res :(Option<Visibility>, Vec<(Visibility,Signature)>) = (None,Vec::new());
 
-    match item {
-        syn::Item::Fn(item_fn) => {
-            if is_vis(&item_fn.vis){
-                res.0 = Some(item_fn.vis.clone());
-                for stmt in &item_fn.block.stmts {
-                    match stmt {
-                        syn::Stmt::Item(itm) => {
-                            match itm {
-                                syn::Item::Fn(itm_fn) => {
-                                    // match visibility
-                                    if is_vis(&itm_fn.vis){
-                                        res.1.push((itm_fn.vis.clone(),itm_fn.sig.clone()));
-                                    }
-                                },
-                                _ => (),
-                            }
-                        },
-                        _ => (),
-                    }
+fn get_sigs(item_impl: &syn::ItemImpl) -> Vec<(Visibility,Signature)>{
+    let mut res :Vec<(Visibility,Signature)> = Vec::new();
+
+    // match item {
+    //     syn::Item::Fn(item_fn) => {
+    //         if is_vis(&item_fn.vis){
+    //             res.0 = Some(item_fn.vis.clone());
+    //             for stmt in &item_fn.block.stmts {
+    //                 match stmt {
+    //                     syn::Stmt::Item(itm) => {
+    //                         match itm {
+    //                             syn::Item::Fn(itm_fn) => {
+    //                                 // match visibility
+    //                                 if is_vis(&itm_fn.vis){
+    //                                     res.1.push((itm_fn.vis.clone(),itm_fn.sig.clone()));
+    //                                 }
+    //                             },
+    //                             _ => (),
+    //                         }
+    //                     },
+    //                     _ => (),
+    //                 }
+    //             }
+    //         } else {
+    //             let msg = "Expected explicit visibility.";
+    //             let (note,help) = error::item_vis();
+    //             abort!(item,msg;note=note;help=help)
+    //         }
+    //     },
+    //     syn::Item::Trait(item_trait) => {
+    //         if is_vis(&item_trait.vis){
+    //             res.0 = Some(item_trait.vis.clone());
+    //             for itm in &item_trait.items {
+    //                 match itm {
+    //                     syn::TraitItem::Fn(trait_item_fn) => {
+    //                         res.1.push((item_trait.vis.clone(),trait_item_fn.sig.clone()));
+    //                     },
+    //                     _ => (),
+    //                 }
+    //             }
+    //         } else {
+    //             let msg = "Expected explicit visibility.";
+    //             let (note,help) = error::item_vis();
+    //             abort!(item,msg;note=note;help=help) 
+    //         }
+    //     },
+        // syn::Item::Impl(item_impl) => {
+
+
+    for itm in &item_impl.items {
+        match itm {
+            ImplItem::Fn( met ) => {
+                if is_vis(&met.vis) {
+                    res.push((met.vis.clone(),met.sig.clone()));
                 }
-            } else {
-                let msg = "Expected explicit visibility.";
-                let (note,help) = error::item_vis();
-                abort!(item,msg;note=note;help=help)
-            }
-        },
-        syn::Item::Trait(item_trait) => {
-            if is_vis(&item_trait.vis){
-                res.0 = Some(item_trait.vis.clone());
-                for itm in &item_trait.items {
-                    match itm {
-                        syn::TraitItem::Fn(trait_item_fn) => {
-                            res.1.push((item_trait.vis.clone(),trait_item_fn.sig.clone()));
-                        },
-                        _ => (),
-                    }
-                }
-            } else {
-                let msg = "Expected explicit visibility.";
-                let (note,help) = error::item_vis();
-                abort!(item,msg;note=note;help=help) 
-            }
-        },
-        syn::Item::Impl(item_impl) => {
-            for itm in &item_impl.items {
-                match itm {
-                    ImplItem::Fn( met ) => {
-                        if is_vis(&met.vis) {
-                            res.1.push((met.vis.clone(),met.sig.clone()));
-                        }
-                    },
-                    _ => (),
-                }
-            }
-        },
-        v => {
-            let msg = "Internal Error. 'methods::get_sigs' Expected Item  `Fn`, `Trait` or `Impl`.";
-            abort!(v,msg);
-        },
+            },
+            _ => (),
+        }
     }
+
+
+        // },
+        // v => {
+        //     let msg = "Internal Error. 'methods::get_sigs' Expected Item  `Fn`, `Trait` or `Impl`.";
+        //     abort!(v,msg);
+        // },
+    // }
     res
 }
 
 
-pub fn get_methods( actor_type: &syn::Type, item: Item, stat:bool ) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
+pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac: &AAExpand ) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
 
     let mut loc              = vec![];
     let mut method_new = None;
     let ident_new                       = format_ident!("new");
     let ident_try_new                   = format_ident!("try_new");
+    let mut actor                        = AAExpand::Actor.eq(mac);
 
     // use item_vis for `group` 
-    let (_item_vis,sigs) = get_sigs(&item);
+    let sigs = get_sigs(&item_impl);
 
     for (vis,sig) in sigs {
 
         if is_self_refer(&sig){
             loc.push(sieve(vis,explicit(&sig,actor_type),Some(false)));
         } else {
+            
+            if actor {
+                // check if there is a function "new" or "try_new"
+                if sig.ident.eq(&ident_new) || sig.ident.eq(&ident_try_new){
+                
+                    let(new_sig,res_opt) = check_self_return(&mut sig.clone(),actor_type);
+                    let method = sieve(vis,sig.clone(),Some(true));
+                    method_new = ActorMethodNew::try_new( method, new_sig, res_opt );
+                    actor = false;
+                    continue; 
+                } 
+            }
     
-            // check if there is a function "new" or "try_new"
-            if sig.ident.eq(&ident_new) || sig.ident.eq(&ident_try_new){
-    
-                let(new_sig,res_opt) = check_self_return(&mut sig.clone(),actor_type);
-                let method = sieve(vis,sig.clone(),Some(true));
-                method_new = ActorMethodNew::try_new( method, new_sig, res_opt ); 
-            } 
-    
-            else {
-                if stat {
-                    if is_return(&sig){
-                        loc.push(sieve(vis,explicit(&sig,actor_type),Some(true)));
-                    }
+            if stat {
+                if is_return(&sig){
+                    loc.push(sieve(vis,explicit(&sig,actor_type),Some(true)));
                 }
             }
+
         }
     }
     (loc, method_new)

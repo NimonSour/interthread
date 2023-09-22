@@ -1251,7 +1251,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
     
     let mac  = attribute::AAExpand::Actor;
-    let act_item = syn::parse_macro_input!(item as syn::Item);
+    let item_impl = syn::parse_macro_input!(item as syn::ItemImpl);
 
     let mut aaa = attribute::ActorAttributeArguments::default();
     let nested  = syn::parse_macro_input!(attr with syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated); 
@@ -1261,10 +1261,10 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     check::channels_import( &aaa.lib );
 
     let (code,edit) = 
-    crate::actor_gen::actor_macro_generate_code( aaa.clone(), act_item.clone(), &mac );
+    crate::actor_gen::actor_macro_generate_code( aaa.clone(), item_impl.clone(), &mac ,None);
 
     if let Some( aaf ) = aaa.file {
-        parse::edit_write(  &aaf, act_item, aaa.edit.is_all(), &mac, edit);
+        parse::edit_write(  &aaf, item_impl, aaa.edit.is_all(), &mac, edit);
     }
 
     quote::quote!{#code}.into()

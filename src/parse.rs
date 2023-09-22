@@ -1,4 +1,4 @@
-use crate::name::get_name_and_type;
+use crate::name::get_ident_type_generics;
 use crate::file::get_idents;
 use crate::show::get_text;
 use crate::attribute::AAFile;
@@ -8,28 +8,30 @@ use crate::LINE_ENDING;
 use proc_macro_error::abort;
 use proc_macro2::Span;
 
-use syn::{Attribute,Item,Visibility};
+use syn::{Attribute,Item,ItemImpl};
 
 
 
-fn set_attrs( attrs: &Vec<Attribute>, item: &Item ) -> Item {
-    let item = item.clone();
+fn set_attrs( attrs: &Vec<Attribute>, item_impl: &ItemImpl ) -> ItemImpl {
+    let mut item_impl = item_impl.clone();
+    item_impl.attrs = attrs.clone();
+    item_impl
 
-    match item {
-        Item::Fn(mut body)      => {
-            body.attrs = attrs.clone();
-            Item::Fn(body)
-        },
-        Item::Trait(mut body) => {
-            body.attrs = attrs.clone();
-            Item::Trait(body)
-        },
-        Item::Impl(mut body)   => {
-            body.attrs = attrs.clone();
-            Item::Impl(body)
-        },
-        _ => {abort!(Span::call_site(),"Internal Error. `parse::set_attrs`. Expected Fn, Imbl block or Trait !".to_string())},
-    }
+    // match item {
+        // Item::Fn(mut body)      => {
+        //     body.attrs = attrs.clone();
+        //     Item::Fn(body)
+        // },
+        // Item::Trait(mut body) => {
+        //     body.attrs = attrs.clone();
+        //     Item::Trait(body)
+        // },
+    //     Item::Impl(mut body)   => {
+    //         body.attrs = attrs.clone();
+    //         Item::Impl(body)
+    //     },
+    //     _ => {abort!(Span::call_site(),"Internal Error. `parse::set_attrs`. Expected Fn, Imbl block or Trait !".to_string())},
+    // }
 }
 
 
@@ -329,7 +331,7 @@ impl ItemCodeBlock {
         }
     }
     
-    fn reset(&mut self, line: Option<(&mut String,usize)>,  item: Option<&Item> ) -> Result<(),String>{
+    fn reset(&mut self, line: Option<(&mut String,usize)>,  item_impl: Option<&ItemImpl> ) -> Result<(),String>{
 
         if let Some((code,end)) = line{
             let space = &code[..=end];
@@ -342,43 +344,43 @@ impl ItemCodeBlock {
         self.end   = None;
         self.code_block = String::new();
 
-        if let Some(itm) = item {
+        if let Some(_) = item_impl {
 
-            match itm {
+            // match itm {
 
-                Item::Impl(_) => {
+            //     Item::Impl(_) => {
                     self.token = "impl";
                     self.open  = '{';
                     self.close = '}';
-                },
+            //     },
 
-                Item::Fn(v) => {
-                    self.open  = '{';
-                    self.close = '}';
-                    match v.vis {
-                        Visibility::Inherited => {
-                            if let Some(_) = v.sig.asyncness {
-                                self.token = "async";
-                            }
-                            self.token = "fn";
-                        },
-                        _ => { self.token = "pub"; },
-                    }
-                },
+            //     Item::Fn(v) => {
+            //         self.open  = '{';
+            //         self.close = '}';
+            //         match v.vis {
+            //             Visibility::Inherited => {
+            //                 if let Some(_) = v.sig.asyncness {
+            //                     self.token = "async";
+            //                 }
+            //                 self.token = "fn";
+            //             },
+            //             _ => { self.token = "pub"; },
+            //         }
+            //     },
 
-                Item::Trait(v) => {
-                    match v.vis {
-                        Visibility::Inherited => {
-                            self.token = "trait";
-                        },
-                        _ => { self.token = "pub"; },
-                    }
-                },
-                _ => {
-                    let msg = "Internal Error. `ItemCodeBlock::reset`. Expected Fn, Imbl block or Trait".to_string();
-                    return Err(msg);
-                },
-            }
+            //     Item::Trait(v) => {
+            //         match v.vis {
+            //             Visibility::Inherited => {
+            //                 self.token = "trait";
+            //             },
+            //             _ => { self.token = "pub"; },
+            //         }
+            //     },
+            //     _ => {
+            //         let msg = "Internal Error. `ItemCodeBlock::reset`. Expected Fn, Imbl block or Trait".to_string();
+            //         return Err(msg);
+            //     },
+            // }
 
         } else {
 
@@ -389,26 +391,26 @@ impl ItemCodeBlock {
         Ok(())
     }
     
-    fn parse_item(&self,s: Option<&str>) -> Result<Item,String> {
+    fn parse_item_impl(&self,s: Option<&str>) -> Result<ItemImpl,String> {
 
         let body_text = s.unwrap_or(&self.src[self.first.unwrap()..=self.end.unwrap()]); 
 
-        match syn::parse_str::<Item>(body_text) {
+        match syn::parse_str::<ItemImpl>(body_text) {
 
             Ok(item) => Ok(item),
             Err(e) => { 
-                let msg = format!("Internal Error. `ItemCodeBlock::parse_item`. Could not parse the item! {}",e);
+                let msg = format!("Internal Error. `ItemCodeBlock::parse_item_impl`. Could not parse the item! {}",e);
                 Err(msg) 
             },
         }
     }
     
-    fn check_name(&self, item: &Item) -> bool {
-        let (name,_,_) = 
-        match item {
-            Item::Fn(_) => { get_name_and_type(&AAExpand::Group, item)},
-                          _  => { get_name_and_type(&AAExpand::Actor, item)},
-        };
+    fn check_name(&self, item_impl: &ItemImpl) -> bool {
+        let (name,_,_) = get_ident_type_generics(item_impl);
+        // match item {
+        //     Item::Fn(_)      => { get_name_and_type(&AAExpand::Group, item)},
+        //                   _  => { get_name_and_type(&AAExpand::Actor, item)},
+        // };
         self.code_block.contains(&name.to_string()) 
     }
 
@@ -420,11 +422,11 @@ impl ItemCodeBlock {
         done_attrs[0].0
     }
 
-    pub fn get_item_code(&mut self, mut attrs: Vec<Attribute>, item: Item ) -> Result<Vec<(usize, Attribute, String)>,String> {
+    pub fn get_item_code(&mut self, mut attrs: Vec<Attribute>, item_impl: ItemImpl ) -> Result<Vec<(usize, Attribute, String)>,String> {
 
-        let org_item = set_attrs(&attrs, &item);
+        let org_item = set_attrs(&attrs, &item_impl);
         if attrs.is_empty(){ 
-            self.reset(None,Some(&item))?; 
+            self.reset(None,Some(&item_impl))?; 
         } 
 
         let mut done_attrs = Vec::new();
@@ -466,7 +468,7 @@ impl ItemCodeBlock {
 
                                 if self.token != "#" {
 
-                                    if !self.check_name(&item){
+                                    if !self.check_name(&item_impl){
 
                                         // start all over again
                                         while let Some((_,a,_)) = done_attrs.pop() {
@@ -495,7 +497,7 @@ impl ItemCodeBlock {
 
                                                 if attrs.is_empty(){
 
-                                                    let _ = self.reset(Some((&mut code, i)),Some(&item))?;
+                                                    let _ = self.reset(Some((&mut code, i)),Some(&item_impl))?;
                                                     continue 'l1;
                                                 } else {
 
@@ -517,13 +519,13 @@ impl ItemCodeBlock {
                                         }
                                     } else {
 
-                                        if let Ok(out_item) = self.parse_item(None){
-                                            if out_item == item {
+                                        if let Ok(out_item) = self.parse_item_impl(None){
+                                            if out_item == item_impl {
 
                                                 let first_index    = self.first_index(&mut done_attrs);
                                                 let full_str        = &self.src[first_index..=self.end.unwrap()];
 
-                                                if let Ok(out_item) = self.parse_item(Some(full_str)){
+                                                if let Ok(out_item) = self.parse_item_impl(Some(full_str)){
                                                     if out_item == org_item {
                                                         self.index = index + i + 1;
                                                         return Ok(done_attrs)
@@ -565,7 +567,7 @@ impl ItemCodeBlock {
 
 
 
-pub fn split_file( aaf: &AAFile, item: Item, edit: bool ) -> (String,String,) {
+pub fn split_file( aaf: &AAFile, item_impl: ItemImpl, edit: bool ) -> (String,String,) {
 
     match  get_text(&aaf.path){
 
@@ -573,7 +575,7 @@ pub fn split_file( aaf: &AAFile, item: Item, edit: bool ) -> (String,String,) {
             
             let mut icb = ItemCodeBlock::new(text);
 
-            match icb.get_item_code(aaf.attrs.clone(),item){
+            match icb.get_item_code(aaf.attrs.clone(),item_impl){
                 Ok(attrs) => {
                     let (prefix,suffix) = icb.src.split_at(icb.index);
 
@@ -611,16 +613,16 @@ pub fn split_file( aaf: &AAFile, item: Item, edit: bool ) -> (String,String,) {
 
 
 pub fn edit_write(  aaf: &AAFile, 
-                   item: Item, 
+                   item_impl: ItemImpl, 
                    repl: bool,
-                    mac: &AAExpand,  
+                    _mac: &AAExpand,  
                    edit: proc_macro2::TokenStream ) {
 
-    let (name, _, _)=  crate::name::get_name_and_type(mac, &item);
+    let (name, _, _)     =  get_ident_type_generics(&item_impl);
     let edifile    =  syn::parse2::<syn::File>(edit).unwrap();
     let edifix   =  prettyplease::unparse(&edifile);
 
-    let (mut prefix, suffix) = split_file( aaf, item, repl );
+    let (mut prefix, suffix) = split_file( aaf, item_impl, repl );
     
     let attr = &aaf.attr;
     let mut attr_str = quote::quote!{ #attr }.to_string();
@@ -658,79 +660,79 @@ pub fn edit_write(  aaf: &AAFile,
 mod tests {
     use super::*;
     
-    #[test]
-    fn test_find_attr(){
-        // NOT USED
-        fn get_attrs( item: &Item ) -> Result<(Vec<Attribute>, Item),String>{
-            let item = item.clone();
-            let attrs;
+    // #[test]
+    // fn test_find_attr(){
+    //     // NOT USED
+    //     fn get_attrs( item: &Item ) -> Result<(Vec<Attribute>, Item),String>{
+    //         let item = item.clone();
+    //         let attrs;
         
-            let res = match item {
+    //         let res = match item {
             
-                Item::Fn(mut body)       => {
-                    attrs = body.attrs;
-                    body.attrs = Vec::new();
-                    (attrs, Item::Fn(body))
-                },
-                Item::Trait(mut body) => {
-                    attrs = body.attrs;
-                    body.attrs = Vec::new();
-                    (attrs, Item::Trait(body))
-                },
-                Item::Impl(mut body)   => {
-                    attrs = body.attrs;
-                    body.attrs = Vec::new();
-                    (attrs, Item::Impl(body))
-                },
-                _ => { return Err("Internal Error. `parses::get_attrs`. Expected Fn, Imbl block or Trait !".to_string())},
-            };
+    //             Item::Fn(mut body)       => {
+    //                 attrs = body.attrs;
+    //                 body.attrs = Vec::new();
+    //                 (attrs, Item::Fn(body))
+    //             },
+    //             Item::Trait(mut body) => {
+    //                 attrs = body.attrs;
+    //                 body.attrs = Vec::new();
+    //                 (attrs, Item::Trait(body))
+    //             },
+    //             Item::Impl(mut body)   => {
+    //                 attrs = body.attrs;
+    //                 body.attrs = Vec::new();
+    //                 (attrs, Item::Impl(body))
+    //             },
+    //             _ => { return Err("Internal Error. `parses::get_attrs`. Expected Fn, Imbl block or Trait !".to_string())},
+    //         };
         
-            Ok( res )
-        }
+    //         Ok( res )
+    //     }
 
 
-        let s = r#"
-        struct Bla(i8);
+    //     let s = r#"
+    //     struct Bla(i8);
 
-        #[example(file="src/bla.rs")]
-        #[ actor (channel = 2,
-             edit(play))
-        ] 
-        impl Bla {
+    //     #[example(file="src/bla.rs")]
+    //     #[ actor (channel = 2,
+    //          edit(play))
+    //     ] 
+    //     impl Bla {
 
-            fn new(v: i8) -> Self {
-                Self(v)
-            }
-        }
+    //         fn new(v: i8) -> Self {
+    //             Self(v)
+    //         }
+    //     }
 
-        #[example(
-            file="src/bla.rs"
+    //     #[example(
+    //         file="src/bla.rs"
         
         
-        )] #[ actor (channel = 2, edit(play))] 
-        pub fn actor_exam_play( value: i8 ) -> i8 {
-        9
-        }"#;
+    //     )] #[ actor (channel = 2, edit(play))] 
+    //     pub fn actor_exam_play( value: i8 ) -> i8 {
+    //     9
+    //     }"#;
 
 
-        let data_fn = r#"
+    //     let data_fn = r#"
 
-        #[example(file="src/bla.rs")] 
-        #[ actor (channel = 2, edit(play))]
-        // bla 
-        pub fn actor_exam_play( value: i8 ) -> i8 {
-        9 }
-        "#;
+    //     #[example(file="src/bla.rs")] 
+    //     #[ actor (channel = 2, edit(play))]
+    //     // bla 
+    //     pub fn actor_exam_play( value: i8 ) -> i8 {
+    //     9 }
+    //     "#;
 
-        let item_fn: syn::Item = syn::parse_str(data_fn).expect("could not parse item");
+    //     let item_fn: syn::Item = syn::parse_str(data_fn).expect("could not parse item");
 
-        let mut icb = ItemCodeBlock::new(s.to_string());
-        let (attrs,item) = get_attrs(&item_fn).unwrap();
-        match icb.get_item_code(attrs,item){
-            Ok(v) => {println!("Ok({:?})",v);},
-            Err(e) => {println!("Err({})",e);},
-        }
-    }
+    //     let mut icb = ItemCodeBlock::new(s.to_string());
+    //     let (attrs,item) = get_attrs(&item_fn).unwrap();
+    //     match icb.get_item_code(attrs,item){
+    //         Ok(v) => {println!("Ok({:?})",v);},
+    //         Err(e) => {println!("Err({})",e);},
+    //     }
+    // }
     
     
     #[test]
