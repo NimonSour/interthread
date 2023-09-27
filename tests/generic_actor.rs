@@ -5,7 +5,7 @@ use interthread::actor as life;
 #[test]
 fn actor_sync_unbound_default() {
     pub struct Actor<T>(T);
-    #[life(id)]
+    #[life(debut)]
     impl <T:Clone> Actor <T> 
       where T: core::ops::AddAssign,
     {
@@ -26,7 +26,7 @@ fn actor_sync_unbound_default() {
 #[test]
 fn actor_sync_unbounded_int() {
     pub struct Actor<T>(T);
-    #[life(channel=0, name="MyActor",id)]
+    #[life(channel=0, name="MyActor",debut)]
     impl <T:Clone> Actor <T> 
       where T: core::ops::AddAssign,
     {
@@ -43,7 +43,7 @@ fn actor_sync_unbounded_int() {
 #[test]
 fn actor_sync_bounded() {
     pub struct Actor<T>(T);
-    #[life(channel=3,id)]
+    #[life(channel=3,debut)]
     impl <T:Clone> Actor <T> 
       where T: core::ops::AddAssign,
     {
@@ -65,7 +65,7 @@ fn actor_sync_bounded() {
 #[test]
 fn actor_tokio_bounded() {
     pub struct Actor<T>(T);
-    #[life(channel=3,lib="tokio",id)]
+    #[life(channel=3,lib="tokio",debut)]
     impl <T:Clone> Actor <T> 
       where T: core::ops::AddAssign + std::fmt::Debug,
     {
@@ -90,7 +90,7 @@ fn actor_tokio_bounded() {
 #[test]
 fn actor_tokio_unbounded() {
     pub struct Actor<T>(T);
-    #[life(channel= 0,lib="tokio",id)]
+    #[life(channel= 0,lib="tokio",debut)]
     impl <T:Clone> Actor <T> 
       where T: core::ops::AddAssign + std::fmt::Debug,
     {
@@ -114,7 +114,7 @@ fn actor_tokio_unbounded() {
 #[test]
 fn actor_async_std_bounded() {
     pub struct Actor<T>(T);
-    #[life(channel=3,lib="async_std",id)]
+    #[life(channel=3,lib="async_std",debut)]
     impl <T:Clone> Actor <T> 
       where T: core::ops::AddAssign + std::fmt::Debug,
     {
@@ -135,7 +135,7 @@ fn actor_async_std_bounded() {
  #[test]
 fn actor_async_std_unbounded() {
     pub struct Actor<T>(T);
-    #[life(channel=0,lib="async_std",id)]
+    #[life(channel=0,lib="async_std",debut)]
     impl <T:Clone> Actor <T> 
       where T: core::ops::AddAssign + std::fmt::Debug,
     {
@@ -157,7 +157,7 @@ fn actor_async_std_unbounded() {
 #[test]
 fn actor_smol_bounded() {
     pub struct Actor<T>(T);
-    #[life(channel=3,lib="smol",id)]
+    #[life(channel=3,lib="smol",debut)]
     impl <T:Clone> Actor <T> 
       where T: core::ops::AddAssign + std::fmt::Debug,
     {
@@ -178,7 +178,7 @@ fn actor_smol_bounded() {
 #[test]
 fn actor_smol_unbounded() {
     pub struct Actor<T>(T);
-    #[life(channel=0,lib="smol",id)]
+    #[life(channel=0,lib="smol",debut)]
     impl <T:Clone> Actor <T> 
       where T: core::ops::AddAssign + std::fmt::Debug,
     {

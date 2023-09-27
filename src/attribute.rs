@@ -5,6 +5,7 @@ use std::path::PathBuf;
 use proc_macro2::Span;
 use proc_macro_error::abort;
 use quote::format_ident;
+use syn::punctuated::Punctuated;
 
 
 // #[derive(Debug, Eq, PartialEq, Clone, Copy)]
@@ -232,7 +233,7 @@ pub struct AAEdit {
 }
 impl AAEdit {
 
-    pub fn parse_nested(&mut self, nested: syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>, sol: bool ){
+    pub fn parse_nested(&mut self, nested: Punctuated::<syn::Meta,syn::Token![,]>, sol: bool ){
         let (name,mut strct) = 
         if sol {("script",self.script.clone()) } else { ("live",self.live.clone())};
 
@@ -243,7 +244,7 @@ impl AAEdit {
             }
             else if meta.path().is_ident("imp"){
 
-                if let Some(list) = get_list(meta, error::AVAIL_EDIT) {
+                if let Some(list) = get_list(meta, Some(error::AVAIL_EDIT)) {
                     strct.1 = Some(list.iter().filter_map(|x| get_ident(x)).collect::<Vec<_>>());
                 } else {
                     strct.1 = Some( Vec::new());
@@ -252,7 +253,7 @@ impl AAEdit {
             
             else if meta.path().is_ident("trt"){
     
-                if let Some(list) = get_list(meta, error::AVAIL_EDIT) {
+                if let Some(list) = get_list(meta, Some(error::AVAIL_EDIT)) {
                     strct.2 = Some(list.iter().filter_map(|x| get_ident(x)).collect::<Vec<_>>());
                 } else {
                     strct.2 = Some( Vec::new());
@@ -313,6 +314,34 @@ pub struct AAFile {
 }
 
 
+//-----------------------  ACTOR DEBUT
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct AADebut {
+    pub path:      Option<PathBuf>,
+    pub legend:       Option<bool>,
+}
+
+impl AADebut {
+
+    pub fn active(&self) -> bool {
+        self.legend.is_some()
+    } 
+    pub fn is_legend(&self) -> bool {
+        if let Some(bol) = self.legend{
+            bol
+        } else { false }
+    } 
+
+}
+
+impl Default for AADebut {
+    fn default() -> AADebut {
+        Self{ path: None, legend: None } 
+    }
+}
+
+
+
 
 
 //-----------------------  ACTOR  
@@ -325,7 +354,7 @@ pub struct ActorAttributeArguments {
     pub assoc   :  bool,
     pub channel :  AAChannel,
     pub edit    :  AAEdit,
-    pub id      :  bool,
+    pub debut   :  AADebut,
     pub file    :  Option<AAFile>,
     /* ADD NEW OPTION */
 }
@@ -337,11 +366,11 @@ impl Default for ActorAttributeArguments {
 
         Self { 
             name   : None,
-            lib    : AALib::default() ,
+            lib    : AALib::default(),
             assoc  : false,
             channel: AAChannel::default(),
-            edit   : AAEdit::default() ,
-            id     : false,
+            edit   : AAEdit::default(),
+            debut  : AADebut::default(),
             file   : None,
             /* ADD NEW ATTRIBUTE */
         }  
@@ -351,7 +380,7 @@ impl Default for ActorAttributeArguments {
 
 impl ActorAttributeArguments {
        
-    pub fn parse_nested(&mut self, nested: syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>) {
+    pub fn parse_nested(&mut self, nested: Punctuated::<syn::Meta,syn::Token![,]>) {
 
         for meta in nested.iter(){
 
@@ -422,13 +451,13 @@ impl ActorAttributeArguments {
                 else if meta.path().is_ident("edit"){
                     
 
-                    if let Some(meta_list) = get_list( meta,error::AVAIL_EDIT ) {
+                    if let Some(meta_list) = get_list( meta,Some(error::AVAIL_EDIT) ) {
 
                         for edit_meta in meta_list.iter() {
 
                             if edit_meta.path().is_ident("script"){
     
-                                if let Some(list) = get_list(edit_meta,error::AVAIL_EDIT ){
+                                if let Some(list) = get_list(edit_meta,Some(error::AVAIL_EDIT) ){
 
                                     self.edit.parse_nested(list,true);
 
@@ -439,7 +468,7 @@ impl ActorAttributeArguments {
 
                             else if edit_meta.path().is_ident("live"){
                                 
-                                if let Some(list) = get_list(edit_meta,error::AVAIL_EDIT ){
+                                if let Some(list) = get_list(edit_meta,Some(error::AVAIL_EDIT) ){
 
                                     self.edit.parse_nested(list,false);
 
@@ -467,17 +496,57 @@ impl ActorAttributeArguments {
 
                 }
 
-                // ID
-                else if meta.path().is_ident("id"){
-                    match meta {
-                        syn::Meta::Path(_) => { self.id = true; },
-                        _ => {
-                            match get_lit(meta) {
-                                syn::Lit::Bool(val) => { self.id = val.value(); },
-                                v => abort!(v, error::error_name_type( &ident, "bool"); help=error::AVAIL_ACTOR ),
+                // DEBUT
+
+                /*
+                
+                #[actor( channel=0, debut(legend(path="src")) )]
+                AVAIL_DEBUT
+                 */
+                else if meta.path().is_ident("debut"){
+
+                    if let Some(meta_list) = get_list( meta,Some(error::AVAIL_DEBUT) ) {
+
+                        for m in meta_list {
+                            if m.path().is_ident("legend"){
+                                if let Some(meta_list) = get_list( meta,Some(error::AVAIL_DEBUT) ) {
+                                    for m in meta_list{
+
+                                        if m.path().is_ident("path"){
+
+                                            match get_lit(&m) {
+                                                syn::Lit::Str(val) => {
+                                                    let path_str = val.value();
+                                                    todo!()
+                                                },
+                                                _ => { abort!(m, error::error_name_type( &ident, "bool"); help=error::AVAIL_ACTOR ) },
+                                            }
+                                        } else {
+                                            let msg = "Unknown option for argument 'debut'.";
+                                            abort!(m,msg;help=error::AVAIL_DEBUT);
+                                        }
+                                    }
+                                } else { self.debut.legend = Some(true); }  
+                            } else {
+                                let msg = "Unknown option for argument 'debut'.";
+                                abort!(m,msg;help=error::AVAIL_DEBUT);
                             }
                         }
-                    }
+                    } else {  self.debut.legend = Some(false);  }
+
+
+                    // match meta {
+                    //     syn::Meta::Path(_) => { self.debut.legend = Some(false); },
+                    //     syn::Meta::List(_)=> {
+                    //         if meta_list.
+                    //     },
+                    //     _ => {
+                    //         match get_lit(meta) {
+                    //             syn::Lit::Bool(val) => { self.id = val.value(); },
+                    //             v => abort!(v, error::error_name_type( &ident, "bool"); help=error::AVAIL_ACTOR ),
+                    //         }
+                    //     }
+                    // }
                 }
 
                 // FILE
@@ -511,6 +580,12 @@ impl ActorAttributeArguments {
                     }
                 }
 
+                else if meta.path().is_ident("id"){ 
+                    // error "id" is "debut" since v2.0.0
+                    abort!(ident, error::OLD_ARG_ID);
+                }
+
+
                 // UNKNOWN ARGUMENT
                 else {
                     error::unknown_attr_arg("actor",&ident )
@@ -537,15 +612,211 @@ impl ActorAttributeArguments {
 } 
 
 
-pub fn get_list(meta: & syn::Meta, help: &str) -> Option<syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>> {
+
+
+// GROUP ARGUMENTS 
+pub struct  AGEdit {
+    pub script:( bool, Option<Vec<syn::Ident>>, Option<Vec<syn::Ident>> ),
+    pub live:  ( bool, Option<Vec<syn::Ident>>, Option<Vec<syn::Ident>> ),
+    pub groupart: Option<Vec< (syn::Ident, AAEdit)>>,
+}
+
+impl AGEdit {
+
+    pub fn set_live_all(&mut self){
+        self.live = (true,Some(Vec::new()),Some(Vec::new()));
+    }
+
+    pub fn set_script_all (&mut self){
+        self.script = (true,Some(Vec::new()),Some(Vec::new()));
+    }
+
+    pub fn set_groupart_all (&mut self){
+        self.groupart = Some(Vec::new());
+    }
+    
+    pub fn is_all(&self) -> bool {
+        let empty = Some(Vec::new());
+        let empty_g = Some(Vec::<(syn::Ident, AAEdit)>::new());
+        self.live.0 == true  && self.script.0 == true  &&
+        self.live.1 == empty && self.script.1 == empty &&
+        self.live.2 == empty && self.script.1 == empty &&
+        self.groupart == empty_g
+    } 
+
+    pub fn is_none(&self) -> bool {
+
+        self.live.0 == false && self.script.0 == false &&
+        self.live.1 == None  && self.script.1 == None  &&
+        self.live.2 == None  && self.script.2 == None  &&
+        self.groupart == None
+    }  
+
+}
+
+impl Default for AGEdit {
+
+    fn default() -> Self {
+        let script  = (false,None,None);
+        let live    = (false,None,None);
+        let groupart = None;
+        Self { script, live, groupart }
+    } 
+}
+
+
+pub struct GroupAttributeArguments {
+
+    pub name    :  Option<syn::Ident>,
+    pub lib     :  AALib,
+    pub assoc   :  bool,
+    pub channel :  AAChannel,
+ 
+}
+
+
+
+impl GroupAttributeArguments {
+
+    pub fn parse_nested(&mut self, nested: Punctuated::<syn::Meta,syn::Token![,]>) {
+        for meta in nested.iter(){
+
+            if let Some(ident) = get_ident(meta) {
+
+                // NAME
+                if meta.path().is_ident("name"){
+
+                    match get_lit(meta) {
+                        syn::Lit::Str(val) => {  
+                            let str_name = val.value();
+
+                            if str_name == "".to_string() {
+                                abort!(&ident,"Attribute field 'name' is empty. Enter a name.") 
+                            }
+                            else {
+                                self.name = Some(format_ident!("{}",val.value()));
+                            } 
+                        },
+                        v => abort!(v, error::error_name_type( &ident, "str"); help=error::AVAIL_ACTOR ),
+                    }
+                }
+
+
+                // LIB
+                else if meta.path().is_ident("lib"){
+
+                    match get_lit(meta) {
+                        syn::Lit::Str(val) => {
+
+                            self.lib = AALib::from(&val);
+                        },
+                        v => abort!(v, error::error_name_type( &ident, "str"); help=error::AVAIL_ACTOR ),
+                    }
+                }
+
+                // ASSOC
+                else if meta.path().is_ident("assoc"){
+
+                    match meta {
+                        syn::Meta::Path(_) => { self.assoc = true; },
+                        _ => {
+                            match get_lit(meta) {
+                                syn::Lit::Bool(val) => { self.assoc = val.value(); },
+                                v => abort!(v, error::error_name_type( &ident, "bool"); help=error::AVAIL_ACTOR ),
+                            }
+                        },
+                    }
+                }
+
+
+                // CHANNEL
+                else if meta.path().is_ident("channel"){
+
+                    match get_lit(meta) {
+                        syn::Lit::Int(val) => { 
+                            let value = to_usize(&val);
+                            if value > 0 {
+                                self.channel = AAChannel::Buffer(val.clone());
+                            }
+                        },
+                        v => abort!(v, error::error_name_type( &ident, "Int (usize)"),; help=error::AVAIL_ACTOR ),
+                    }
+                }
+
+                // FILE
+                else if meta.path().is_ident("file") {
+                    let value = get_lit(meta);
+
+                    match value.clone() {
+                        syn::Lit::Str(val) => {
+
+                            // the path needs to be checked first 
+                            let path = std::path::PathBuf::from(val.value());
+
+                            if path.exists() {
+                                // one only check 
+                                match crate::file::macro_file_count(&path) {
+                                    Ok((attr,attrs)) => {
+                                        // self.file = Some(AAFile {
+                                        //                             path: path.clone(),
+                                        //                             attr,
+                                        //                             attrs });
+                                    },
+                                    Err(e) => { abort!(value,e); },
+                                }
+                            }
+                            else {
+                                abort!(val, format!("Path - {:?} does not exists.",val.value())); 
+                            } 
+                        },
+                        _ => { abort!(value, error::error_name_type( &ident, "str"); help=error::AVAIL_ACTOR ) },
+                    }
+                }
+            } else { 
+                abort!(meta,"Unknown configuration option!"; help=error::AVAIL_ACTOR); 
+            }
+        }
+    }
+}
+
+
+impl Default for GroupAttributeArguments {
+
+    fn default() -> GroupAttributeArguments {
+
+        Self { 
+            name   : None,
+            lib    : AALib::default(),
+            assoc  : false,
+            channel: AAChannel::default(),
+            // edit   : AAEdit::default(),
+            // debut  : AADebut::default(),
+            // file   : None,
+            /* ADD NEW ATTRIBUTE */
+        }  
+    }
+}
+
+
+
+// impl Attribute for GroupAttributeArguments {}
+// impl Attribute for ActorAttributeArguments {}
+
+// pub trait Attribute{}
+
+pub fn get_list(meta: & syn::Meta, help: Option<&str>) -> Option<Punctuated::<syn::Meta,syn::Token![,]>> {
     match meta {
         syn::Meta::Path(_) => { None },
         syn::Meta::List(meta_list) => { 
             let list = 
-            meta_list.parse_args_with(syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated).unwrap();
+            meta_list.parse_args_with(Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated).unwrap();
             Some(list) 
         },
-        syn::Meta::NameValue(_) => { abort!(meta,"Expected a list!"; help=help) },
+        syn::Meta::NameValue(_) => { 
+            if let Some(help) = help {
+                abort!(meta,"Expected a list!"; help=help) 
+            } else { None }
+        },
     }
 }
 

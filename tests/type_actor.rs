@@ -206,7 +206,7 @@ fn self_word_in_arg_type() {
 #[test]
 fn id_actor_sync_inter(){
     pub struct Actor(i8);
-    #[life(id=true)]
+    #[life(debut)]
     impl Actor {
         pub fn new() -> Self{Self(0)}
         pub fn input(&mut self, v:i8){self.0 = v}
@@ -317,7 +317,7 @@ fn id_actor_sync_inter(){
 #[test]
 fn id_actor_sync_bounded() {
     pub struct Actor(u8);
-    #[life(channel=3,id=true)]
+    #[life(channel=3,debut)]
     impl Actor {
         pub fn new(v:u8) -> Self{Self(v)}
     }
@@ -422,7 +422,7 @@ fn id_actor_sync_bounded() {
 #[test]
 fn id_actor_tokio_bounded() {
     pub struct Actor(i8);
-    #[life(channel=3,lib="tokio",id=true)]
+    #[life(channel=3,lib="tokio",debut)]
     impl Actor {
         pub fn new() -> Self{Self(0)}
         pub fn input(&mut self, v:i8){self.0 = v}

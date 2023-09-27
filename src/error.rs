@@ -211,6 +211,20 @@ a statement just `edit` implies `edit(live,script)` !
 ";
 
 
+pub static AVAIL_DEBUT: &'static str = "
+\navailable 'debut' options:
+    debut
+        (
+        legend
+             (
+              path='..'  
+             )
+        )
+    
+    When employing the `legend` option without providing a tuple list \
+    with a path in it like `debut(legend)` the model will be saved on the heap.
+";
+
 pub static AVAIL_ACTOR: &'static str = "
 #[interthread::actor( 
     
@@ -233,8 +247,11 @@ pub static AVAIL_ACTOR: &'static str = "
         assoc = false *
                  true
         
-        id    = false *
-                 true
+        debut 
+             (
+              legend(..)
+             )  
+            
     )
 ]
 
@@ -242,9 +259,9 @@ pub static AVAIL_ACTOR: &'static str = "
 ";
 
 
-pub fn live_send_recv(cust_name: &syn::Ident, ) -> (TokenStream, TokenStream){
+pub fn live_send_recv(live_name:&syn::Ident ) -> (TokenStream, TokenStream){
 
-    let live_name  = &name::live(cust_name);
+    // let live_name  = &name::live(cust_name);
     let send_msg = format!("'{live_name}::method.send'. Channel is closed!");
     let recv_msg = format!("'{live_name}::method.recv'. Channel is closed!");
     (quote!{#send_msg},quote!{#recv_msg})
@@ -320,3 +337,8 @@ pub static OLD_PLAY_ARG: &'static str = "
 pub fn old_file_arg( path: String ) -> String {
     format!( "Since v1.0.0 `file` argument is not aplicable. Use `path= \"{}\"` instead!", &path )
 }
+
+// v.2.0.0
+pub static OLD_ARG_ID: &'static str = "
+    Since v2.0.0 `id` argument is not aplicable. Use `debut` instead!
+";

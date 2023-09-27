@@ -108,7 +108,8 @@ fn find_file( index: usize, s: &str, attr: &Attribute) -> (usize,usize) {
     
 
     // find file arg
-    let idents = get_idents(attr);
+    let nested = crate::file::to_nested(attr);
+    let idents = get_idents(&nested);
     let file_ident = quote::format_ident!("file");
 
     if let Some(pos) = idents.iter().position(|x| file_ident.eq(x)){

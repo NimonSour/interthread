@@ -3,7 +3,7 @@ use tokio::sync::oneshot::Sender;
 use std::sync::{Arc,Mutex};
 pub struct MyActor(Arc<Mutex<u32>>);
 // we use argument `id`
-#[interthread::actor(channel=2,lib="tokio",id=true)] 
+#[interthread::actor(channel=2,lib="tokio",debut)] 
 impl MyActor {
 
     pub fn new() -> Self {Self(Arc::new(Mutex::new(0)))}

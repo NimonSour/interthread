@@ -1,7 +1,9 @@
 
 use quote::format_ident;
-// use crate::attribute::AAExpand;
+use syn::Ident;
 use proc_macro_error::abort;
+
+use crate::attribute::AAExpand;
 
 pub fn get_ident_type_generics(item_impl: &syn::ItemImpl) -> (syn::Ident,syn::Type,syn::Generics) {
 
@@ -27,20 +29,54 @@ pub fn get_ident_type_generics(item_impl: &syn::ItemImpl) -> (syn::Ident,syn::Ty
     // }
 }
 
-
-pub fn script(name: &syn::Ident) -> syn::Ident{
+// Actor
+pub fn script(name: &Ident) -> Ident{
     let new_name = name.to_string() + "Script";
     format_ident!("{}",new_name)
 }
-pub fn script_field(name: &syn::Ident) -> syn::Ident{
+
+pub fn live(name: &Ident) -> Ident{
+    let new_name = name.to_string() + "Live";
+    format_ident!("{}",new_name)
+}
+
+pub fn script_field(name: &Ident) -> Ident{
     let new_name = fn_to_struct(&name.to_string());
     format_ident!("{}",new_name)
 }
 
-pub fn live(name: &syn::Ident) -> syn::Ident{
-    let new_name = name.to_string() + "Live";
+// ActorGroup
+pub fn group_script(name: &Ident) -> Ident{
+    let new_name = name.to_string() + "GroupScript";
     format_ident!("{}",new_name)
 }
+
+pub fn group_live(name: &Ident) -> Ident{
+    let new_name = name.to_string() + "GroupLive";
+    format_ident!("{}",new_name)
+}
+
+// GroupActor
+pub fn script_group(name: &Ident) -> Ident{
+    let new_name = name.to_string() + "ScriptGroup";
+    format_ident!("{}",new_name)
+}
+
+pub fn live_group(name: &Ident) -> Ident{
+    let new_name = name.to_string() + "LiveGroup";
+    format_ident!("{}",new_name)
+}
+
+
+
+pub fn get_actor_names(name: &Ident, mac: &AAExpand) -> ( Ident, Ident ){
+
+    match mac {
+        AAExpand::Actor => ( script(name), live(name) ),
+        AAExpand::Group => ( script_group(name), script_group(name) ),
+    }
+}
+
 
 fn fn_to_struct(input: &str) -> String {
 

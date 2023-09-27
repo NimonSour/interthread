@@ -1,12 +1,12 @@
-use crate::attribute::{ActorAttributeArguments,AALib,AAChannel,AAExpand};
+use crate::attribute::{ActorAttributeArguments,AALib,AAExpand};
 use crate::name;
 use crate::method;
 use crate::error;
 use crate::generics;
+use crate::model;
 
 use proc_macro_error::abort;
-use std::boxed::Box;
-use syn::{Ident,Signature,ItemImpl,Type,Visibility };
+use syn::{Ident,Signature,ItemImpl,Visibility };
 use quote::{quote,format_ident};
 use proc_macro2::TokenStream;
 
@@ -30,7 +30,8 @@ pub fn live_static_method(
 
 
 // returns  (code,edit) TokenStreams 
-pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item_impl: ItemImpl, mac: &AAExpand, mut new_vis: Option<Visibility> ) -> (TokenStream, TokenStream){
+pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: AAExpand, mut new_vis: Option<Visibility> ) 
+->  crate::model::ActorModelSdpl{ //(TokenStream, TokenStream){
     
     let mut script_def;
     let mut script_mets = vec![];
@@ -48,7 +49,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item_impl: ItemI
 
     let (actor_name,
         actor_type,
-        generics) = name::get_ident_type_generics(&item_impl);
+        generics) = name::get_ident_type_generics(item_impl);
     
 
 
@@ -96,7 +97,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item_impl: ItemI
         live_meth_send_recv, 
         script_field_output, 
         live_send_input,
-        live_recv_output ) = channels( &aaa.lib, &aaa.channel, &cust_name, &ty_generics);
+        live_recv_output ) = model::channels( &aaa.lib, &aaa.channel, &script_name,&live_name, &ty_generics);
 
 
     
@@ -309,14 +310,13 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item_impl: ItemI
 
     // METHOD NEW
 
-    if AAExpand::Actor.eq(mac) { 
+    if AAExpand::Actor.eq(&mac) { 
 
         if met_new.is_none() {
 
             let msg = format!("Can not find public/restricted  method `new` or `try_new` for {:?} object.",actor_name.to_string());
             let (note,help) = error::met_new_note_help(&actor_name);
             abort!(item_impl,msg;note=note;help=help);
-
         }
         
         // Change visibility of model methods 
@@ -349,14 +349,14 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item_impl: ItemI
         };
 
         let (init_actor, play_args) = {
-            let id_debut_name = if aaa.id {quote!{ ,debut,name}} else {quote!{}};
+            let id_debut_name = if aaa.debut.active() {quote!{ ,debut,name}} else {quote!{}};
             ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, actor } )
         };
 
         let spawn = live_new_spawn(play_args);
         let turbofish = ty_generics.as_turbofish();
         let (id_debut,id_name)  =  
-        if aaa.id {
+        if aaa.debut.active() {
             (quote!{let debut =  #script_name #turbofish ::debut();},
                 quote!{let name  = String::from("");})
         } else { (quote!{}, quote!{}) };
@@ -377,98 +377,18 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item_impl: ItemI
     };
 
     // LIVE INTER METHODS AND TRAITS
-    if aaa.id {
-
-        live_mets.push((format_ident!("inter_get_debut"),
-        quote!{
-            #new_vis fn inter_get_debut(&self) -> std::time::SystemTime {
-                *self.debut
-            }
-        }));
-        
-        live_mets.push((format_ident!("inter_get_count"),
-        quote!{
-            #new_vis fn inter_get_count(&self) -> usize {
-                std::sync::Arc::strong_count(&self.debut)
-            }
-        }));
-
-        live_mets.push((format_ident!("inter_set_name"),
-        quote!{
-            #new_vis fn inter_set_name<Name: std::string::ToString>(&mut self, name: Name) {
-                self.name = name.to_string();
-            }
-        }));
-
-
-        live_mets.push((format_ident!("inter_get_name"),
-        quote!{    
-            #new_vis fn inter_get_name(&self) -> &str {
-                &self.name
-            } 
-        }));
-
-        // we need this function to return as much an id as it is possible
-        // the model will build some options on top of this "id"
-        // it MUST be unique 
-        script_mets.push((format_ident!("debut"),
-        quote!{
-
-            pub fn debut ()-> std::sync::Arc<std::time::SystemTime> {
-                static LAST: std::sync::Mutex<std::time::SystemTime> = std::sync::Mutex::new(std::time::SystemTime::UNIX_EPOCH);
-        
-                let mut last_time = LAST.lock().unwrap();
-                let mut next_time = std::time::SystemTime::now();
-        
-                // we check for 'drift'
-                // as described in docs 
-                while !(*last_time < next_time)  {
-                    // in case if they are just equal
-                    // add a nano but don't break the loop yet
-                    if *last_time == next_time {
-                        next_time += std::time::Duration::new(0, 1);
-                    } else {
-                        next_time = std::time::SystemTime::now();
-                    }
-                }
-                // update LAST 
-                *last_time = next_time.clone();
-                std::sync::Arc::new(next_time)
-            }
-        }));
-        
-        live_trts.push((format_ident!("PartialEq"),
-        quote!{
-            impl #ty_generics PartialEq for #live_name #ty_generics #where_clause{
-                fn eq(&self, other: &Self) -> bool {
-                    *self.debut == *other.debut
-                }
-            }
-        }));
-
-        live_trts.push((format_ident!("Eq"),
-        quote!{
-            impl #ty_generics Eq for #live_name #ty_generics #where_clause {}
-        }));  
-
-        live_trts.push((format_ident!("PartialOrd"),
-        quote!{
-            impl #ty_generics PartialOrd for #live_name #ty_generics #where_clause{
-                fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-                    other.debut.partial_cmp(&self.debut)
-                }
-            }
-        }));   
-
-        live_trts.push((format_ident!("Ord"),
-        quote!{
-            impl #ty_generics Ord for #live_name #ty_generics #where_clause {
-                fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-                    other.debut.cmp(&self.debut)
-                }
-            }
-        }));  
-    } 
+    // model::debut()
+    if aaa.debut.active(){
+        model::debut(
+            &mut live_mets,
+            &mut live_trts,
+            &mut script_mets,
+            &live_name,
+            &new_vis,
+            &ty_generics,
+            &where_clause
+        )
+    }
 
     // SCRIPT DEFINITION
     script_def = {
@@ -543,7 +463,7 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item_impl: ItemI
 
     // LIVE DEFINITION
     live_def = {
-        let (debut_field, name_field) = if aaa.id {
+        let (debut_field, name_field) = if aaa.debut.active() {
             ( quote!{ pub debut: std::sync::Arc<std::time::SystemTime>,},
             quote!{ pub name: String,} )
         } else { (quote!{}, quote!{})};   
@@ -557,254 +477,48 @@ pub fn actor_macro_generate_code( aaa: ActorAttributeArguments, item_impl: ItemI
             }
         }
     };
-
-    // Create and Select Edit Parts
-
-    let mut edit_script_def   = quote!{};
-    let edit_script_mets ;
-    let edit_script_trts ;
-
-    let mut edit_live_def  = quote!{};
-    let edit_live_mets ;
-    let edit_live_trts ;
-
-
-    match aaa.edit {
-
-        crate::attribute::AAEdit  { live, script } => {
-            match script {
-
-                ( def , mets, trts) => {
-                    if def {
-                        edit_script_def = script_def.clone();
-                        script_def      = quote!{}; 
-                    }
-                    edit_script_mets = edit_select(mets,&mut script_mets);
-                    edit_script_trts = edit_select(trts,&mut script_trts);
-                },
-            }
-
-            match live {
-
-                ( def , mets, trts) => {
-                    if def {
-                        edit_live_def = live_def.clone();
-                        live_def      = quote!{}; 
-                    }
-                    edit_live_mets = edit_select(mets,&mut live_mets);
-                    edit_live_trts = edit_select(trts,&mut live_trts);
-                },
-            }
-        }
-    }
-
-    // Prepare Token Stream Vecs
-    let script_methods = script_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-    let script_traits  = script_trts.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-    let live_methods   = live_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-    let live_traits    = live_trts.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
     
+    if AAExpand::Group.eq(&mac){
+        //we have to extract play from the model
+        // ???
+        let play = format_ident!("play");
 
-    let res_code = quote! {
+    }
+    crate::model::ActorModelSdpl {
+        name:          cust_name,
+        mac:         mac.clone(),
+        edit:           aaa.edit,
+        generics: model_generics,
+        script: ( script_def, script_mets, script_trts ),
+        live:   (   live_def,   live_mets,   live_trts ),
+    }
+}
+
+pub fn macro_actor_generate_code(
+        aaa: ActorAttributeArguments, 
+        item_impl: ItemImpl ) 
+        -> ( TokenStream, TokenStream ) {
+
+
+    let mut act_model = actor_model( aaa,&item_impl,AAExpand::Actor,None);
+
+    let (mut code,edit) = act_model.split_edit();
+    
+    // abort!(item_impl,code.to_string());
+    
+    code = quote!{
 
         #item_impl
-
-        #script_def
-        impl #impl_generics #script_name #ty_generics #where_clause {
-            #(#script_methods)*
-        }
-        #(#script_traits)*
-
-        #live_def
-        impl #impl_generics #live_name #ty_generics #where_clause {
-            #(#live_methods)*
-        }
-        #(#live_traits)*
-
+        #code
     };
-
-
-    let res_edit_script_mets =  
-    if  edit_script_mets.is_empty() { quote!{} }
-    else { quote!{ 
-        impl #impl_generics #script_name #ty_generics #where_clause {
-            #(#edit_script_mets)* 
-        }
-    }};
-
-    let res_edit_script_trts =  
-    if  edit_script_trts.is_empty() { quote!{} }
-    else { quote!{ #(#edit_script_trts)* }};
-
-    let res_edit_live_mets =  
-    if  edit_live_mets.is_empty() { quote!{} }
-    else { quote!{ 
-        impl #impl_generics #live_name #ty_generics #where_clause { 
-            #(#edit_live_mets)* 
-        }
-    }};
-
-    let res_edit_live_trts =  
-    if  edit_live_trts.is_empty() { quote!{} }
-    else { quote!{ #(#edit_live_trts)* }};
-
-
-    let res_edit = quote!{
-
-        #edit_script_def
-        #res_edit_script_mets
-        #res_edit_script_trts
-
-        #edit_live_def
-        #res_edit_live_mets
-        #res_edit_live_trts
-    };
-
-    (res_code, res_edit)
-
+    (code,edit)
+    
 }
 
 
 
-pub fn edit_select(edit_idents: Option<Vec<Ident>>, 
-                    ident_mets: &mut Vec<(Ident,TokenStream)> ) -> Vec<TokenStream> {
-
-    let mut res = Vec::new();
-
-    if let Some(idents) = edit_idents { 
-
-        if idents.is_empty() {
-            res = ident_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-            ident_mets.clear();
-        }
-
-        for ident in idents {
-            if let Some(pos) = ident_mets.iter().position(|x| x.0 == ident){
-                let (_,trt)  = ident_mets.remove(pos);
-                res.push(trt);
-            } else {
-                let msg = format!("No method named `{}` in Actor's methods.",ident.to_string());
-                abort!(ident,msg);
-            }
-        }
-    } 
-    res
-}
 
 
-pub fn channels( lib: &AALib,
-             channel: &AAChannel,
-           cust_name: &Ident,
-            generics: &syn::TypeGenerics<'_>) -> ( 
-                                    TokenStream,
-                                    TokenStream,
-                                    TokenStream,
-                                    TokenStream,
-                                    Box<dyn Fn(Box<Type>) -> TokenStream>,
-                                    TokenStream,
-                                    TokenStream ){
-
-    let live_field_sender:   TokenStream;
-    let play_input_receiver: TokenStream;
-    let new_live_send_recv:  TokenStream;
-                            
-    let type_ident = &name::script(cust_name);
-    let (error_live_send,error_live_recv) = error::live_send_recv(cust_name);
-    
-    let mut live_meth_send_recv = 
-        quote!{ let ( send, recv ) = oneshot::channel(); };
-
-    let mut script_field_output: Box<dyn Fn(Box<Type>) -> TokenStream> =
-        Box::new(|out_type: Box<Type>|quote!{ output: oneshot::Sender<#out_type>, }); 
-    
-    let mut live_send_input: TokenStream =
-        quote!{let _ = self.sender.send(msg).await;};
-
-
-    let mut live_recv_output: TokenStream = 
-        quote!{ recv.await.expect(#error_live_recv)};
-
-    match  channel {
-
-        AAChannel::Unbounded    => {
-
-            match  lib { 
-
-                AALib::Std      => {
-                    live_field_sender   = quote!{ sender: std::sync::mpsc::Sender<#type_ident #generics>, };   
-                    play_input_receiver = quote!{ receiver: std::sync::mpsc::Receiver<#type_ident #generics>, }; 
-                    new_live_send_recv  = quote!{ let ( sender, receiver ) = std::sync::mpsc::channel(); };
-                    live_send_input     = quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
-                    live_recv_output    = quote!{ recv.recv().expect(#error_live_recv)};
-                },
-
-                AALib::Tokio    => {
-                    live_field_sender   = quote!{ sender: tokio::sync::mpsc::UnboundedSender<#type_ident #generics>, };
-                    play_input_receiver = quote!{ mut receiver: tokio::sync::mpsc::UnboundedReceiver<#type_ident #generics>, }; 
-                    new_live_send_recv  = quote!{ let ( sender, receiver ) = tokio::sync::mpsc::unbounded_channel(); }; 
-                    live_meth_send_recv = quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
-                    script_field_output = Box::new(|out_type: Box<Type>|quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
-                    live_send_input     = quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
-                },
-
-                AALib::AsyncStd  => {
-                    live_field_sender   = quote!{ sender: async_std::channel::Sender<#type_ident #generics>, };
-                    play_input_receiver = quote!{ receiver: async_std::channel::Receiver<#type_ident #generics>, };
-                    new_live_send_recv  = quote!{ let ( sender, receiver ) = async_std::channel::unbounded(); };                    
-                },
-
-                AALib::Smol      => {
-                    live_field_sender   = quote!{ sender: async_channel::Sender<#type_ident #generics>, };
-                    play_input_receiver = quote!{ receiver: async_channel::Receiver<#type_ident #generics>, };
-                    new_live_send_recv  = quote!{ let ( sender, receiver ) =  async_channel::unbounded(); }; 
-                },
-            }
-        },
-        AAChannel::Buffer(val)  => {
-
-            match  lib { 
-
-                AALib::Std      => {
-                    live_field_sender   = quote!{ sender: std::sync::mpsc::SyncSender<#type_ident #generics>, };
-                    play_input_receiver = quote!{ receiver: std::sync::mpsc::Receiver<#type_ident #generics>, };
-                    new_live_send_recv  = quote!{ let ( sender, receiver ) = std::sync::mpsc::sync_channel(#val); };
-                    live_send_input     = quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
-                    live_recv_output    = quote!{ recv.recv().expect(#error_live_recv)};
-                },
-                AALib::Tokio    => {
-                    live_field_sender   = quote!{ sender: tokio::sync::mpsc::Sender<#type_ident #generics>, };
-                    play_input_receiver = quote!{ mut receiver: tokio::sync::mpsc::Receiver<#type_ident #generics>, };
-                    new_live_send_recv  = quote!{ let ( sender, receiver ) = tokio::sync::mpsc::channel(#val); }; 
-                    live_meth_send_recv = quote!{ let ( send, recv ) = tokio::sync::oneshot::channel(); };
-                    script_field_output = Box::new(|out_type: Box<Type>|quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
-                },
-
-                AALib::AsyncStd  => {
-                    live_field_sender   = quote!{ sender: async_std::channel::Sender<#type_ident #generics>, };
-                    play_input_receiver = quote!{ receiver: async_std::channel::Receiver<#type_ident #generics>, };
-                    new_live_send_recv  = quote!{ let ( sender, receiver ) = async_std::channel::bounded(#val); };
-                },
-
-                AALib::Smol      => {
-                    live_field_sender   = quote!{ sender: async_channel::Sender<#type_ident #generics>, };
-                    play_input_receiver = quote!{ receiver: async_channel::Receiver<#type_ident #generics>, };
-                    new_live_send_recv  = quote!{ let ( sender, receiver ) = async_channel::bounded(#val); };
-                },
-            }
-        },
-    }
-
-    
-    (
-        live_field_sender,
-        play_input_receiver, 
-        new_live_send_recv , 
-        live_meth_send_recv, 
-        script_field_output, 
-        live_send_input,
-        live_recv_output,
-    )
-}
 
 
 

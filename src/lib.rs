@@ -414,13 +414,15 @@ mod attribute;
 mod use_macro;
 mod show;
 mod file;
-mod actor_gen;
+mod gen_actor;
+mod gen_group;
 mod name;
 mod method;
 mod check;
 mod error;
 mod parse;
 mod generics;
+mod model;
 
 static INTERTHREAD: &'static str            = "interthread";
 static INTER_EXAMPLE_DIR_NAME: &'static str = "INTER_EXAMPLE_DIR_NAME";
@@ -1261,7 +1263,7 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     check::channels_import( &aaa.lib );
 
     let (code,edit) = 
-    crate::actor_gen::actor_macro_generate_code( aaa.clone(), item_impl.clone(), &mac ,None);
+    crate::gen_actor::macro_actor_generate_code( aaa.clone(), item_impl.clone());
 
     if let Some( aaf ) = aaa.file {
         parse::edit_write(  &aaf, item_impl, aaa.edit.is_all(), &mac, edit);
@@ -1301,9 +1303,21 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_attribute]
-pub fn group( _attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
-    let msg = "The \"group\" macro is currently under development and is not yet implemented in the `interthread` crate.";
+pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
+
+    // let msg = "The \"group\" macro is currently under development and is not yet implemented in the `interthread` crate.";
+    // proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
+
+    let mac  = attribute::AAExpand::Group;
+    let item_impl = syn::parse_macro_input!(item as syn::ItemImpl);
+
+    let mut gaa = attribute::GroupAttributeArguments::default();
+    let nested  = syn::parse_macro_input!(attr with syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated); 
+    gaa.parse_nested(nested);
+    // aaa.cross_check();
+    let msg = "Nothing yet ";
     proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
+
 }
 
 

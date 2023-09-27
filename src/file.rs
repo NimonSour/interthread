@@ -1,11 +1,12 @@
-use crate::attribute::{AALib,AAExpand,ActorAttributeArguments};
+use crate::attribute::{self,AALib,AAExpand,ActorAttributeArguments,GroupAttributeArguments};
 use crate::use_macro::UseMacro;
-use crate::actor_gen;
+use crate::gen_actor;
+use crate::gen_group;
 
 use proc_macro_error::abort;
 use proc_macro2::Span;
-use syn::{Attribute,Meta,Token};
-use syn::punctuated::Punctuated;
+use syn::{Attribute,Meta,Token,punctuated::Punctuated};
+// use syn::punctuated::Punctuated;
 
 
 pub fn code_to_file(code: proc_macro2::TokenStream ) -> syn::File {
@@ -25,7 +26,7 @@ pub fn get_file( path: &std::path::PathBuf ) -> syn::File {
                 match syn::parse_file(&contents){
                     Ok(file)  => { return file; },
                     Err(_) => {
-                        let msg = format!("Internal Error. 'file::get_file'. Could not parse file {:?}!", path.file_name().unwrap().to_string_lossy());
+                        let msg = format!("Internal Error.'file::get_file'. Could not parse file {:?}!", path.file_name().unwrap().to_string_lossy());
                         abort!( Span::call_site(),msg );
                     },
                 }
@@ -54,18 +55,24 @@ pub fn expand_macros( path: &std::path::PathBuf, macs: &Vec<AAExpand>) -> (syn::
     (file,libr)
 }
 
+
+pub fn to_nested(attr: &Attribute) -> Punctuated::<Meta,Token![,]>{
+    match attr.parse_args_with(Punctuated::<Meta,Token![,]>::parse_terminated){
+        Ok(punct) => punct.clone(),
+        Err(e) =>{
+            let msg = format!("Internal Error.'file::to_nested'. Could not parse the attr. Error: {}",e.to_string());
+            abort!(attr,msg );
+        } 
+    }
+}
 pub fn get_ident( meta: &syn::Meta ) -> Option<syn::Ident>{
     meta.path().get_ident().map(|x| x.clone())
 }
 
-pub fn get_idents( attr: &Attribute ) -> Vec<syn::Ident> {
-    let nested = 
-    attr.parse_args_with(Punctuated::<Meta,Token![,]>::parse_terminated).unwrap();
-    
+pub fn get_idents( nested: &Punctuated::<Meta,Token![,]> ) -> Vec<syn::Ident> {
     nested.into_iter().filter_map(|m|{
-        get_ident(&m)
+        get_ident(m)
     }).collect::<Vec<_>>()
-
 }
 
 
@@ -79,25 +86,41 @@ pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<(Attribute, Vec<A
     let mut loc = Vec::new();
     let file_ident = quote::format_ident!("file");
 
-    let check_file_arg=|attr: &Attribute| -> bool{
-
-        let idents = get_idents(attr);
+    let check_file_arg=|nested: &Punctuated::<Meta,Token![,]>| -> bool{
+        
+        let idents = get_idents(nested);
         if idents.iter().any(|x| file_ident.eq(x)) {
             return true;
         }
         false
     };
 
+
     for item  in file.items {
+
         match item {
 
             syn::Item::Impl( item_impl) => {
                 for attr in &item_impl.attrs.clone() {
+
                     if use_macro_actor.is(attr){
-                        if check_file_arg(attr){
+                        let nested = to_nested(attr);
+                        if check_file_arg(&nested){
                             loc.push((attr.clone(),item_impl.attrs.clone()));
                         }
                     }
+
+                    else if use_macro_actor.is(attr){
+                        let first_nested = to_nested(attr);
+                        let second_nested = 
+                        first_nested.iter().filter_map(|m| crate::attribute::get_list(m,None));
+                        for nested in second_nested {
+                            if check_file_arg(&nested){
+                                loc.push((attr.clone(),item_impl.attrs.clone()));
+                                break;
+                            }
+                        }
+                    } 
                 }
             },
 
@@ -147,15 +170,26 @@ pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<(Attribute, Vec<A
 }
 
 
-pub fn get_aaa( attr: Attribute ) -> ActorAttributeArguments {
+pub fn get_aaa( attr: Attribute, mac: &AAExpand ) -> ActorAttributeArguments {
     let mut aaa = ActorAttributeArguments::default();
-    
+
     if let syn::Meta::List(_) = attr.meta{
         let nested = 
         attr.parse_args_with(Punctuated::<Meta,Token![,]>::parse_terminated).unwrap();
         aaa.parse_nested(nested);
     }
     aaa
+}
+
+pub fn get_gaa( attr: Attribute, mac: &AAExpand ) -> GroupAttributeArguments {
+    let mut gaa = GroupAttributeArguments::default();
+
+    if let syn::Meta::List(_) = attr.meta{
+        let nested = 
+        attr.parse_args_with(Punctuated::<Meta,Token![,]>::parse_terminated).unwrap();
+        gaa.parse_nested(nested);
+    }
+    gaa
 }
 
 pub fn expand_macro( mut file: syn::File, mac: &AAExpand  ) -> (syn::File, AALib){ 
@@ -175,9 +209,9 @@ pub fn expand_macro( mut file: syn::File, mac: &AAExpand  ) -> (syn::File, AALib
 
                     for attr in &item_impl.attrs.clone() {
                         if use_macro.is(attr){
-                            let aaa = get_aaa( attr.clone());
+                            // let aaa = get_aaa( attr.clone(),mac);
                             // get lib 
-                            lib = aaa.lib.clone();
+                            // lib = aaa.lib.clone();
                             // exclude self macro 
                             // use_macro.exclude_self_macro(item);
                             // let attrs = item_impl.attrs.clone();
@@ -185,9 +219,22 @@ pub fn expand_macro( mut file: syn::File, mac: &AAExpand  ) -> (syn::File, AALib
                             // generate code
                             item_impl.attrs = use_macro.exclude(&item_impl.attrs.clone());
                             // let _ = std::mem::replace(&mut item_impl.attrs, use_macro.exclude(&(item_impl.attrs.clone()))); 
+
+
                             // generate code
                             let (code,_) = 
-                            actor_gen::actor_macro_generate_code( aaa, item_impl.clone(), &mac,None );
+                                match &mac {
+                                    AAExpand::Actor => { 
+                                        let aaa = get_aaa( attr.clone(),mac);
+                                        lib = aaa.lib.clone();
+                                        gen_actor::macro_actor_generate_code( aaa, item_impl.clone()) 
+                                    },
+                                    AAExpand::Group => { 
+                                        let gaa = get_gaa( attr.clone(),mac);
+                                        lib = gaa.lib.clone();
+                                        gen_group::macro_group_generate_code( gaa, item_impl.clone()) },
+                                };
+
 
                             let f = code_to_file(code);
                             new_items_file.push(f.items);
