@@ -32,7 +32,7 @@ impl ActorModelSdpl {
 
 
         let (script,live) = 
-        match &self.edit { crate::attribute::AAEdit{ script, live,..  } => {(script.clone(),live.clone())}};
+        match &self.edit { crate::attribute::AAEdit{ script, live, ..  } => {(script.clone(),live.clone())}};
         
         let diff = 
         | ((def,scope_def),mets,trts): ( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ),

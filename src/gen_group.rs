@@ -45,8 +45,11 @@ pub struct AaBbCc {
 */
 
 
-pub fn group_model( ){
+pub fn group_model( gaa: GroupAttributeArguments, 
+                    item_impl: &ItemImpl ) {
+
     
+
 }
 
 pub fn macro_group_generate_code(
