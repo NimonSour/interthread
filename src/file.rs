@@ -1,4 +1,4 @@
-use crate::attribute::{self,AALib,AAExpand,ActorAttributeArguments,GroupAttributeArguments};
+use crate::attribute::{self,AALib,AAExpand,ActorAttributeArguments,GroupAttributeArguments,EditAttribute};
 use crate::use_macro::UseMacro;
 use crate::gen_actor;
 use crate::gen_group;
@@ -75,8 +75,69 @@ pub fn get_idents( nested: &Punctuated::<Meta,Token![,]> ) -> Vec<syn::Ident> {
     }).collect::<Vec<_>>()
 }
 
+/*
+we have to look up for 'file' 
+options active 
 
-pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<(Attribute, Vec<Attribute>),String> {
+file = "path/to/file.rs"   in first nest not included
+
+may be to have a list of arguments that suppport 'file' active 
+
+let active_list = ["edit","web"];
+
+then find if there is a option 
+
+*/
+
+pub fn clean_active_file_from( meta: &mut Meta ){
+
+    if let Some(mut meta_list) = crate::attribute::get_list(&meta,None){
+        if let Some(new_list)  = crate::attribute::filter_file(&meta_list){ 
+            if new_list.is_empty() {
+
+                // if let Some(ident)  = meta.path().get_ident(){
+                //     let new_meta: syn::Meta = syn::parse_quote!(#ident);
+                //     *meta = new_meta;
+                // }
+                let path = meta.path();
+                *meta = syn::parse_quote!(#path);
+                return;
+            } else {
+                meta_list = new_list;
+            }
+        }
+        for m in meta_list.iter_mut() {
+            clean_active_file_from(m);
+        }
+
+        // let new_meta: syn::Meta = syn::parse_quote!(#meta_list);
+        let path = meta.path();
+        let meta_list: syn::MetaList = syn::parse_quote!{#path(#meta_list)};
+        // abort!(Span::call_site(),"Before MetaList");
+
+        *meta = syn::Meta::List(meta_list);
+    }
+}
+
+
+
+pub fn attr_file_clean( attr: &syn::Attribute ) -> syn::Attribute  {
+
+    let mut attr = attr.clone();
+    if let Some(mut list) = crate::attribute::get_list(&attr.meta,None){
+        for meta in list.iter_mut() {
+            if meta.path().is_ident("edit"){
+                clean_active_file_from(meta);
+            } 
+        }
+        let path = attr.path();
+        let meta_list: syn::MetaList = syn::parse_quote!{#path(#list)};
+        let _ = std::mem::replace(&mut attr.meta,syn::Meta::List(meta_list));
+    } 
+    attr
+}
+
+pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<EditAttribute,String> {
 
     let file = get_file(path);
 
@@ -85,14 +146,14 @@ pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<(Attribute, Vec<A
 
     let mut loc = Vec::new();
     let file_ident = quote::format_ident!("file");
+    let edit_ident = quote::format_ident!("edit");
 
     let check_file_arg=|nested: &Punctuated::<Meta,Token![,]>| -> bool{
         
         let idents = get_idents(nested);
-        if idents.iter().any(|x| file_ident.eq(x)) {
-            return true;
-        }
-        false
+        let file_bol = idents.iter().any(|x| file_ident.eq(x));
+        let edit_bol = idents.iter().any(|x| edit_ident.eq(x));
+        file_bol && edit_bol
     };
 
 
@@ -106,21 +167,34 @@ pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<(Attribute, Vec<A
                     if use_macro_actor.is(attr){
                         let nested = to_nested(attr);
                         if check_file_arg(&nested){
-                            loc.push((attr.clone(),item_impl.attrs.clone()));
+                            for meta in nested {
+                                if meta.path().is_ident("edit"){
+                                    let mut edit = crate::attribute::AAEdit::default();
+                                    edit.parse_nested(&meta);
+                                    if edit.is_any_active(){
+                                        let edit_attr = EditAttribute { 
+                                            path: path.clone(),
+                                            attr: attr.clone(),
+                                            attrs: item_impl.attrs.clone(),
+                                            new_attr: attr_file_clean(&attr) };
+                                        loc.push(edit_attr); 
+                                    }
+                                }
+                            }
                         }
                     }
 
-                    else if use_macro_actor.is(attr){
-                        let first_nested = to_nested(attr);
-                        let second_nested = 
-                        first_nested.iter().filter_map(|m| crate::attribute::get_list(m,None));
-                        for nested in second_nested {
-                            if check_file_arg(&nested){
-                                loc.push((attr.clone(),item_impl.attrs.clone()));
-                                break;
-                            }
-                        }
-                    } 
+                    // else if use_macro_actor.is(attr){
+                    //     let first_nested = to_nested(attr);
+                    //     let second_nested = 
+                    //     first_nested.iter().filter_map(|m| crate::attribute::get_list(m,None));
+                    //     for nested in second_nested {
+                    //         if check_file_arg(&nested){
+                    //             loc.push((attr.clone(),item_impl.attrs.clone()));
+                    //             break;
+                    //         }
+                    //     }
+                    // } 
                 }
             },
 
@@ -155,7 +229,9 @@ pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<(Attribute, Vec<A
     // check if is one only
     if loc.len() == 0 {
         // error no file in attrs 
-        let msg = format!("Expected a macro `group` or `actor` in module {} .", path.to_string_lossy() );
+        // let msg = format!("Expected a macro `group` or `actor` in module {} .", path.to_string_lossy() );
+        let msg = format!("Internal Error.'file::macro_file_count'. Failed to find a file active macro `group` or `actor` in module {} .",
+         path.to_string_lossy() );
         return Err(msg);
     }
     else if loc.len() > 1 {

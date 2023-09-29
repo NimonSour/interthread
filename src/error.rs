@@ -242,6 +242,8 @@ pub static AVAIL_ACTOR: &'static str = "
              live(..)
             ) 
 
+        file = \"path/to/current/file.rs\"
+        
         name = \"\" 
 
         assoc = false *
@@ -258,6 +260,52 @@ pub static AVAIL_ACTOR: &'static str = "
 *  -  default 
 ";
 
+
+
+pub static HELP_EDIT_FILE_ACTOR: &'static str = "
+The 'file' identifier within the 'edit' argument customizes writing behavior.
+Its scope is the entire tuple context in which it's defined.
+
+Example 1:
+edit(file, script, live(def, imp))
+     ^^^^
+   write:   script, live(def, imp)
+   exclude: ---
+
+Example 2:
+edit(script, live(file, def, imp))
+                  ^^^^
+   write:   live(def, imp)
+   exclude: script
+
+Example 3:
+edit(script, live(def(file), imp))
+                      ^^^^
+   write:   live(def)
+   exclude: script, live(imp)
+
+Example 4:
+edit(script, live(def, imp(method_1(file), method_2)))
+                                    ^^^^
+   write:   live(imp(method_1))
+   exclude: script, live(def, imp(method_2))
+
+Multiple 'file' declarations are allowed as long as their scopes do not overlap.
+
+NOT ALLOWED! 
+edit(file, script, live(def(file), imp))
+     ^^^^                   ^^^^
+First declaration overlaps second declaration.
+
+ALLOWED! 
+edit(script(file), live(def(file), imp)) 
+            ^^^^            ^^^^
+    write:   script,live(def)
+    exclude: live(imp)
+
+   
+
+";
 
 pub fn live_send_recv(live_name:&syn::Ident ) -> (TokenStream, TokenStream){
 

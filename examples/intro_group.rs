@@ -4,9 +4,9 @@
 pub struct AnyOtherType;
 
 
-struct Aa(pub u8);
-struct Bb(pub u8);
-struct Cc(pub u8);
+pub struct Aa(pub u8);
+pub struct Bb(pub u8);
+pub struct Cc(pub u8);
 
 
 pub struct AaBbCc {
@@ -68,8 +68,35 @@ The above `edit` argument triggers the whole model to be written.
 
 // }
 
+pub struct MyActor {
+    value: i8,
+}
+// #[interthread::actor(edit(live(imp(get_value))))]  V
+
+// #[interthread::actor(edit(live(imp(increment))))]   
+// #[interthread::actor(file = "examples/intro_group.rs", edit(live(def, imp),script(def(file))))]  
+#[interthread::actor(file = "examples/intro_group.rs", edit(live(def, imp),script(def(file))))]  
 
 
-// pub fn main(){
+impl MyActor {
+    pub fn new(v: i8) -> Self {
+        Self { value: v }
+    }
+    pub fn increment(&mut self) {
+        self.value += 1;
+    }
+    pub fn add_number(&mut self, num: i8) -> i8 {
+        self.value += num;
+        self.value
+    }
+    pub fn get_value(&self) -> i8 {
+        self.value
+    }
+}
 
-// }
+
+
+// #[interthread::example(path = "examples/intro_group.rs")]
+pub fn main(){
+
+}

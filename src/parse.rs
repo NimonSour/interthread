@@ -1,8 +1,9 @@
+
 use crate::name::get_ident_type_generics;
 use crate::file::get_idents;
 use crate::show::get_text;
-use crate::attribute::AAFile;
-use crate::attribute::AAExpand;
+
+use crate::attribute::{EditAttribute,AAExpand};
 use crate::LINE_ENDING;
 
 use proc_macro_error::abort;
@@ -423,9 +424,9 @@ impl ItemCodeBlock {
         done_attrs[0].0
     }
 
-    pub fn get_item_code(&mut self, mut attrs: Vec<Attribute>, item_impl: ItemImpl ) -> Result<Vec<(usize, Attribute, String)>,String> {
+    pub fn get_item_code(&mut self, mut attrs: Vec<Attribute>, item_impl: &ItemImpl ) -> Result<Vec<(usize, Attribute, String)>,String> {
 
-        let org_item = set_attrs(&attrs, &item_impl);
+        let org_item = set_attrs(&attrs, item_impl);
         if attrs.is_empty(){ 
             self.reset(None,Some(&item_impl))?; 
         } 
@@ -521,7 +522,7 @@ impl ItemCodeBlock {
                                     } else {
 
                                         if let Ok(out_item) = self.parse_item_impl(None){
-                                            if out_item == item_impl {
+                                            if out_item.eq(item_impl) {
 
                                                 let first_index    = self.first_index(&mut done_attrs);
                                                 let full_str        = &self.src[first_index..=self.end.unwrap()];
@@ -568,20 +569,20 @@ impl ItemCodeBlock {
 
 
 
-pub fn split_file( aaf: &AAFile, item_impl: ItemImpl, edit: bool ) -> (String,String,) {
+pub fn split_file( edit_attr: &EditAttribute, item_impl: &ItemImpl, edit: bool ) -> (String,String,) {
 
-    match  get_text(&aaf.path){
+    match  get_text(&edit_attr.path){
 
         Ok(text) => {
             
             let mut icb = ItemCodeBlock::new(text);
 
-            match icb.get_item_code(aaf.attrs.clone(),item_impl){
+            match icb.get_item_code(edit_attr.attrs.clone(),&item_impl){
                 Ok(attrs) => {
                     let (prefix,suffix) = icb.src.split_at(icb.index);
 
                     let mut prefix  = prefix.to_string();
-                    if let Some(pos) = attrs.iter().position(|x| x.1.eq(&aaf.attr)){
+                    if let Some(pos) = attrs.iter().position(|x| x.1.eq(&edit_attr.attr)){
 
                         let index =  attrs[pos].0;
                         let s   = &attrs[pos].2;
@@ -590,13 +591,17 @@ pub fn split_file( aaf: &AAFile, item_impl: ItemImpl, edit: bool ) -> (String,St
                             let end = index + s.len();
                             prefix.replace_range(index..=end, "");
                         } else {
-                            let (start,end) = find_file(index,s,&aaf.attr);
-                            prefix.replace_range(start..end, "");
+                            let new_attr = &edit_attr.new_attr;
+                            let new_attr_str = quote::quote!{ #new_attr}.to_string();
+                            let end = index + s.len();
+                            prefix.replace_range(index..=end, &new_attr_str);
+                            // let (start,end) = find_file(index,s,&aaf.attr);
+                            // prefix.replace_range(start..end, "");
                         }
                         return (prefix,suffix.into());
                     }
                     // no position internal error
-                    abort!(Span::call_site(),"Internal Error. 'parse::split_file' . Did not match any Attribute in Attributes !");
+                    abort!(Span::call_site(),"Internal Error. 'parse::split_file'. No matching Attribute found in the list of Attributes.");
 
                 },
                 Err(e) => {
@@ -613,19 +618,20 @@ pub fn split_file( aaf: &AAFile, item_impl: ItemImpl, edit: bool ) -> (String,St
 } 
 
 
-pub fn edit_write(  aaf: &AAFile, 
-                   item_impl: ItemImpl, 
-                   repl: bool,
-                    _mac: &AAExpand,  
-                   edit: proc_macro2::TokenStream ) {
+pub fn edit_write(  
+                   edit_attr: EditAttribute, 
+                   item_impl: &ItemImpl, 
+                        repl: bool,
+                        _mac: &AAExpand,  
+                        edit: proc_macro2::TokenStream ) {
 
     let (name, _, _)     =  get_ident_type_generics(&item_impl);
     let edifile    =  syn::parse2::<syn::File>(edit).unwrap();
     let edifix   =  prettyplease::unparse(&edifile);
 
-    let (mut prefix, suffix) = split_file( aaf, item_impl, repl );
+    let (mut prefix, suffix) = split_file( &edit_attr, item_impl, repl );
     
-    let attr = &aaf.attr;
+    let attr = &edit_attr.attr;
     let mut attr_str = quote::quote!{ #attr }.to_string();
     attr_str = (&attr_str).replace(LINE_ENDING,"");
     attr_str = (&attr_str).replace(" ","");
@@ -650,7 +656,7 @@ pub fn edit_write(  aaf: &AAFile,
     prefix += &suffix;
 
 
-    if let Err(e) = crate::show::write(prefix, &aaf.path){
+    if let Err(e) = crate::show::write(prefix, &edit_attr.path){
         proc_macro_error::abort!(proc_macro2::Span::call_site(),e.to_string());
     }
 

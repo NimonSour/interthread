@@ -225,42 +225,190 @@ impl Default for AAChannel {
 }
 
 //-----------------------  ACTOR EDIT 
+
+
+
+
+/*
+needs a check for methods 
+if it finds any methods with a name 
+`file` return an error saying that  
+active 'file' trigger argument
+should be renamed to 'inter_file'.
+*/
+
+
+/*
+    filter_file  returns  Some(punctuated) if file
+                            None 
+
+    this is fo single  Ident(file) options
+    applicable for def(file) as well
+
+    in Meta bool ->  out (syn::Ident,bool) 
+*/
+pub fn edit_ident( meta: &syn::Meta, scope: bool ) -> (syn::Ident,bool) {
+    if let Some(ident) = meta.path().get_ident(){
+        if let Some(list) = get_list(&meta,Some(&format!("Did you mean '{ident}(file)'."))){
+            if let Some(new_list) = filter_file(&list){
+                if scope {
+                    abort!(new_list,"1The option 'file' is overlapped.";help=error::HELP_EDIT_FILE_ACTOR);
+                } else {
+                    if new_list.is_empty() {
+                        (ident.clone(),true)
+                    } else { abort!(new_list, "Unexpected option.";help=error::HELP_EDIT_FILE_ACTOR)}
+                }
+            } else { abort!(list, "Unexpected option.";help=error::HELP_EDIT_FILE_ACTOR) }
+        } else { (ident.clone(),false) }
+    } else { abort!( meta, "Expected an identation."); }
+}
+
+
 #[derive(Debug, Eq, PartialEq, Clone)]
 
 pub struct AAEdit {
-    pub script:( bool, Option<Vec<syn::Ident>>, Option<Vec<syn::Ident>> ),
-    pub live:  ( bool, Option<Vec<syn::Ident>>, Option<Vec<syn::Ident>> ),
+    pub attr: Option<EditAttribute>,
+    pub script:( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ),
+    pub live:  ( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ),
 }
+
 impl AAEdit {
 
-    pub fn parse_nested(&mut self, nested: Punctuated::<syn::Meta,syn::Token![,]>, sol: bool ){
+    pub fn edit_structs(&mut self, meta: &syn::Meta, sol: bool){ 
+        // tuples: &mut ( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ), 
+
+        let tuples = 
+        if sol {&self.script } else { &self.live };
+
+        if let Some(list) = get_list(meta,Some(error::AVAIL_EDIT) ){
+
+            // file in script
+            if let Some(new_list) = filter_file(&list){
+                // let msg = quote::quote!{ #new_list}.to_string();
+                // abort!(meta,msg);
+                // not declared already 
+                if tuples.0.1 || tuples.1.1  || tuples.2.1  {
+                    abort!(meta,"2The option 'file' is overlapped.";help=error::HELP_EDIT_FILE_ACTOR);
+                } else {
+                    if new_list.is_empty() {
+                        self.set_script_all_active();
+                        self.set_script_all();
+                    } else { self.parse_nested_sol(new_list,sol); }
+                }
+            } else { self.parse_nested_sol(list,sol); }
+
+        } else { self.set_script_all(); }
+    }
+
+    pub fn parse_nested(&mut self,  meta: &syn::Meta ) {
+
+        if let Some(mut meta_list) = get_list( meta,Some(error::AVAIL_EDIT) ) {
+
+            if let Some(new_list) = filter_file(&meta_list){
+                // let msg = quote::quote!{ #new_list}.to_string();
+                // abort!(meta_list,msg);
+
+                self.set_script_all_active();
+                self.set_live_all_active();
+                // needs a check if is empty
+                if new_list.is_empty(){
+                    self.set_script_all();
+                    self.set_live_all();
+                } else {
+                    meta_list = new_list;
+                }
+            }
+
+
+            for edit_meta in meta_list.iter() {
+
+                if edit_meta.path().is_ident("script"){
+                    // is a list
+                    self.edit_structs(edit_meta,true);
+                } 
+
+                else if edit_meta.path().is_ident("live"){
+
+                    // edit_structs(&mut self.script,edit_meta,false);
+                    self.edit_structs(edit_meta,false);
+                    /*
+                     
+                    // is a list
+                    // if let Some(mut list) = get_list(edit_meta,Some(error::AVAIL_EDIT) ){
+                    //     // file in script
+                    //     if let Some(new_list) = filter_file(&list){
+                    //         // not declared already 
+                    //         if self.edit.script.0.1 || self.edit.script.1.1  || self.edit.script.2.1  {
+                    //             abort!(edit_meta,"Option 'file' has already been declared!" );
+                    //         } else {
+                    //             if new_list.is_empty() {
+
+                    //                 self.edit.set_live_all_active();
+                    //                 self.edit.set_live_all();
+
+                    //             } else { self.edit.parse_nested(new_list,false); }
+                    //         }
+                    //     } else { self.edit.parse_nested(list,false); }
+
+                    // } else { self.edit.set_live_all(); }
+                    */
+                } 
+
+                // old args 
+                else if  edit_meta.path().is_ident("direct") {
+                    abort!( meta, crate::error::OLD_DIRECT_ARG);
+                }
+                else if  edit_meta.path().is_ident("play") {
+                    abort!( meta, crate::error::OLD_PLAY_ARG);
+                }
+                // wrong opt
+                else {
+                    abort!(edit_meta,"Unexpected 'edit' option!";help=error::AVAIL_EDIT );
+                } 
+            }
+        } else {
+            self.set_script_all();
+            self.set_live_all();
+        }
+    }
+
+    pub fn parse_nested_sol(&mut self, nested: Punctuated::<syn::Meta,syn::Token![,]>, sol: bool ){
+
         let (name,mut strct) = 
         if sol {("script",self.script.clone()) } else { ("live",self.live.clone())};
+
+        let list_idents = |tuple: &mut (Option<Vec<(syn::Ident,bool)>>,bool), meta: &syn::Meta|{
+            if let Some(list) = get_list(meta, Some(error::HELP_EDIT_FILE_ACTOR)) {
+                if let Some(new_list) = filter_file(&list){
+                    if !tuple.1 { tuple.1 = true; } else { abort!(meta,"3The option 'file' is overlapped.";help=error::HELP_EDIT_FILE_ACTOR);}
+                    tuple.0 = Some(new_list.iter().map(|x| edit_ident(x,tuple.1)).collect::<Vec<_>>());
+                } else {
+                    tuple.0 = Some(list.iter().map(|x| edit_ident(x,tuple.1)).collect::<Vec<_>>());
+                }
+            } else { tuple.0 = Some(Vec::new()); }
+        };
 
         for meta in nested.iter() {
 
             if meta.path().is_ident("def"){
-                strct.0 = true;
+                let (_,scope) = edit_ident(meta,strct.0.1);
+                if scope {
+                    if !strct.0.1 { strct.0.1 = scope; } else { abort!(meta,"4The option 'file' is overlapped.";help=error::HELP_EDIT_FILE_ACTOR);}
+                } 
+                strct.0.0 = true;
             }
+            
             else if meta.path().is_ident("imp"){
-
-                if let Some(list) = get_list(meta, Some(error::AVAIL_EDIT)) {
-                    strct.1 = Some(list.iter().filter_map(|x| get_ident(x)).collect::<Vec<_>>());
-                } else {
-                    strct.1 = Some( Vec::new());
-                }
+                list_idents(&mut strct.1, &meta);
+                // abort!(Span::call_site(),"After Imp");
             }
             
             else if meta.path().is_ident("trt"){
-    
-                if let Some(list) = get_list(meta, Some(error::AVAIL_EDIT)) {
-                    strct.2 = Some(list.iter().filter_map(|x| get_ident(x)).collect::<Vec<_>>());
-                } else {
-                    strct.2 = Some( Vec::new());
-                }
+                list_idents(&mut strct.2, &meta);
             }
+
             else {
-                let msg = format!("Unsuported 'edit({}( ? ))' option! Expected options are `def`,`imp` or `trt` .",name);
+                let msg = format!("Unexpected 'edit({}( ? ))' option! Expected options are `def`,`imp` or `trt` .",name);
                 abort!(meta, msg);
             }
         }
@@ -269,27 +417,73 @@ impl AAEdit {
 
     }
 
+    pub fn is_any_active(&self) -> bool {
+
+        let any_active = 
+        | 
+            tuples: &((bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) )
+        |{
+            if tuples.0.1 || tuples.1.1 || tuples.2.1 {
+                true
+            } else {
+                let mut imp_bol = false;
+                let mut trt_bol = false;
+                if let Some(imp) = &tuples.1.0{
+                    imp_bol = imp.iter().any(|m|m.1 == true);
+                }
+
+                if let Some(imp) = &tuples.2.0{
+                    trt_bol = imp.iter().any(|m|m.1 == true);
+                }
+                imp_bol || trt_bol
+            }
+        };
+        any_active(&self.script) || any_active(&self.live)
+    }
+
     pub fn set_live_all(&mut self){
-        self.live = (true,Some(Vec::new()),Some(Vec::new()));
+        self.live.0.0 = true;
+        self.live.1.0 = Some(Vec::new());
+        self.live.2.0 = Some(Vec::new());
     }
 
     pub fn set_script_all (&mut self){
-        self.script = (true,Some(Vec::new()),Some(Vec::new()));
+        self.script.0.0 = true;
+        self.script.1.0 = Some(Vec::new());
+        self.script.2.0 = Some(Vec::new());
+    }
+
+    pub fn set_live_all_active(&mut self){
+        self.live.0.1 = true;
+        self.live.1.1 = true;
+        self.live.2.1 = true;
+    }
+
+    pub fn set_script_all_active(&mut self){
+        self.script.0.1 = true;
+        self.script.1.1 = true;
+        self.script.2.1 = true;
     }
 
     pub fn is_all(&self) -> bool {
         let empty = Some(Vec::new());
 
-        self.live.0 == true  && self.script.0 == true  &&
-        self.live.1 == empty && self.script.1 == empty &&
-        self.live.2 == empty && self.script.1 == empty
+        self.live.0.0 == true  && self.script.0.0 == true  &&
+        self.live.1.0 == empty && self.script.1.0 == empty &&
+        self.live.2.0 == empty && self.script.1.0 == empty
     } 
 
     pub fn is_none(&self) -> bool {
 
-        self.live.0 == false && self.script.0 == false &&
-        self.live.1 == None  && self.script.1 == None  &&
-        self.live.2 == None  && self.script.2 == None
+        self.live.0.0 == false && self.script.0.0 == false &&
+        self.live.1.0 == None  && self.script.1.0 == None  &&
+        self.live.2.0 == None  && self.script.2.0 == None
+    }  
+    pub fn is_none_active(&self) -> bool {
+
+        self.live.0.1 == false && self.script.0.1 == false &&
+        self.live.1.1 == false && self.script.1.1 == false &&
+        self.live.2.1 == false && self.script.2.1 == false
     }  
 
 }
@@ -297,20 +491,40 @@ impl AAEdit {
 impl Default for AAEdit {
 
     fn default() -> Self {
-        let script  = (false,None,None);
-        let live    = (false,None,None);
-        Self { script, live }
+        let attr = None;
+        let script = 
+        ((false,false),(None,false),(None,false));
+        let live   = 
+        ((false,false),(None,false),(None,false));
+        Self { attr, script, live }
     } 
+}
+
+pub fn filter_file(meta_list: &Punctuated::<syn::Meta,syn::Token![,]>) 
+    -> Option<Punctuated::<syn::Meta,syn::Token![,]>>{
+
+    let filtered_list: Punctuated::<syn::Meta,syn::Token![,]> = 
+        meta_list.clone()
+              .into_iter()
+              .filter(|m| !m.path().is_ident("file"))
+              .collect();
+
+    if meta_list.len() == filtered_list.len() {
+        None
+    } else {
+        Some(filtered_list)
+    }
 }
 
 
 //-----------------------  ACTOR FILE
 #[derive(Debug, Eq, PartialEq, Clone)]
 
-pub struct AAFile {
+pub struct EditAttribute {
     pub path:              PathBuf,
     pub attr:       syn::Attribute,
     pub attrs: Vec<syn::Attribute>,
+    pub new_attr:   syn::Attribute,
 }
 
 
@@ -341,9 +555,6 @@ impl Default for AADebut {
 }
 
 
-
-
-
 //-----------------------  ACTOR  
 
 #[derive(Debug,Clone, Eq, PartialEq)]
@@ -355,7 +566,8 @@ pub struct ActorAttributeArguments {
     pub channel :  AAChannel,
     pub edit    :  AAEdit,
     pub debut   :  AADebut,
-    pub file    :  Option<AAFile>,
+    // pub file    :  Option<AAFile>,
+    pub file    :  Option<std::path::PathBuf>,
     /* ADD NEW OPTION */
 }
 
@@ -449,51 +661,7 @@ impl ActorAttributeArguments {
 
                 // EDIT
                 else if meta.path().is_ident("edit"){
-                    
-
-                    if let Some(meta_list) = get_list( meta,Some(error::AVAIL_EDIT) ) {
-
-                        for edit_meta in meta_list.iter() {
-
-                            if edit_meta.path().is_ident("script"){
-    
-                                if let Some(list) = get_list(edit_meta,Some(error::AVAIL_EDIT) ){
-
-                                    self.edit.parse_nested(list,true);
-
-                                } else {
-                                    self.edit.set_script_all();
-                                }
-                            } 
-
-                            else if edit_meta.path().is_ident("live"){
-                                
-                                if let Some(list) = get_list(edit_meta,Some(error::AVAIL_EDIT) ){
-
-                                    self.edit.parse_nested(list,false);
-
-                                } else {
-                                    self.edit.set_live_all();
-                                }
-                            } 
-    
-                            // old args 
-                            else if  edit_meta.path().is_ident("direct") {
-                                abort!( meta, crate::error::OLD_DIRECT_ARG);
-                            }
-                            else if  edit_meta.path().is_ident("play") {
-                                abort!( meta, crate::error::OLD_PLAY_ARG);
-                            }
-                            // wrong opt
-                            else {
-                                abort!(edit_meta,"Unknown 'edit' option!";help=error::AVAIL_EDIT );
-                            } 
-                        }
-                    } else {
-                        self.edit.set_script_all();
-                        self.edit.set_live_all();
-                    }
-
+                    self.edit.parse_nested(&meta);
                 }
 
                 // DEBUT
@@ -562,15 +730,8 @@ impl ActorAttributeArguments {
 
                             if path.exists() {
                                 // one only check 
-                                match crate::file::macro_file_count(&path) {
-                                    Ok((attr,attrs)) => {
-                                        self.file = Some(AAFile {
-                                                                    path: path.clone(),
-                                                                    attr,
-                                                                    attrs });
-                                    },
-                                    Err(e) => { abort!(value,e); },
-                                }
+                                
+                                self.file = Some(path);
                             }
                             else {
                                 abort!(val, format!("Path - {:?} does not exists.",val.value())); 
@@ -600,12 +761,22 @@ impl ActorAttributeArguments {
     }
 
 
-    pub fn cross_check(&self){
+    pub fn cross_check(&mut self){
 
-        if self.file.is_some() {
-            if self.edit.is_none(){
-                let msg = "Expected an `edit` argument!";
-                abort!(Span::call_site(),msg;help=error::AVAIL_EDIT);
+        if !self.edit.is_any_active(){
+            // let msg = format!("script - {:?}, live - {:?}", &self.edit.script, &self.edit.live);
+            // abort!(Span::call_site(),msg);
+            if let Some(file_path) = &self.file {
+                match crate::file::macro_file_count(file_path) {
+                    Ok(edit_attr) => {
+                        self.edit.attr = Some(edit_attr);
+                    },
+                    Err(e) => { abort!(Span::call_site(),e); },
+                }
+            } else {
+                // error for using option file active but the path is not specified 
+                let msg = r#"Expected a 'file' argument ` file = "path/to/current/file.rs" ` ."#; 
+                abort!(Span::call_site(),msg;help=error::AVAIL_ACTOR)
             }
         }
     }
@@ -671,6 +842,7 @@ pub struct GroupAttributeArguments {
     pub lib     :  AALib,
     pub assoc   :  bool,
     pub channel :  AAChannel,
+    pub file    :  Option<std::path::PathBuf>,
  
 }
 
@@ -755,15 +927,7 @@ impl GroupAttributeArguments {
 
                             if path.exists() {
                                 // one only check 
-                                match crate::file::macro_file_count(&path) {
-                                    Ok((attr,attrs)) => {
-                                        // self.file = Some(AAFile {
-                                        //                             path: path.clone(),
-                                        //                             attr,
-                                        //                             attrs });
-                                    },
-                                    Err(e) => { abort!(value,e); },
-                                }
+                                self.file = Some(path);
                             }
                             else {
                                 abort!(val, format!("Path - {:?} does not exists.",val.value())); 
@@ -789,6 +953,7 @@ impl Default for GroupAttributeArguments {
             lib    : AALib::default(),
             assoc  : false,
             channel: AAChannel::default(),
+            file   : None,
             // edit   : AAEdit::default(),
             // debut  : AADebut::default(),
             // file   : None,

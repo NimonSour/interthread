@@ -1252,7 +1252,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 #[proc_macro_attribute]
 pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
     
-    let mac  = attribute::AAExpand::Actor;
+    // let mac  = attribute::AAExpand::Actor;
     let item_impl = syn::parse_macro_input!(item as syn::ItemImpl);
 
     let mut aaa = attribute::ActorAttributeArguments::default();
@@ -1262,14 +1262,32 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 
     check::channels_import( &aaa.lib );
 
-    let (code,edit) = 
-    crate::gen_actor::macro_actor_generate_code( aaa.clone(), item_impl.clone());
+    // let (code,edit) = 
+    // crate::gen_actor::macro_actor_generate_code( aaa.clone(), item_impl.clone());
 
-    if let Some( aaf ) = aaa.file {
-        parse::edit_write(  &aaf, item_impl, aaa.edit.is_all(), &mac, edit);
+    
+    let mut act_model = gen_actor::actor_model( aaa,&item_impl,attribute::AAExpand::Actor,None);
+
+    let (mut code,edit) = act_model.split_edit();
+
+
+    // if let Some( aaf ) = aaa.file {
+    if let Some( edit_attr ) = &act_model.edit.attr {
+
+        parse::edit_write( edit_attr.clone(), 
+                                  &item_impl, 
+               act_model.edit.is_all(), 
+           &attribute::AAExpand::Actor, 
+                                       edit);
     }
 
-    quote::quote!{#code}.into()
+    // quote::quote!{#code}.into()
+
+    quote::quote!{
+        #item_impl
+        #code
+    }.into()
+
 
 }
 

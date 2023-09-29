@@ -32,10 +32,10 @@ impl ActorModelSdpl {
 
 
         let (script,live) = 
-        match &self.edit { crate::attribute::AAEdit{ script, live,  } => {(script.clone(),live.clone())}};
+        match &self.edit { crate::attribute::AAEdit{ script, live,..  } => {(script.clone(),live.clone())}};
         
         let diff = 
-        | (def,mets,trts): ( bool, Option<Vec<syn::Ident>>, Option<Vec<syn::Ident>> ),
+        | ((def,scope_def),mets,trts): ( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ),
           model_def:  &mut TokenStream,
           model_mets: &mut Vec<(Ident,TokenStream)>,
           model_trts: &mut Vec<(Ident,TokenStream)>,
@@ -44,8 +44,12 @@ impl ActorModelSdpl {
           edit_trts:  &mut Option<Vec<TokenStream>>
         |{
             if def {
-                *edit_def   = Some(model_def.clone());
+                let temp_def = Some(model_def.clone());
                 *model_def  = quote!{}; 
+
+                if scope_def{
+                    *edit_def = temp_def;
+                }
             }
             *edit_mets = Some(edit_select(mets,model_mets));
             *edit_trts = Some(edit_select(trts,model_trts));
@@ -263,7 +267,7 @@ impl ActorModelSdpl {
 */
 
 
-pub fn edit_select(edit_idents: Option<Vec<Ident>>, 
+pub fn edit_select((edit_idents,scope): (Option<Vec<(Ident,bool)>>,bool), 
     ident_mets: &mut Vec<(Ident,TokenStream)> ) -> Vec<TokenStream> {
 
     let mut res = Vec::new();
@@ -271,14 +275,22 @@ pub fn edit_select(edit_idents: Option<Vec<Ident>>,
     if let Some(idents) = edit_idents { 
 
         if idents.is_empty() {
-            res = ident_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-            ident_mets.clear();
+            // let temp_ident_mets = ident_mets.clone();
+            let temp_ident_mets = std::mem::replace(ident_mets,Vec::new());
+            if scope {
+                res = temp_ident_mets.into_iter().map(|x| x.1).collect::<Vec<_>>();
+            }
+            // ident_mets.clear();
         }
 
-        for ident in idents {
+
+
+        for (ident,scp) in idents {
             if let Some(pos) = ident_mets.iter().position(|x| x.0 == ident){
-                let (_,trt)  = ident_mets.remove(pos);
-                res.push(trt);
+                let (_,met)  = ident_mets.remove(pos);
+                if scope || scp {
+                    res.push(met);
+                }
             } else {
                 let msg = format!("No method named `{}` in Actor's methods.",ident.to_string());
                 abort!(ident,msg);
@@ -287,3 +299,12 @@ pub fn edit_select(edit_idents: Option<Vec<Ident>>,
     } 
     res
 }
+
+/*
+V 1) Find  macros with active file 
+2) Edit sort active
+V 3) Clean all  active 'file' idents from macro.
+4) Write to the file .
+
+
+*/
