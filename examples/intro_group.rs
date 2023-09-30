@@ -45,6 +45,24 @@ available `edit` arguments are:
     )
 )]
 
+#[interthread::group(
+    file="path/to/abc.rs",
+    edit(
+        file   <-  !!!
+
+        script( def, imp(..), trt(..) ),
+        live(   def, imp(..), trt(..) ),
+
+        Self::a( script( def, imp(..), trt(..) ),
+           live(   def, imp(..), trt(..) ), 
+         ),
+
+        Self::b( script( def, imp(..), trt(..) ),
+           live(   def, imp(..), trt(..) ), 
+         )
+    )
+)]
+
 
 Note: the `file` ident inside the `edit` argument. 
 
@@ -54,6 +72,30 @@ Note: the `file` ident inside the `edit` argument.
 )]
 
 The above `edit` argument triggers the whole model to be written.
+
+
+#[interthread::group(
+    file = "path/to/abc.rs",
+    path = ( a("path/to/a.rs"), b("path/to/b.rs") ),
+
+)]
+
+#[interthread::actor(
+    file="path/to/abc.rs",
+    edit( file(
+            script( def, imp(..), trt(..) ),
+            live(   def, imp(..), trt(..) ),
+        )
+    )
+)]
+
+
+
+
+
+
+
+
 
 */
 
@@ -75,7 +117,9 @@ pub struct MyActor {
 
 // #[interthread::actor(edit(live(imp(increment))))]   
 // #[interthread::actor(file = "examples/intro_group.rs", edit(live(def, imp),script(def(file))))]  
-#[interthread::actor(file = "examples/intro_group.rs", edit(live(def, imp),script(def(file))))]  
+// #[interthread ::
+// actor(file = "examples/intro_group.rs", edit(live(def, imp), script(def)))] 
+#[interthread :: actor(file = "examples/intro_group.rs", edit(script))]
 
 
 impl MyActor {

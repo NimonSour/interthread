@@ -589,7 +589,6 @@ impl Default for ActorAttributeArguments {
     }
 }
 
-
 impl ActorAttributeArguments {
        
     pub fn parse_nested(&mut self, nested: Punctuated::<syn::Meta,syn::Token![,]>) {
@@ -763,7 +762,7 @@ impl ActorAttributeArguments {
 
     pub fn cross_check(&mut self){
 
-        if !self.edit.is_any_active(){
+        if self.edit.is_any_active(){
             // let msg = format!("script - {:?}, live - {:?}", &self.edit.script, &self.edit.live);
             // abort!(Span::call_site(),msg);
             if let Some(file_path) = &self.file {
@@ -835,7 +834,6 @@ impl Default for AGEdit {
     } 
 }
 
-
 pub struct GroupAttributeArguments {
 
     pub name    :  Option<syn::Ident>,
@@ -845,8 +843,6 @@ pub struct GroupAttributeArguments {
     pub file    :  Option<std::path::PathBuf>,
  
 }
-
-
 
 impl GroupAttributeArguments {
 
@@ -942,7 +938,6 @@ impl GroupAttributeArguments {
         }
     }
 }
-
 
 impl Default for GroupAttributeArguments {
 
