@@ -48,7 +48,7 @@ available `edit` arguments are:
 #[interthread::group(
     file="path/to/abc.rs",
     edit(
-        file   <-  !!!
+        file   
 
         script( def, imp(..), trt(..) ),
         live(   def, imp(..), trt(..) ),
@@ -91,6 +91,69 @@ The above `edit` argument triggers the whole model to be written.
 
 
 
+//////////////
+
+1) About 'file' argument.
+    Actor ) 'file' argument migrates into 'edit' argument.
+           When the argument is defined it works as it should 
+           editing (writing)to the file. If an additional 
+           file-active argument is defined anywere in the scope of 
+           'edit' list, than to the file will be written just 
+           arguments defined in 'file-active' scope.
+
+    Group ) File argument is defined outside of 'edit' argument.
+            To include it inside the 'edit' argument to enforce rules of 
+            'file-active' just include a 'file-active' (`file`) where normally
+            will use a file key value inside the  'Actor' 'edit' argument.
+
+
+2) Examples of usage : 
+    
+    a) write all 
+
+        actor)
+
+        group) 
+
+Examples:
+
+
+#[interthread::group(
+    file="path/to/abc.rs",
+    edit(
+        file ,  
+
+        script( def, imp, trt ),
+        file(live(   def, imp, trt)),
+
+        Self::a( script( def, imp(file(bla)), trt ),
+           live(   file(def), imp, trt ), 
+         ),
+
+        Self::b( file(script( def, imp)),
+           live(   def, imp, trt ), 
+         )
+    )
+)]
+
+
+#[interthread::group(
+    file="path/to/abc.rs",
+    edit(
+        script( def, imp, trt ),
+        live(   def, imp, trt),
+
+        Self::a( script( def, imp(bla), trt ),
+                   live( def, imp, trt ), 
+         ),
+
+        Self::b( script( def, imp),
+                   live( def, imp, trt ), 
+         )
+    )
+)]
+
+
 
 
 
@@ -119,7 +182,7 @@ pub struct MyActor {
 // #[interthread::actor(file = "examples/intro_group.rs", edit(live(def, imp),script(def(file))))]  
 // #[interthread ::
 // actor(file = "examples/intro_group.rs", edit(live(def, imp), script(def)))] 
-#[interthread :: actor(file = "examples/intro_group.rs", edit(script))]
+// #[interthread :: actor(file = "examples/intro_group.rs", edit(script))]
 
 
 impl MyActor {

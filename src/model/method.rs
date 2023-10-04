@@ -1,5 +1,5 @@
 use crate::error::{self,met_new_found};
-use crate::attribute::{AALib,AAExpand};
+use crate::model::{name,argument::{Lib,Model}};
 
 use syn::{Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Receiver,Token};
 use proc_macro_error::abort;
@@ -33,7 +33,7 @@ impl ActorMethod {
             Self::O    { sig, ident, ..} => (sig.clone(),ident),
             Self::None { sig, ident, ..} => (sig.clone(),ident),
         };
-        (sig, crate::name::script_field(name))
+        (sig, name::script_field(name))
     }
 
     pub fn is_async(&self) -> bool {
@@ -349,13 +349,13 @@ fn get_sigs(item_impl: &syn::ItemImpl) -> Vec<(Visibility,Signature)>{
 }
 
 
-pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac: &AAExpand ) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
+pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac: &Model ) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
 
     let mut loc              = vec![];
     let mut method_new = None;
     let ident_new                       = format_ident!("new");
     let ident_try_new                   = format_ident!("try_new");
-    let mut actor                        = AAExpand::Actor.eq(mac);
+    let mut actor                        = Model::Actor.eq(mac);
 
     // use item_vis for `group` 
     let sigs = get_sigs(&item_impl);
@@ -466,10 +466,10 @@ pub fn arguments_ident_type( args: &Vec<FnArg> ) -> (TokenStream, TokenStream) {
     ( args_ident, args_type )
 }
 
-pub fn to_async( lib: &AALib, sig: &mut Signature ) {
+pub fn to_async( lib: &Lib, sig: &mut Signature ) {
     
     match lib {
-        AALib::Std => (),
+        Lib::Std => (),
         _ => {
             sig.asyncness = Some(Token![async](Span::call_site()));
         }

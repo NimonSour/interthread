@@ -1,7 +1,8 @@
-use crate::attribute::{self,AALib,AAExpand,ActorAttributeArguments,GroupAttributeArguments,EditAttribute};
+use crate::model::attribute::{self,ActorAttributeArguments,GroupAttributeArguments,get_list,filter_file};
+use crate::model::argument::{Lib,Model,Edit,EditAttribute};
 use crate::use_macro::UseMacro;
-use crate::gen_actor;
-use crate::gen_group;
+// use crate::gen_actor;
+use crate::generate::{group,actor};
 
 use proc_macro_error::abort;
 use proc_macro2::Span;
@@ -42,13 +43,13 @@ pub fn get_file( path: &std::path::PathBuf ) -> syn::File {
 }
 
 
-pub fn expand_macros( path: &std::path::PathBuf, macs: &Vec<AAExpand>) -> (syn::File, AALib){
+pub fn expand_macros( path: &std::path::PathBuf, macs: &Vec<Model>) -> (syn::File, Lib){
     let mut file    = get_file(path);
-    let mut libr = AALib::default();
+    let mut libr = Lib::default();
     for mac in macs {
         let(fil,lib) = expand_macro(file,mac);
         file = fil;
-        if AALib::default()!= lib{
+        if Lib::default()!= lib{
             libr = lib;
         }
     }
@@ -91,8 +92,8 @@ then find if there is a option
 
 pub fn clean_active_file_from( meta: &mut Meta ){
 
-    if let Some(mut meta_list) = crate::attribute::get_list(&meta,None){
-        if let Some(new_list)  = crate::attribute::filter_file(&meta_list){ 
+    if let Some(mut meta_list) = get_list(&meta,None){
+        if let Some(new_list)  = filter_file(&meta_list){ 
             if new_list.is_empty() {
 
                 // if let Some(ident)  = meta.path().get_ident(){
@@ -124,7 +125,7 @@ pub fn clean_active_file_from( meta: &mut Meta ){
 pub fn attr_file_clean( attr: &syn::Attribute ) -> syn::Attribute  {
 
     let mut attr = attr.clone();
-    if let Some(mut list) = crate::attribute::get_list(&attr.meta,None){
+    if let Some(mut list) = get_list(&attr.meta,None){
         for meta in list.iter_mut() {
             if meta.path().is_ident("edit"){
                 clean_active_file_from(meta);
@@ -169,7 +170,7 @@ pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<EditAttribute,Str
                         if check_file_arg(&nested){
                             for meta in nested {
                                 if meta.path().is_ident("edit"){
-                                    let mut edit = crate::attribute::AAEdit::default();
+                                    let mut edit = Edit::default();
                                     edit.parse_nested(&meta);
                                     if edit.is_any_active(){
                                         let edit_attr = EditAttribute { 
@@ -246,7 +247,7 @@ pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<EditAttribute,Str
 }
 
 
-pub fn get_aaa( attr: Attribute, mac: &AAExpand ) -> ActorAttributeArguments {
+pub fn get_aaa( attr: Attribute, mac: &Model ) -> ActorAttributeArguments {
     let mut aaa = ActorAttributeArguments::default();
 
     if let syn::Meta::List(_) = attr.meta{
@@ -257,7 +258,7 @@ pub fn get_aaa( attr: Attribute, mac: &AAExpand ) -> ActorAttributeArguments {
     aaa
 }
 
-pub fn get_gaa( attr: Attribute, mac: &AAExpand ) -> GroupAttributeArguments {
+pub fn get_gaa( attr: Attribute, mac: &Model ) -> GroupAttributeArguments {
     let mut gaa = GroupAttributeArguments::default();
 
     if let syn::Meta::List(_) = attr.meta{
@@ -268,8 +269,8 @@ pub fn get_gaa( attr: Attribute, mac: &AAExpand ) -> GroupAttributeArguments {
     gaa
 }
 
-pub fn expand_macro( mut file: syn::File, mac: &AAExpand  ) -> (syn::File, AALib){ 
-    let mut lib            = AALib::default();
+pub fn expand_macro( mut file: syn::File, mac: &Model  ) -> (syn::File, Lib){ 
+    let mut lib            = Lib::default();
     let mut use_macro   = UseMacro::new(mac.to_str());
     let mut use_example = UseMacro::new(crate::EXAMPLE);
 
@@ -300,21 +301,21 @@ pub fn expand_macro( mut file: syn::File, mac: &AAExpand  ) -> (syn::File, AALib
                             // generate code
                             let (code,_) = 
                                 match &mac {
-                                    AAExpand::Actor => { 
+                                    Model::Actor => { 
                                         let aaa = get_aaa( attr.clone(),mac);
                                         lib = aaa.lib.clone();
-                                        gen_actor::macro_actor_generate_code( aaa, item_impl.clone()) 
+                                        actor::macro_actor_generate_code( aaa, item_impl.clone()) 
                                     },
-                                    AAExpand::Group => { 
+                                    Model::Group => { 
                                         let gaa = get_gaa( attr.clone(),mac);
                                         lib = gaa.lib.clone();
-                                        gen_group::macro_group_generate_code( gaa, item_impl.clone()) },
+                                        group::macro_group_generate_code( gaa, item_impl.clone()) },
                                 };
 
 
                             let f = code_to_file(code);
                             new_items_file.push(f.items);
-                            continue 'f1; 
+                            // continue 'f1; 
                         }
                     }
                 } else { 
@@ -383,12 +384,12 @@ pub fn expand_macro( mut file: syn::File, mac: &AAExpand  ) -> (syn::File, AALib
 
 }
 
-pub fn main_file( mod_name: String, lib: AALib ) -> syn::File {
+pub fn main_file( mod_name: String, lib: Lib ) -> syn::File {
 
     let mod_name = quote::format_ident!("{}",mod_name);
 
     let code = match lib {
-        AALib::Std => { 
+        Lib::Std => { 
             quote::quote!{
                 mod #mod_name;
                 
@@ -397,7 +398,7 @@ pub fn main_file( mod_name: String, lib: AALib ) -> syn::File {
                 }
             }
         },
-        AALib::Tokio => {
+        Lib::Tokio => {
             quote::quote!{
                 mod #mod_name;
 
@@ -407,7 +408,7 @@ pub fn main_file( mod_name: String, lib: AALib ) -> syn::File {
                 }
             }
         },
-        AALib::AsyncStd => { 
+        Lib::AsyncStd => { 
             quote::quote!{
                 mod #mod_name;
                 
@@ -417,7 +418,7 @@ pub fn main_file( mod_name: String, lib: AALib ) -> syn::File {
                 }
             }
         },
-        AALib::Smol => {
+        Lib::Smol => {
             quote::quote!{
                 mod #mod_name;
     

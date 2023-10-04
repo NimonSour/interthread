@@ -1,15 +1,27 @@
-pub mod channels;
-pub mod debut;
-pub mod edit;
+// pub mod channels;
+// pub mod debut;
+// pub mod edit;
 
 
-pub use channels::*;
-pub use debut::*;
-pub use edit::*;
+// pub use channels::*;
+// pub use debut::*;
+// pub use edit::*;
+
+pub mod argument;
+pub mod attribute;
+pub mod generics;
+pub mod method;
+pub mod name;
+
+pub use argument::*;
+pub use attribute::*;
+pub use generics::*;
+pub use method::*;
+pub use name::*;
 
 use proc_macro2::TokenStream;
 use syn::{Generics,Ident};
-use crate::attribute::{AAEdit,AGEdit};
+// use crate::attribute::{AAEdit,AGEdit};
 
 
 

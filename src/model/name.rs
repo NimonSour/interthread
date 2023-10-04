@@ -3,7 +3,8 @@ use quote::format_ident;
 use syn::Ident;
 use proc_macro_error::abort;
 
-use crate::attribute::AAExpand;
+// use crate::attribute::AAExpand;
+use crate::model::argument::Model;
 
 pub fn get_ident_type_generics(item_impl: &syn::ItemImpl) -> (syn::Ident,syn::Type,syn::Generics) {
 
@@ -69,11 +70,11 @@ pub fn live_group(name: &Ident) -> Ident{
 
 
 
-pub fn get_actor_names(name: &Ident, mac: &AAExpand) -> ( Ident, Ident ){
+pub fn get_actor_names(name: &Ident, mac: &Model) -> ( Ident, Ident ){
 
     match mac {
-        AAExpand::Actor => ( script(name), live(name) ),
-        AAExpand::Group => ( script_group(name), script_group(name) ),
+        Model::Actor => ( script(name), live(name) ),
+        Model::Group => ( script_group(name), live_group(name) ),
     }
 }
 

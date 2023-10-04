@@ -410,18 +410,19 @@
 //! Checkout `interthread` on [![GitHub](https://img.shields.io/badge/GitHub-%2312100E.svg?&style=plastic&logo=GitHub&logoColor=white)](https://github.com/NimonSour/interthread)
 //! 
 
-mod attribute;
+// mod attribute;
 mod use_macro;
 mod show;
 mod file;
-mod gen_actor;
-mod gen_group;
-mod name;
-mod method;
+// mod gen_actor;
+mod generate;
+// mod gen_group;
+// mod name;
+// mod method;
 mod check;
 mod error;
 mod parse;
-mod generics;
+// mod generics;
 mod model;
 
 static INTERTHREAD: &'static str            = "interthread";
@@ -431,6 +432,14 @@ static GROUP: &'static str                  = "group";
 static ACTOR: &'static str                  = "actor";
 static EXAMPLE: &'static str                = "example";
 static EXAMPLES: &'static str               = "examples";
+
+
+// Some of Attributes Arguments
+
+static EDIT: &'static str               = "edit";
+static FILE: &'static str               = "file";
+
+
 
 #[cfg(windows)]
 const LINE_ENDING: &'static str = "\r\n";
@@ -636,7 +645,7 @@ const LINE_ENDING: &'static str = "\n";
 #[proc_macro_attribute]
 pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
 
-    let mut eaa   = attribute::ExampleAttributeArguments::default();
+    let mut eaa   = model::attribute::example::ExampleAttributeArguments::default();
 
     let aaa_parser = 
     syn::meta::parser(|meta| eaa.parse(meta));
@@ -1255,7 +1264,7 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     // let mac  = attribute::AAExpand::Actor;
     let item_impl = syn::parse_macro_input!(item as syn::ItemImpl);
 
-    let mut aaa = attribute::ActorAttributeArguments::default();
+    let mut aaa = model::attribute::ActorAttributeArguments::default();
     let nested  = syn::parse_macro_input!(attr with syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated); 
     aaa.parse_nested(nested);
     aaa.cross_check();
@@ -1266,9 +1275,9 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     // crate::gen_actor::macro_actor_generate_code( aaa.clone(), item_impl.clone());
 
     
-    let mut act_model = gen_actor::actor_model( aaa,&item_impl,attribute::AAExpand::Actor,None);
+    let mut act_model = generate::actor::actor_model( aaa,&item_impl,model::argument::Model::Actor,None);
 
-    let (mut code,edit) = act_model.split_edit();
+    let (code,edit) = act_model.split_edit();
 
 
     // if let Some( aaf ) = aaa.file {
@@ -1277,7 +1286,7 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
         parse::edit_write( edit_attr.clone(), 
                                   &item_impl, 
                act_model.edit.is_all(), 
-           &attribute::AAExpand::Actor, 
+            &model::argument::Model::Actor,
                                        edit);
     }
 
@@ -1326,10 +1335,10 @@ pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     // let msg = "The \"group\" macro is currently under development and is not yet implemented in the `interthread` crate.";
     // proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
 
-    let mac  = attribute::AAExpand::Group;
+    let mac  = model::argument::Model::Group;
     let item_impl = syn::parse_macro_input!(item as syn::ItemImpl);
 
-    let mut gaa = attribute::GroupAttributeArguments::default();
+    let mut gaa = model::attribute::GroupAttributeArguments::default();
     let nested  = syn::parse_macro_input!(attr with syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated); 
     gaa.parse_nested(nested);
     // aaa.cross_check();

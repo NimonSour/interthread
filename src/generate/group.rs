@@ -1,6 +1,5 @@
 
-
-use crate::attribute::GroupAttributeArguments;
+use crate::model::attribute::GroupAttributeArguments;
 
 use syn::{ItemImpl};
 use proc_macro2::TokenStream;

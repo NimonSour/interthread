@@ -1,9 +1,6 @@
-use crate::attribute::{ActorAttributeArguments,AALib,AAExpand};
-use crate::name;
-use crate::method;
+// use crate::attribute::{ActorAttributeArguments,Lib,AAExpand};
 use crate::error;
-use crate::generics;
-use crate::model;
+use crate::model::{name,method,generics,attribute::ActorAttributeArguments,argument::{Lib,Model}};
 
 use proc_macro_error::abort;
 use syn::{Ident,Signature,ItemImpl,Visibility };
@@ -30,14 +27,14 @@ pub fn live_static_method(
 
 
 // returns  (code,edit) TokenStreams 
-pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: AAExpand, mut new_vis: Option<Visibility> ) 
+pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Model, mut new_vis: Option<Visibility> ) 
 ->  crate::model::ActorModelSdpl{ //(TokenStream, TokenStream){
     
-    let mut script_def;
+    let script_def;
     let mut script_mets = vec![];
     let mut script_trts = vec![];
   
-    let mut live_def;
+    let live_def;
     let mut live_mets = vec![];
     let mut live_trts = vec![];
 
@@ -97,7 +94,7 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: AAE
         live_meth_send_recv, 
         script_field_output, 
         live_send_input,
-        live_recv_output ) = model::channels( &aaa.lib, &aaa.channel, &script_name,&live_name, &ty_generics);
+        live_recv_output ) = aaa.channel.get_all( &aaa.lib, &script_name,&live_name, &ty_generics);
 
 
     
@@ -109,7 +106,7 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: AAE
     let play_async_decl   = 
 
         match &aaa.lib {
-            AALib::Std => {
+            Lib::Std => {
                 if direct_async_decl.is_some(){ 
                     let pos = actor_methods.iter().position(|x| x.is_async()).unwrap();
                     error::abort_async_no_lib(&actor_name,&actor_methods[pos]);
@@ -310,7 +307,7 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: AAE
 
     // METHOD NEW
 
-    if AAExpand::Actor.eq(&mac) { 
+    if Model::Actor.eq(&mac) { 
 
         if met_new.is_none() {
 
@@ -331,29 +328,33 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: AAE
         let return_statement   = met_new.live_ret_statement(&live_var);
         let vis                = &met_new.vis.clone();
 
-        let live_new_spawn = |play_args:TokenStream| {
-            match aaa.lib {
-                AALib::Std      => {
-                    quote!{ std::thread::spawn(|| { #script_name :: play(#play_args) } );}
-                },
-                AALib::Smol     => {
-                    quote!{ smol::spawn( #script_name :: play(#play_args) ).detach();} 
-                },
-                AALib::Tokio    => {
-                    quote!{ tokio::spawn( #script_name :: play(#play_args) );}
-                },
-                AALib::AsyncStd => {
-                    quote!{ async_std::task::spawn( #script_name :: play(#play_args) );}
-                },
-            }
-        };
+
+        // let live_new_spawn = 
+        // aaa.lib.method_new_spawn()
+        // |play_args:TokenStream| {
+        //     match aaa.lib {
+        //         Lib::Std      => {
+        //             quote!{ std::thread::spawn(|| { #script_name :: play(#play_args) } );}
+        //         },
+        //         Lib::Smol     => {
+        //             quote!{ smol::spawn( #script_name :: play(#play_args) ).detach();} 
+        //         },
+        //         Lib::Tokio    => {
+        //             quote!{ tokio::spawn( #script_name :: play(#play_args) );}
+        //         },
+        //         Lib::AsyncStd => {
+        //             quote!{ async_std::task::spawn( #script_name :: play(#play_args) );}
+        //         },
+        //     }
+        // };
+
 
         let (init_actor, play_args) = {
             let id_debut_name = if aaa.debut.active() {quote!{ ,debut,name}} else {quote!{}};
             ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, actor } )
         };
 
-        let spawn = live_new_spawn(play_args);
+        let spawn = aaa.lib.method_new_spawn(&play_args,script_name);
         let turbofish = ty_generics.as_turbofish();
         let (id_debut,id_name)  =  
         if aaa.debut.active() {
@@ -379,7 +380,7 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: AAE
     // LIVE INTER METHODS AND TRAITS
     // model::debut()
     if aaa.debut.active(){
-        model::debut(
+        aaa.debut.impl_debut(
             &mut live_mets,
             &mut live_trts,
             &mut script_mets,
@@ -424,7 +425,7 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: AAE
         let play_method = {
         
             let ok_or_some = match aaa.lib {
-                AALib::Tokio => quote!{Some},
+                Lib::Tokio => quote!{Some},
                 _ => quote!{Ok}
             };
             quote! {
@@ -478,7 +479,7 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: AAE
         }
     };
     
-    if AAExpand::Group.eq(&mac){
+    if Model::Group.eq(&mac){
         //we have to extract play from the model
         // ???
         let play = format_ident!("play");
@@ -500,7 +501,7 @@ pub fn macro_actor_generate_code(
         -> ( TokenStream, TokenStream ) {
 
 
-    let mut act_model = actor_model( aaa,&item_impl,AAExpand::Actor,None);
+    let mut act_model = actor_model( aaa,&item_impl,Model::Actor,None);
 
     let (mut code,edit) = act_model.split_edit();
     

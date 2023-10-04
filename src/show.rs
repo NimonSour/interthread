@@ -1,4 +1,6 @@
-use crate::attribute;
+// use crate::attribute;
+
+use crate::model::argument::Lib ;
 use std::path::PathBuf;
 use std::fs::OpenOptions;
 use std::io::{self,Read,Write};
@@ -84,7 +86,7 @@ fn write_file( file: syn::File, path: &PathBuf ) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-pub fn example_show( file: syn::File, path: &PathBuf, lib: Option<attribute::AALib> ) -> PathBuf {
+pub fn example_show( file: syn::File, path: &PathBuf, lib: Option<Lib > ) -> PathBuf {
 
     let main_file = if lib.is_none() { None } else {  be_main(path, lib.unwrap()) };
 
@@ -113,7 +115,7 @@ pub fn example_show( file: syn::File, path: &PathBuf, lib: Option<attribute::AAL
     }
 }
 
-fn be_main( path: &PathBuf ,lib: attribute::AALib) ->  Option<syn::File> { 
+fn be_main( path: &PathBuf ,lib: Lib ) ->  Option<syn::File> { 
     
     if let Some(stem) = path.file_stem(){
         if let Some(stem) = stem.to_str(){

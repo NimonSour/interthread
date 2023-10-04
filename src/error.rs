@@ -1,4 +1,6 @@
-use crate::name;
+// use crate::name;
+use crate::model::method::ActorMethod;
+
 use quote::{quote,ToTokens};
 use proc_macro_error::abort;
 use proc_macro2::TokenStream;
@@ -105,7 +107,7 @@ pub fn met_new_not_instance<T: ToTokens>(sig: &syn::Signature, name: &T, bit: To
     (msg,note,help)
 } 
 
-pub fn abort_async_no_lib(name: &syn::Ident, met: &crate::method::ActorMethod){
+pub fn abort_async_no_lib(name: &syn::Ident, met: &ActorMethod){
 
     let (sig,_ ) = met.get_sig_and_field_name();
     let sig = quote!{#sig}.to_string();
