@@ -102,7 +102,36 @@ pub struct EditAttribute {
     pub path:              PathBuf,
     pub attr:       syn::Attribute,
     pub attrs: Vec<syn::Attribute>,
-    pub new_attr:   syn::Attribute,
+    // pub new_attr:   syn::Attribute,
 }
 
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_functions(){
+        // let attr: syn::Attribute = syn::parse_quote!{#[actor( edit(file(script), live(imp(file(add_number)))))] };
+        // let attr: syn::Attribute = syn::parse_quote!{
+        //     #[actor( edit(file(script), 
+        //              live(file(imp(add_number))))
+        // )] };
+
+        let attr: syn::Attribute = syn::parse_quote!{#[actor( edit(file))] };
+
+
+        println!("{}", quote::quote!{#attr}.to_string());
+
+        let mut edit = Edit::default();
+
+        for meta in crate::model::attribute::attr_to_meta_list(&attr){
+
+            if meta.path().is_ident("edit"){
+                edit.parse(&meta);
+            }
+            // let ident = crate::model::attribute::get_ident(&meta);
+        }
+        println!("Edit  - {:?}", edit);  
+    }
+}

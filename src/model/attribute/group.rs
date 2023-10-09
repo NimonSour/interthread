@@ -1,8 +1,8 @@
 use crate::error;
-use crate::file::get_ident;
+// use crate::file::get_ident;
 use crate::model::{
     argument::{Channel,Lib,Edit,Debut},
-    attribute::{get_lit,get_list,to_usize},
+    attribute::{get_ident,get_lit,get_list,to_usize},
 };
 
 use std::path::PathBuf;
@@ -61,7 +61,7 @@ impl Default for AGEdit {
         Self { script, live, groupart }
     } 
 }
-
+#[derive(Clone)]
 pub struct GroupAttributeArguments {
 
     pub name    :  Option<syn::Ident>,
@@ -77,8 +77,8 @@ impl GroupAttributeArguments {
     pub fn parse_nested(&mut self, nested: Punctuated::<syn::Meta,syn::Token![,]>) {
         for meta in nested.iter(){
 
-            if let Some(ident) = get_ident(meta) {
-
+            // if let Some(ident) = get_ident(meta) {
+            let ident = get_ident(meta);
                 // NAME
                 if meta.path().is_ident("name"){
 
@@ -160,9 +160,9 @@ impl GroupAttributeArguments {
                         _ => { abort!(value, error::error_name_type( &ident, "str"); help=error::AVAIL_ACTOR ) },
                     }
                 }
-            } else { 
-                abort!(meta,"Unknown configuration option!"; help=error::AVAIL_ACTOR); 
-            }
+            // } else { 
+            //     abort!(meta,"Unknown configuration option!"; help=error::AVAIL_ACTOR); 
+            // }
         }
     }
 }

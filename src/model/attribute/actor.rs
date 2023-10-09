@@ -1,8 +1,8 @@
 use crate::error;
-use crate::file::get_ident;
+// use crate::file::get_ident;
 use crate::model::{
     argument::{Channel,Lib,Edit,Debut},
-    attribute::{get_lit,get_list,to_usize},
+    attribute::{get_ident,get_lit,get_list,to_usize},
 };
 
 use std::path::PathBuf;
@@ -48,10 +48,13 @@ impl ActorAttributeArguments {
        
     pub fn parse_nested(&mut self, nested: Punctuated::<syn::Meta,syn::Token![,]>) {
 
+        // check if unique options
+        super::is_set(&nested); 
+
         for meta in nested.iter(){
 
-            if let Some(ident) = get_ident(meta) {
-
+            // if let Some(ident) = get_ident(meta) {
+            let ident = get_ident(meta);
                 // NAME
                 if meta.path().is_ident("name"){
 
@@ -114,8 +117,8 @@ impl ActorAttributeArguments {
 
 
                 // EDIT
-                else if meta.path().is_ident("edit"){
-                    self.edit.parse_nested(&meta);
+                else if meta.path().is_ident(crate::EDIT){
+                    self.edit.parse(&meta);
                 }
 
                 // DEBUT
@@ -172,7 +175,7 @@ impl ActorAttributeArguments {
                 }
 
                 // FILE
-                else if meta.path().is_ident("file") {
+                else if meta.path().is_ident(crate::FILE) {
 
                     let value = get_lit(meta);
 
@@ -181,33 +184,22 @@ impl ActorAttributeArguments {
 
                             // the path needs to be checked first 
                             let path = std::path::PathBuf::from(val.value());
-
-                            if path.exists() {
-                                // one only check 
-                                
-                                self.file = Some(path);
-                            }
-                            else {
-                                abort!(val, format!("Path - {:?} does not exists.",val.value())); 
-                            } 
+                            // one only check 
+                            if path.exists() { self.file = Some(path); }
+                            else { abort!(val, format!("Path - {:?} does not exists.",val.value())); } 
                         },
                         _ => { abort!(value, error::error_name_type( &ident, "str"); help=error::AVAIL_ACTOR ) },
                     }
                 }
 
                 else if meta.path().is_ident("id"){ 
-                    // error "id" is "debut" since v2.0.0
+                    // error "id" is "debut" since v1.2.0
                     abort!(ident, error::OLD_ARG_ID);
                 }
 
 
                 // UNKNOWN ARGUMENT
-                else {
-                    error::unknown_attr_arg("actor",&ident )
-                }
-            } else { 
-                abort!(meta,"Unknown configuration option!"; help=error::AVAIL_ACTOR); 
-            }
+                else { error::unknown_attr_arg("actor",&ident ) }
 
         }
 
@@ -217,6 +209,14 @@ impl ActorAttributeArguments {
 
     pub fn cross_check(&mut self){
 
+
+        // here  needs to check 
+        // if file = path exists 
+        //        true) and  is active 
+        //              count active files
+        //                  ok 
+        //        false) and is active  -> error
+    
         if self.edit.is_any_active(){
             // let msg = format!("script - {:?}, live - {:?}", &self.edit.script, &self.edit.live);
             // abort!(Span::call_site(),msg);
@@ -232,7 +232,10 @@ impl ActorAttributeArguments {
                 let msg = r#"Expected a 'file' argument ` file = "path/to/current/file.rs" ` ."#; 
                 abort!(Span::call_site(),msg;help=error::AVAIL_ACTOR)
             }
+    
         }
+        // let msg = format!("script - {:?} \n live - {:?}",self.edit.script,self.edit.live);
+        // abort!(proc_macro::Span::call_site(),msg);
     }
 } 
 

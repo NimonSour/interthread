@@ -17,124 +17,142 @@ use proc_macro_error::abort;
 
 
 
-pub fn edit_ident( meta: &syn::Meta, scope: bool ) -> (syn::Ident,bool) {
-    if let Some(ident) = meta.path().get_ident(){
-        if let Some(list) = get_list(&meta,Some(&format!("Did you mean '{ident}(file)'."))){
-            if let Some(new_list) = filter_file(&list){
-                if scope {
-                    abort!(new_list,"1The option 'file' is overlapped.";help=error::HELP_EDIT_FILE_ACTOR);
-                } else {
-                    if new_list.is_empty() {
-                        (ident.clone(),true)
-                    } else { abort!(new_list, "Unexpected option.";help=error::HELP_EDIT_FILE_ACTOR)}
-                }
-            } else { abort!(list, "Unexpected option.";help=error::HELP_EDIT_FILE_ACTOR) }
-        } else { (ident.clone(),false) }
-    } else { abort!( meta, "Expected an identation."); }
-}
+// pub fn edit_ident( meta: &syn::Meta, scope: bool ) -> (syn::Ident,bool) {
+//     if let Some(ident) = meta.path().get_ident(){
+//         if let Some(list) = get_list(&meta,Some(&format!("Did you mean '{ident}(file)'."))){
+//             if let Some(new_list) = filter_file(&list){
+//                 if scope {
+//                     abort!(new_list,"1The option 'file' is overlapped.";help=error::HELP_EDIT_FILE_ACTOR);
+//                 } else {
+//                     if new_list.is_empty() {
+//                         (ident.clone(),true)
+//                     } else { abort!(new_list, "Unexpected option.";help=error::HELP_EDIT_FILE_ACTOR)}
+//                 }
+//             } else { abort!(list, "Unexpected option.";help=error::HELP_EDIT_FILE_ACTOR) }
+//         } else { (ident.clone(),false) }
+//     } else { abort!( meta, "Expected an identation."); }
+// }
+
+
+
+/*
+
+#[actor( file="path.rs" edit(file))]
+#[actor( file="path.rs", edit(file(script,live)))]
+#[actor( edit(file="path.rs"))]
+#[actor( edit(
+            file="path.rs",
+            file(script,live) )
+)]
+
+*/
+
 
 
 #[derive(Debug, Eq, PartialEq, Clone)]
-
 pub struct Edit {
     pub attr: Option<EditAttribute>,
     pub script:( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ),
     pub live:  ( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ),
 }
 
+
 impl Edit {
 
-    pub fn edit_structs(&mut self, meta: &syn::Meta, sol: bool){ 
-        // tuples: &mut ( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ), 
+    /*
+    Two major sources of errors within this option 
+    will be 
+    a) double declaration/assignement  of suboptions like
+    `script`, imp,trt ... 
+    Examples: edit( live, file( live( imp ))) 
+                    ^^^^        ^^^^
+    b) nesting 'file' arguments 
+    Examples: edit( file( live( file( imp ))))
+                    ^^^^        ^^^^
+    While both (a) and (b) appear to have the same root will be a big mistake 
+    not to let the user differentiate between these two errors.
+    There can be multiple 'file' declarations as long as they are
+    not nested.
 
-        let tuples = 
-        if sol {&self.script } else { &self.live };
+    Examples: edit( live( file(def), imp(file(new),sum) )))
+                          ^^^^           ^^^^
+    In case when we want to print to the file `live` definition
+    and method `new` but method `sum` just to be excluded from
+    code generation, assumming that we have it already edited.
 
-        if let Some(list) = get_list(meta,Some(error::AVAIL_EDIT) ){
+    The rule is that multiple parallel (not nested) 'file'  
+    are allowed.
 
-            // file in script
-            if let Some(new_list) = filter_file(&list){
-                // let msg = quote::quote!{ #new_list}.to_string();
-                // abort!(meta,msg);
-                // not declared already 
-                if tuples.0.1 || tuples.1.1  || tuples.2.1  {
-                    abort!(meta,"2The option 'file' is overlapped.";help=error::HELP_EDIT_FILE_ACTOR);
-                } else {
-                    if new_list.is_empty() {
-                        self.set_script_all_active();
-                        self.set_script_all();
-                    } else { self.parse_nested_sol(new_list,sol); }
-                }
-            } else { self.parse_nested_sol(list,sol); }
+    Multiple model struct options and sub options 
+    like: 
+    a) inside 'edit' - 'script' || 'live' can be declarred  once.
+    b) inside  'script'||'live' - 'def' || 'imp' || 'trt' can be declarred  once.
+    
+    So we have to track not the validity of the input only 
+    but to raise adequate errors which will 
+    a) force the user to work in allowed way which is 
+    both an efficent end explicit.
+    b) will give a reasonable undestanding of above pattern 
+     
 
-        } else { self.set_script_all(); }
+
+    them so we need to 
+    keep track of both mistakes and raise appropriate errors, 
+    otherway the whole option will be confusing to use.
+
+
+    */
+    pub fn abort_if_is_file( meta: &syn::Meta ){
+        if meta.path().is_ident(crate::FILE) { 
+            abort!(meta, error::NESTED_FILE; help=error::HELP_EDIT_FILE_ACTOR);
+        }  
     }
 
-    pub fn parse_nested(&mut self,  meta: &syn::Meta ) {
+    pub fn get_file_list( meta: &syn::Meta ) -> Punctuated::<syn::Meta,syn::Token![,]>{
+        if let Some(meta_list) = get_list( meta,Some(error::AVAIL_EDIT) ) { 
+            return meta_list; 
+        } else { abort!(meta,"Expected a list!"; help=error::HELP_EDIT_FILE_ACTOR); }
+    }
 
-        if let Some(mut meta_list) = get_list( meta,Some(error::AVAIL_EDIT) ) {
+    pub fn parse(&mut self,  meta: &syn::Meta ){
 
-            if let Some(new_list) = filter_file(&meta_list){
-                // let msg = quote::quote!{ #new_list}.to_string();
-                // abort!(meta_list,msg);
+        if let Some(meta_list) = get_list( meta,Some(error::AVAIL_EDIT) ) {
+            
+            if meta_list.len() == 1 {
 
-                self.set_script_all_active();
-                self.set_live_all_active();
-                // needs a check if is empty
-                if new_list.is_empty(){
-                    self.set_script_all();
-                    self.set_live_all();
-                } else {
-                    meta_list = new_list;
-                }
-            }
+                if let Some(meta_value) = meta_list.first(){
 
+                    if meta_value.path().is_ident(crate::FILE){
 
-            for edit_meta in meta_list.iter() {
+                        if let Some(list) = get_list( meta_value,Some(error::AVAIL_EDIT) ) {
 
-                if edit_meta.path().is_ident("script"){
-                    // is a list
-                    self.edit_structs(edit_meta,true);
+                            for m in list.iter(){
+                                Self::abort_if_is_file(m);
+                                self.parse_sol(m,true);
+                            }
+
+                        } else {
+                            self.set_script_all_active();
+                            self.set_live_all_active();
+                            self.set_script_all();
+                            self.set_live_all();
+                        }
+
+                    } else { self.parse_sol(meta_value,false); }
                 } 
+            } else {
 
-                else if edit_meta.path().is_ident("live"){
+                for meta in meta_list.iter() {
 
-                    // edit_structs(&mut self.script,edit_meta,false);
-                    self.edit_structs(edit_meta,false);
-                    /*
-                     
-                    // is a list
-                    // if let Some(mut list) = get_list(edit_meta,Some(error::AVAIL_EDIT) ){
-                    //     // file in script
-                    //     if let Some(new_list) = filter_file(&list){
-                    //         // not declared already 
-                    //         if self.edit.script.0.1 || self.edit.script.1.1  || self.edit.script.2.1  {
-                    //             abort!(edit_meta,"Option 'file' has already been declared!" );
-                    //         } else {
-                    //             if new_list.is_empty() {
+                    if meta.path().is_ident(crate::FILE){
 
-                    //                 self.edit.set_live_all_active();
-                    //                 self.edit.set_live_all();
+                        for m in Self::get_file_list(meta).iter() { 
+                            Self::abort_if_is_file(m);
+                            self.parse_sol(m,true);
+                        }
 
-                    //             } else { self.edit.parse_nested(new_list,false); }
-                    //         }
-                    //     } else { self.edit.parse_nested(list,false); }
-
-                    // } else { self.edit.set_live_all(); }
-                    */
-                } 
-
-                // old args 
-                else if  edit_meta.path().is_ident("direct") {
-                    abort!( meta, crate::error::OLD_DIRECT_ARG);
+                    } else { self.parse_sol(meta,false); }
                 }
-                else if  edit_meta.path().is_ident("play") {
-                    abort!( meta, crate::error::OLD_PLAY_ARG);
-                }
-                // wrong opt
-                else {
-                    abort!(edit_meta,"Unexpected 'edit' option!";help=error::AVAIL_EDIT );
-                } 
             }
         } else {
             self.set_script_all();
@@ -142,49 +160,141 @@ impl Edit {
         }
     }
 
-    pub fn parse_nested_sol(&mut self, nested: Punctuated::<syn::Meta,syn::Token![,]>, sol: bool ){
+    pub fn parse_sol( &mut self, meta: &syn::Meta, file:bool ){
 
-        let (name,mut strct) = 
-        if sol {("script",self.script.clone()) } else { ("live",self.live.clone())};
+        let sol:bool;
 
-        let list_idents = |tuple: &mut (Option<Vec<(syn::Ident,bool)>>,bool), meta: &syn::Meta|{
-            if let Some(list) = get_list(meta, Some(error::HELP_EDIT_FILE_ACTOR)) {
-                if let Some(new_list) = filter_file(&list){
-                    if !tuple.1 { tuple.1 = true; } else { abort!(meta,"3The option 'file' is overlapped.";help=error::HELP_EDIT_FILE_ACTOR);}
-                    tuple.0 = Some(new_list.iter().map(|x| edit_ident(x,tuple.1)).collect::<Vec<_>>());
-                } else {
-                    tuple.0 = Some(list.iter().map(|x| edit_ident(x,tuple.1)).collect::<Vec<_>>());
-                }
-            } else { tuple.0 = Some(Vec::new()); }
-        };
+        if meta.path().is_ident("script") {
+            if self.is_script_none() {
+                sol = true;
+            } else { abort!(meta,error::double_decl("script");help=error::HELP_EDIT_FILE_ACTOR); }
+        } 
 
-        for meta in nested.iter() {
+        else if meta.path().is_ident("live") {
 
-            if meta.path().is_ident("def"){
-                let (_,scope) = edit_ident(meta,strct.0.1);
-                if scope {
-                    if !strct.0.1 { strct.0.1 = scope; } else { abort!(meta,"4The option 'file' is overlapped.";help=error::HELP_EDIT_FILE_ACTOR);}
-                } 
-                strct.0.0 = true;
-            }
-            
-            else if meta.path().is_ident("imp"){
-                list_idents(&mut strct.1, &meta);
-                // abort!(Span::call_site(),"After Imp");
-            }
-            
-            else if meta.path().is_ident("trt"){
-                list_idents(&mut strct.2, &meta);
-            }
-
-            else {
-                let msg = format!("Unexpected 'edit({}( ? ))' option! Expected options are `def`,`imp` or `trt` .",name);
-                abort!(meta, msg);
-            }
+            if self.is_live_none() {
+                sol = false;
+            } else { abort!(meta,error::double_decl("live");help=error::HELP_EDIT_FILE_ACTOR); }
         }
 
-        if sol { self.script = strct; } else { self.live = strct; };
+        // wrong opt
+        else { abort!(meta,"Unexpected 'edit' option!"; help=error::AVAIL_EDIT ); } 
 
+        if let Some(meta_list) = get_list( meta,Some(error::AVAIL_EDIT) ) { 
+                
+            for met in meta_list.iter() {
+
+                if met.path().is_ident(crate::FILE) {
+                    if file { abort!(met, error::NESTED_FILE; help=error::HELP_EDIT_FILE_ACTOR); }
+                    
+                    for m in Self::get_file_list(met).iter() { 
+                        Self::abort_if_is_file(m);
+                        self.parse_sol_nested(m,sol,true); 
+                    }
+
+                } else { self.parse_sol_nested(met,sol,file); }
+            }
+
+        } else {
+
+            if sol {
+                if file { self.set_script_all_active(); }
+                self.set_script_all();
+
+            } else {
+                if file { self.set_live_all_active(); }
+                self.set_live_all();
+            }
+        } 
+    }
+
+
+    pub fn parse_sol_nested(&mut self, meta: &syn::Meta, sol: bool, file:bool ){
+
+        let (name,mut tuples) = 
+        if sol {("script",self.script.clone()) } else { ("live",self.live.clone())};
+
+        let mut iot = None;
+        if meta.path().is_ident("def"){
+
+            if !tuples.0.0 {
+                if file {
+                    tuples.0.1 = true; 
+                } 
+                tuples.0.0 = true; 
+                
+            } else { abort!(meta, error::double_decl(&format!("{name}::def")); help=error::HELP_EDIT_FILE_ACTOR); }
+        }
+        
+        else if meta.path().is_ident("imp") {
+            if tuples.1.0.is_none() {
+                iot = Some(&mut tuples.1);
+            } else { abort!(meta, error::double_decl(&format!("{name}::imp")); help=error::HELP_EDIT_FILE_ACTOR); }
+        }
+        
+        else if meta.path().is_ident("trt") {
+            if tuples.2.0.is_none(){
+                iot = Some(&mut tuples.2);
+            } else { abort!(meta, error::double_decl(&format!("{name}::trt")); help=error::HELP_EDIT_FILE_ACTOR); }
+        }
+
+        else {
+            let msg = format!("Unexpected 'edit({}( ? ))' option! Expected options are `def`,`imp` or `trt` .",name);
+            abort!(meta, msg);
+        }
+        
+        if let Some(iot) = iot {
+
+            Self::parse_sol_nested_idents(iot, &meta, file);
+        }
+
+        if sol { self.script = tuples; } else { self.live = tuples; };
+
+    }
+
+
+    pub fn parse_sol_nested_idents( 
+        (opt,scope): &mut(Option<Vec<(syn::Ident,bool)>>,bool), 
+        meta: &syn::Meta,
+        file:bool 
+        ){
+        
+        if let Some(meta_list) = get_list(meta, Some(error::HELP_EDIT_FILE_ACTOR)) {
+            
+            for m in meta_list.iter(){
+                if m.path().is_ident(crate::FILE){
+                    if let Some(file_list) = get_list(m, Some(error::HELP_EDIT_FILE_ACTOR)) {
+                        
+                        for fm in file_list {
+
+                            if file {
+
+                                abort!(fm, error::NESTED_FILE; help=error::HELP_EDIT_FILE_ACTOR); 
+
+                            } else { Self::add_if_unique(opt,&fm, true); }
+                        }
+                    } else { Self::add_if_unique(opt, m, file); } 
+
+                } else { Self::add_if_unique(opt, m, file); }   
+            }
+        } else { 
+            if file { *scope = true; } 
+            *opt = Some(Vec::new());
+        }
+    }
+
+
+    pub fn add_if_unique(vec: &mut Option<Vec<(syn::Ident,bool)>>, meta:&syn::Meta, file: bool ){
+        let ident = crate::model::attribute::get_ident(meta);
+        if let Some(v) = &vec {
+            if v.iter().any(|(i,_)| ident.eq(i) ){
+                abort!(meta,crate::error::double_decl(&ident.to_string()));
+            } else {
+                vec.as_mut().map(|v| v.push((ident,file)));
+            }
+        } else {
+            *vec = Some(vec![(ident,file)]);
+        }
     }
 
     pub fn is_any_active(&self) -> bool {
@@ -235,27 +345,73 @@ impl Edit {
         self.script.2.1 = true;
     }
 
-    pub fn is_all(&self) -> bool {
-        let empty = Some(Vec::new());
+    pub fn is_live_all(&self)-> bool{
+        self.live.0.0 == true &&
+        self.live.1.0 == Some(Vec::new()) &&
+        self.live.2.0 == Some(Vec::new()) 
+    }
 
-        self.live.0.0 == true  && self.script.0.0 == true  &&
-        self.live.1.0 == empty && self.script.1.0 == empty &&
-        self.live.2.0 == empty && self.script.1.0 == empty
+    pub fn is_script_all (&self)-> bool{
+        self.script.0.0 == true &&
+        self.script.1.0 == Some(Vec::new()) &&
+        self.script.2.0 == Some(Vec::new()) 
+    }
+
+    pub fn is_all(&self) -> bool {
+        self.is_live_all() &&
+        self.is_script_all()
+    } 
+
+    pub fn is_live_all_active(&self)-> bool{
+        self.live.0.1 == true &&
+        self.live.1.1 == true &&
+        self.live.2.1 == true 
+    }
+
+    pub fn is_script_all_active(&self)-> bool{
+        self.script.0.1 == true &&
+        self.script.1.1 == true &&
+        self.script.2.1 == true 
+    }
+
+    pub fn is_all_active(&self) -> bool {
+        self.is_live_all_active() &&
+        self.is_script_all_active()
+    } 
+
+    pub fn is_live_none(&self) -> bool {
+        self.live.0.0 == false &&
+        self.live.1.0 == None  &&
+        self.live.2.0 == None  
+    } 
+
+    pub fn is_script_none(&self) -> bool {
+        self.script.0.0 == false &&
+        self.script.1.0 == None  &&
+        self.script.2.0 == None 
     } 
 
     pub fn is_none(&self) -> bool {
+        self.is_live_none() &&
+        self.is_script_none()
+    } 
 
-        self.live.0.0 == false && self.script.0.0 == false &&
-        self.live.1.0 == None  && self.script.1.0 == None  &&
-        self.live.2.0 == None  && self.script.2.0 == None
-    }  
+    pub fn is_live_none_active(&self) -> bool {
+        self.live.0.1 == false &&  
+        self.live.1.1 == false &&  
+        self.live.2.1 == false 
+    } 
+
+    pub fn is_script_none_active(&self) -> bool {
+        self.script.0.1 == false &&  
+        self.script.1.1 == false &&  
+        self.script.2.1 == false 
+    } 
+
     pub fn is_none_active(&self) -> bool {
-
-        self.live.0.1 == false && self.script.0.1 == false &&
-        self.live.1.1 == false && self.script.1.1 == false &&
-        self.live.2.1 == false && self.script.2.1 == false
-    }  
-
+        self.is_live_none_active() && 
+        self.is_script_none_active()
+    } 
 }
 
 impl Default for Edit {
@@ -270,316 +426,40 @@ impl Default for Edit {
     } 
 }
 
-pub fn filter_file(meta_list: &Punctuated::<syn::Meta,syn::Token![,]>) 
-    -> Option<Punctuated::<syn::Meta,syn::Token![,]>>{
 
-    let filtered_list: Punctuated::<syn::Meta,syn::Token![,]> = 
-        meta_list.clone()
-              .into_iter()
-              .filter(|m| !m.path().is_ident("file"))
-              .collect();
+pub type ElDef    = (bool,bool);
+pub type ElPrt    = (Option<Vec<(syn::Ident,bool)>>,bool); 
+pub type EditLoad = (ElDef,ElPrt,ElPrt); 
+pub type EditGroupLoad = (Ident,EditLoad);
 
-    if meta_list.len() == filtered_list.len() {
-        None
-    } else {
-        Some(filtered_list)
-    }
+
+#[derive(Debug, Eq, PartialEq, Clone)]
+pub struct EditGroup {
+    pub attr:   Option<EditAttribute>,
+    pub slf:    Edit,          
+    pub group:  Vec<(Ident,Edit)>,
 }
 
 
+impl EditGroup {
 
-
-
-pub struct ActorModelSdpl {
-    pub name:        Ident,
-    pub mac:         Model,
-    pub edit:         Edit,
-    pub generics: Generics,
-    pub script: (  TokenStream,  Vec<(Ident,TokenStream)>,  Vec<(Ident,TokenStream)> ),
-    pub live:   (  TokenStream,  Vec<(Ident,TokenStream)>,  Vec<(Ident,TokenStream)> ),
+    pub fn parse( meta: &syn::Meta ) {
+        
+    }
 }
 
+impl Default for EditGroup {
 
-impl ActorModelSdpl {
+    fn default() -> Self {
 
-    pub fn split_edit(&mut self) -> (TokenStream,TokenStream){
+        let attr = None;
+        let slf                   = Edit::default();
+        let group   = Vec::new();
 
-        let mut edit_script_def  = None;
-        let mut edit_script_mets = None;
-        let mut edit_script_trts = None;
-    
-        let mut edit_live_def  = None;
-        let mut edit_live_mets = None;
-        let mut edit_live_trts = None;
-
-
-
-        let (script,live) = 
-        match &self.edit {  Edit{ script, live, ..  } => {(script.clone(),live.clone())}};
-        
-        let diff = 
-        | ((def,scope_def),mets,trts): ( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ),
-          model_def:  &mut TokenStream,
-          model_mets: &mut Vec<(Ident,TokenStream)>,
-          model_trts: &mut Vec<(Ident,TokenStream)>,
-          edit_def:   &mut Option<TokenStream>,
-          edit_mets:  &mut Option<Vec<TokenStream>>,
-          edit_trts:  &mut Option<Vec<TokenStream>>
-        |{
-            if def {
-                let temp_def = Some(model_def.clone());
-                *model_def  = quote!{}; 
-
-                if scope_def{
-                    *edit_def = temp_def;
-                }
-            }
-            *edit_mets = Some(edit_select(mets,model_mets));
-            *edit_trts = Some(edit_select(trts,model_trts));
-
-        };
-
-        diff(
-            script,
-             &mut self.script.0,
-            &mut self.script.1,
-            &mut self.script.2,
-              &mut edit_script_def,
-             &mut edit_script_mets,
-             &mut edit_script_trts 
-        );
-
-        diff(
-            live,
-             &mut self.live.0,
-            &mut self.live.1,
-            &mut self.live.2,
-              &mut edit_live_def,
-             &mut edit_live_mets,
-             &mut edit_live_trts 
-        );
-        
-    
-        // Prepare Token Stream Vecs
-        let script_def         = &self.script.0;
-        let script_methods = self.script.1.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-        let script_traits  = self.script.2.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-
-        let live_def           = &self.live.0;
-        let live_methods   = self.live.1.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-        let live_traits    = self.live.2.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-        
-        let(impl_generics,ty_generics ,where_clause) = self.generics.split_for_impl();
-        let (script_name,live_name) = name::get_actor_names(&self.name, &self.mac);
-
-
-        let res_code = quote! {
-    
-            #script_def
-            impl #impl_generics #script_name #ty_generics #where_clause {
-                #(#script_methods)*
-            }
-            #(#script_traits)*
-    
-            #live_def
-            impl #impl_generics #live_name #ty_generics #where_clause {
-                #(#live_methods)*
-            }
-            #(#live_traits)*
-    
-        };
-    
-    
-        let res_edit_script_mets =  
-            edit_script_mets.as_ref().map(|mets| 
-                quote!{ 
-                    impl #impl_generics #script_name #ty_generics #where_clause {
-                        #(#mets)* 
-                    }
-                }
-            );
-
-        let res_edit_script_trts = 
-            edit_script_trts.as_ref().map(|trts| 
-                quote!{ #(#trts)* }
-            );
-    
-        let res_edit_live_mets = 
-
-            edit_live_mets.as_ref().map(|mets| 
-                quote!{ 
-                    impl #impl_generics #live_name #ty_generics #where_clause {
-                        #(#mets)* 
-                    }
-                }
-            ); 
-
-        let res_edit_live_trts = 
-        edit_live_trts.as_ref().map(|trts| 
-            quote!{ #(#trts)* }
-        );
-
-        let res_edit = quote!{
-    
-            #edit_script_def
-            #res_edit_script_mets
-            #res_edit_script_trts
-    
-            #edit_live_def
-            #res_edit_live_mets
-            #res_edit_live_trts
-        };
-    
-        (res_code, res_edit)
-    
-    
-    }
-
-}    
-
-// OLD EDIT
-/*
-
-    // Create and Select Edit Parts
-
-    let mut edit_script_def   = quote!{};
-    let edit_script_mets ;
-    let edit_script_trts ;
-
-    let mut edit_live_def  = quote!{};
-    let edit_live_mets ;
-    let edit_live_trts ;
-
-
-    match aaa.edit {
-
-        crate::attribute::AAEdit  { live, script } => {
-            match script {
-
-                ( def , mets, trts) => {
-                    if def {
-                        edit_script_def = script_def.clone();
-                        script_def      = quote!{}; 
-                    }
-                    edit_script_mets = edit_select(mets,&mut script_mets);
-                    edit_script_trts = edit_select(trts,&mut script_trts);
-                },
-            }
-
-            match live {
-
-                ( def , mets, trts) => {
-                    if def {
-                        edit_live_def = live_def.clone();
-                        live_def      = quote!{}; 
-                    }
-                    edit_live_mets = edit_select(mets,&mut live_mets);
-                    edit_live_trts = edit_select(trts,&mut live_trts);
-                },
-            }
-        }
-    }
-
-    // Prepare Token Stream Vecs
-    let script_methods = script_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-    let script_traits  = script_trts.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-    let live_methods   = live_mets.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-    let live_traits    = live_trts.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-    
-
-    let res_code = quote! {
-
-        
-
-        #script_def
-        impl #impl_generics #script_name #ty_generics #where_clause {
-            #(#script_methods)*
-        }
-        #(#script_traits)*
-
-        #live_def
-        impl #impl_generics #live_name #ty_generics #where_clause {
-            #(#live_methods)*
-        }
-        #(#live_traits)*
-
-    };
-
-
-    let res_edit_script_mets =  
-    if  edit_script_mets.is_empty() { quote!{} }
-    else { quote!{ 
-        impl #impl_generics #script_name #ty_generics #where_clause {
-            #(#edit_script_mets)* 
-        }
-    }};
-
-    let res_edit_script_trts =  
-    if  edit_script_trts.is_empty() { quote!{} }
-    else { quote!{ #(#edit_script_trts)* }};
-
-    let res_edit_live_mets =  
-    if  edit_live_mets.is_empty() { quote!{} }
-    else { quote!{ 
-        impl #impl_generics #live_name #ty_generics #where_clause { 
-            #(#edit_live_mets)* 
-        }
-    }};
-
-    let res_edit_live_trts =  
-    if  edit_live_trts.is_empty() { quote!{} }
-    else { quote!{ #(#edit_live_trts)* }};
-
-
-    let res_edit = quote!{
-
-        #edit_script_def
-        #res_edit_script_mets
-        #res_edit_script_trts
-
-        #edit_live_def
-        #res_edit_live_mets
-        #res_edit_live_trts
-    };
-
-    (res_code, res_edit)
-
-
-}
-
-*/
-
-
-pub fn edit_select((edit_idents,scope): (Option<Vec<(Ident,bool)>>,bool), 
-    ident_mets: &mut Vec<(Ident,TokenStream)> ) -> Vec<TokenStream> {
-
-    let mut res = Vec::new();
-
-    if let Some(idents) = edit_idents { 
-
-        if idents.is_empty() {
-            // let temp_ident_mets = ident_mets.clone();
-            let temp_ident_mets = std::mem::replace(ident_mets,Vec::new());
-            if scope {
-                res = temp_ident_mets.into_iter().map(|x| x.1).collect::<Vec<_>>();
-            }
-            // ident_mets.clear();
-        }
-
-
-
-        for (ident,scp) in idents {
-            if let Some(pos) = ident_mets.iter().position(|x| x.0 == ident){
-                let (_,met)  = ident_mets.remove(pos);
-                if scope || scp {
-                    res.push(met);
-                }
-            } else {
-                let msg = format!("No method named `{}` in Actor's methods.",ident.to_string());
-                abort!(ident,msg);
-            }
-        }
+        Self { attr, slf, group }
     } 
-    res
 }
+
+
+
 

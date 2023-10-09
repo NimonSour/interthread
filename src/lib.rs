@@ -415,7 +415,7 @@ mod use_macro;
 mod show;
 mod file;
 // mod gen_actor;
-mod generate;
+// mod generate;
 // mod gen_group;
 // mod name;
 // mod method;
@@ -1275,7 +1275,7 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     // crate::gen_actor::macro_actor_generate_code( aaa.clone(), item_impl.clone());
 
     
-    let mut act_model = generate::actor::actor_model( aaa,&item_impl,model::argument::Model::Actor,None);
+    let mut act_model = model::actor::actor_model( aaa,&item_impl,model::argument::Model::Actor,None);
 
     let (code,edit) = act_model.split_edit();
 
@@ -1285,7 +1285,8 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 
         parse::edit_write( edit_attr.clone(), 
                                   &item_impl, 
-               act_model.edit.is_all(), 
+               act_model.is_empty(), 
+            //    act_model.edit.is_all(), 
             &model::argument::Model::Actor,
                                        edit);
     }

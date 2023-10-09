@@ -182,8 +182,51 @@ pub struct MyActor {
 // #[interthread::actor(file = "examples/intro_group.rs", edit(live(def, imp),script(def(file))))]  
 // #[interthread ::
 // actor(file = "examples/intro_group.rs", edit(live(def, imp), script(def)))] 
-// #[interthread :: actor(file = "examples/intro_group.rs", edit(script))]
+// #[interthread :: actor(file = "examples/intro_group.rs", edit(file))]//edit(script(file(imp))))]
+// #[interthread::actor( edit(file(script), 
+// live(file(imp(add_number))))
+// )] 
+/////////////////
+// / #[interthread::actor(file="examples/intro_group.rs",edit(file))] 
+// #[interthread::actor(file="examples/intro_group.rs",edit(file(script),live))] 
 
+// --------------------------
+// #[interthread::actor(file="examples/intro_group.rs",edit)] // default edit
+// #[interthread::actor(file="examples/intro_group.rs",edit(script))] // One argument not 'file'
+// #[interthread::actor(file="examples/intro_group.rs",edit(file))] // One argument 'file'
+// #[interthread::actor(file="examples/intro_group.rs",edit(file(script)))] // One argument 'file(..)'
+// #[interthread::actor(file="examples/intro_group.rs",edit(live,file(script)))] // Many arguments not 'file'
+// #[interthread::actor(file="examples/intro_group.rs",edit(file(script),live))] // Many arguments 'file'
+// #[interthread::actor(file="examples/intro_group.rs",edit(file(script,live)))] // One argument 'file(..)'
+// #[interthread::actor(file="examples/intro_group.rs",edit(file,live))] //Expected a list!
+
+// --------------------------
+
+// #[interthread::actor(file="examples/intro_group.rs",edit(file(script,live)))] //just script
+// #[interthread::actor(file="examples/intro_group.rs",edit(file(live,script)))] // just live
+// #[interthread::actor(file="examples/intro_group.rs",edit(live,script))] // just live
+// #[interthread::actor(file="examples/intro_group.rs",edit(script,live))] // just script
+// #[interthread::actor(file="examples/intro_group.rs",edit(file(live),script))] // just live
+// #[interthread::actor(file="examples/intro_group.rs",edit(file(live(imp)),script))] // outside for loop 'sol(..)'
+// #[interthread::actor(file="examples/intro_group.rs",edit(live(file(imp)),script))] // inside for loop 'file(..)'
+// #[interthread::actor(file="examples/intro_group.rs",edit(live(file(imp)),script))] // inside for loop 'file(..)'
+// #[interthread::actor(file="examples/intro_group.rs",edit(live(file,imp),script))] // Expected a list!
+
+// --------------------------
+// #[interthread::actor(file="examples/intro_group.rs",edit(file(live),live(file(imp))))] // <-- trable
+// need a new message explaining that 
+// while multiple `file` options are allowed 
+// they can not be nested
+// #[interthread::actor(file="examples/intro_group.rs",edit(file(live,file(script))))] // Option has already been declared.
+
+// #[interthread::actor(file="examples/intro_group.rs",edit(live,live(imp)))] // <-- trable
+
+// #[interthread::actor(file="examples/intro_group.rs",edit(live,file(live(file(imp)))))] // <-- trable
+// #[interthread::actor(file="examples/intro_group.rs",edit(file(live(file(imp))),live))] // <-- trable
+// #[interthread::actor(file="examples/intro_group.rs",edit( live(file(imp(file(increment)))),live))] // <-- trable
+// #[interthread::actor(file="examples/intro_group.rs",edit( live(imp(file))))] // <-- trable
+
+ 
 
 impl MyActor {
     pub fn new(v: i8) -> Self {
@@ -202,8 +245,9 @@ impl MyActor {
 }
 
 
-
 // #[interthread::example(path = "examples/intro_group.rs")]
+
 pub fn main(){
+
 
 }

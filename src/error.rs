@@ -265,49 +265,58 @@ pub static AVAIL_ACTOR: &'static str = "
 
 
 pub static HELP_EDIT_FILE_ACTOR: &'static str = "
-The 'file' identifier within the 'edit' argument customizes writing behavior.
-Its scope is the entire tuple context in which it's defined.
+The 'file' identifier within the 'edit' argument customizes writing \
+behavior. It allows you selectively write portions of the \
+model to a file,  enabling edition of other parts while excluding those \
+that have already been modified.
+
+Here are two key guidelines to keep in mind when using the 'file' identifier:
+
+1. Options `script` and `live`, along with their suboptions `def`, `imp`, and `trt`, \
+as well as their respective arguments (the names of methods/traits), can only \
+be declared once within their respective scopes.
+
+2. While multiple 'file' declarations are allowed, nesting \
+them is not permitted.
 
 Example 1:
-edit(file, script, live(def, imp))
-     ^^^^
-   write:   script, live(def, imp)
-   exclude: ---
-
-Example 2:
-edit(script, live(file, def, imp))
-                  ^^^^
-   write:   live(def, imp)
-   exclude: script
-
-Example 3:
-edit(script, live(def(file), imp))
-                      ^^^^
+edit( script, live(file(def), imp))
+                   ^^^^
    write:   live(def)
    exclude: script, live(imp)
 
-Example 4:
-edit(script, live(def, imp(method_1(file), method_2)))
-                                    ^^^^
-   write:   live(imp(method_1))
-   exclude: script, live(def, imp(method_2))
+Example 2:
+edit( script(imp), file(live(def, imp)))
+                   ^^^^
+   write:   live(def, imp)
+   exclude: script(imp)
 
-Multiple 'file' declarations are allowed as long as their scopes do not overlap.
+Example 3:
+edit( live(file(def), imp(try_new, file(try_old))))
+           ^^^^                    ^^^^
+   write:   live(def,imp(try_old))
+   exclude: live(imp(try_new))
 
-NOT ALLOWED! 
-edit(file, script, live(def(file), imp))
-     ^^^^                   ^^^^
-First declaration overlaps second declaration.
-
-ALLOWED! 
-edit(script(file), live(def(file), imp)) 
-            ^^^^            ^^^^
-    write:   script,live(def)
-    exclude: live(imp)
-
-   
-
+Special case: `edit(file)` is equivalent to \
+`edit(file(script, live))` and writes the entire model.
 ";
+
+// pub static ALREADY_ASSIGNED: &'static str = "Option has already been assigned."; 
+// pub static ALREADY_DECLARED: &'static str = "Option has already been declared.";
+pub static EXPECT_IDENT: &'static str = "Expected an identifier. Please pass only a single identifier without any namespace or path.";
+pub static NESTED_FILE: &'static str  = "Nested `file` option!"; 
+
+pub fn double_decl(s: &str) -> String {
+    format!("Double declaration of `{s}` option.")
+}
+
+// pub fn assigned_already(s:&str) -> String {
+//     format!("Option {s} has already been assigned.")
+// }
+// pub fn declared_already(s:&str) -> String {
+//     format!("Option {s} has already been `file` declared.")
+// }
+
 
 pub fn live_send_recv(live_name:&syn::Ident ) -> (TokenStream, TokenStream){
 

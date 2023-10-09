@@ -6,15 +6,12 @@ pub use icb::ItemCodeBlock;
 pub use atp::ActiveTextParser;
 
 use crate::model::name::get_ident_type_generics;
-use crate::file::get_idents;
-use crate::show::get_text;
 use crate::model::argument::{Model,EditAttribute};
-
+use crate::show::get_text;
 use crate::LINE_ENDING;
 
 use proc_macro_error::abort;
 use proc_macro2::Span;
-
 use syn::{Attribute,Item,ItemImpl};
 
 
@@ -71,58 +68,6 @@ fn parse_attr( s: &str ) -> Result<Attribute,String> {
     }
 }
 
-// takes the &str from ItemCodeBlock
-
-fn find_file( index: usize, s: &str, attr: &Attribute) -> (usize,usize) {
-
-    let open  = '(';
-    let close = ')';
-    let comm  = ',';
-
-    let mut depth = 0;
-    let mut loc = Vec::new();
-    // find commas
-    for (i,c) in s.char_indices(){
-        if !loc.is_empty() {
-            if c == open { depth += 1; } 
-            else if c == close {
-                depth -= 1;
-                if depth == 0 { loc.push(i); break;}
-            } 
-            else if c == comm {
-                if depth == 1 { loc.push(i); }
-            } 
-        } else {
-            if c == open { depth += 1; loc.push(i); }
-        } 
-    }
-    
-
-    // find file arg
-    let nested = crate::file::to_nested(attr);
-    let idents = get_idents(&nested);
-    let file_ident = quote::format_ident!("file");
-
-    if let Some(pos) = idents.iter().position(|x| file_ident.eq(x)){
-        let (start, end) = 
-        if pos == 0 {
-            (loc[pos] + 1, loc[pos+1]+1)
-        } else {
-
-            (loc[pos],loc[pos+1])
-        };
-
-        let sub = &s[start..end];
-        if sub.contains("file"){
-            return (start+index,end+index);
-        }
-    }
-
-    abort!(Span::call_site(), "InternalError. `parse::find_file` .Could not find `file` argument!");
-
-}
-
-
 
 pub fn split_file( edit_attr: &EditAttribute, item_impl: &ItemImpl, edit: bool ) -> (String,String,) {
 
@@ -143,15 +88,16 @@ pub fn split_file( edit_attr: &EditAttribute, item_impl: &ItemImpl, edit: bool )
                         let s   = &attrs[pos].2;
 
                         if edit {
+
                             let end = index + s.len();
                             prefix.replace_range(index..=end, "");
+
                         } else {
-                            let new_attr = &edit_attr.new_attr;
-                            let new_attr_str = quote::quote!{ #new_attr}.to_string();
+
                             let end = index + s.len();
+                            let new_attr_str = nested::edit_remove_active_file_args(&prefix[index..=end]);
                             prefix.replace_range(index..=end, &new_attr_str);
-                            // let (start,end) = find_file(index,s,&aaf.attr);
-                            // prefix.replace_range(start..end, "");
+
                         }
                         return (prefix,suffix.into());
                     }
@@ -269,122 +215,7 @@ mod tests {
 
     }
     
-
-    
-    // #[test]
-    // fn test_find_attr(){
-    //     // NOT USED
-    //     fn get_attrs( item: &Item ) -> Result<(Vec<Attribute>, Item),String>{
-    //         let item = item.clone();
-    //         let attrs;
-        
-    //         let res = match item {
-            
-    //             Item::Fn(mut body)       => {
-    //                 attrs = body.attrs;
-    //                 body.attrs = Vec::new();
-    //                 (attrs, Item::Fn(body))
-    //             },
-    //             Item::Trait(mut body) => {
-    //                 attrs = body.attrs;
-    //                 body.attrs = Vec::new();
-    //                 (attrs, Item::Trait(body))
-    //             },
-    //             Item::Impl(mut body)   => {
-    //                 attrs = body.attrs;
-    //                 body.attrs = Vec::new();
-    //                 (attrs, Item::Impl(body))
-    //             },
-    //             _ => { return Err("Internal Error. `parses::get_attrs`. Expected Fn, Imbl block or Trait !".to_string())},
-    //         };
-        
-    //         Ok( res )
-    //     }
-
-
-    //     let s = r#"
-    //     struct Bla(i8);
-
-    //     #[example(file="src/bla.rs")]
-    //     #[ actor (channel = 2,
-    //          edit(play))
-    //     ] 
-    //     impl Bla {
-
-    //         fn new(v: i8) -> Self {
-    //             Self(v)
-    //         }
-    //     }
-
-    //     #[example(
-    //         file="src/bla.rs"
-        
-        
-    //     )] #[ actor (channel = 2, edit(play))] 
-    //     pub fn actor_exam_play( value: i8 ) -> i8 {
-    //     9
-    //     }"#;
-
-
-    //     let data_fn = r#"
-
-    //     #[example(file="src/bla.rs")] 
-    //     #[ actor (channel = 2, edit(play))]
-    //     // bla 
-    //     pub fn actor_exam_play( value: i8 ) -> i8 {
-    //     9 }
-    //     "#;
-
-    //     let item_fn: syn::Item = syn::parse_str(data_fn).expect("could not parse item");
-
-    //     let mut icb = ItemCodeBlock::new(s.to_string());
-    //     let (attrs,item) = get_attrs(&item_fn).unwrap();
-    //     match icb.get_item_code(attrs,item){
-    //         Ok(v) => {println!("Ok({:?})",v);},
-    //         Err(e) => {println!("Err({})",e);},
-    //     }
-    // }
-    
-    
-//     #[test]
-//     fn catch_nn() {
-//         // THIS FUNCTION IS NOT USED
-//         fn find_nn( s: &str) -> usize {
-//             if let Some(pos) = s.find('\n'){
-//                 // first item is a ','
-//                 if pos > 1 {
-//                     if (&s[1..pos]).chars().all(|x| x==' '){
-//                         return pos;
-//                     } else { return 0;}
-//                 } else { return pos; }
-//             }
-//             0
-//         }
-    
-//     // zero space after comma
-//     let s = r#",
-// bla"#;
-
-//     // one space after comma
-//     let ss = r#", 
-// bla"#;
-//     // two spaces after comma 
-//     let sss = r#",  
-// bla"#;
-//     // no '\n' at all 
-//     let ssss = r#",  bla"#;
-    
-
-//     println!(r#"
-// s    - {},
-// ss   - {},
-// sss  - {},    
-// ssss - {},    
-// "#,find_nn(s), find_nn(ss), find_nn(sss), find_nn(ssss));
-
-// }
-
-    // TESTS FOR PARSER
+   // TESTS FOR PARSER
     #[test]
     fn explicit_chars_in_str(){
         let mut atp = ActiveTextParser::new(0);

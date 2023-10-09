@@ -1,4 +1,4 @@
-// use crate::attribute::{ActorAttributeArguments,Lib,AAExpand};
+
 use crate::error;
 use crate::model::{name,method,generics,attribute::ActorAttributeArguments,argument::{Lib,Model}};
 
@@ -26,9 +26,8 @@ pub fn live_static_method(
 }
 
 
-// returns  (code,edit) TokenStreams 
 pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Model, mut new_vis: Option<Visibility> ) 
-->  crate::model::ActorModelSdpl{ //(TokenStream, TokenStream){
+->  crate::model::ActorModelSdpl{ 
     
     let script_def;
     let mut script_mets = vec![];
@@ -328,27 +327,6 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
         let return_statement   = met_new.live_ret_statement(&live_var);
         let vis                = &met_new.vis.clone();
 
-
-        // let live_new_spawn = 
-        // aaa.lib.method_new_spawn()
-        // |play_args:TokenStream| {
-        //     match aaa.lib {
-        //         Lib::Std      => {
-        //             quote!{ std::thread::spawn(|| { #script_name :: play(#play_args) } );}
-        //         },
-        //         Lib::Smol     => {
-        //             quote!{ smol::spawn( #script_name :: play(#play_args) ).detach();} 
-        //         },
-        //         Lib::Tokio    => {
-        //             quote!{ tokio::spawn( #script_name :: play(#play_args) );}
-        //         },
-        //         Lib::AsyncStd => {
-        //             quote!{ async_std::task::spawn( #script_name :: play(#play_args) );}
-        //         },
-        //     }
-        // };
-
-
         let (init_actor, play_args) = {
             let id_debut_name = if aaa.debut.active() {quote!{ ,debut,name}} else {quote!{}};
             ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, actor } )
@@ -495,10 +473,8 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
     }
 }
 
-pub fn macro_actor_generate_code(
-        aaa: ActorAttributeArguments, 
-        item_impl: ItemImpl ) 
-        -> ( TokenStream, TokenStream ) {
+pub fn macro_actor_generate_code( aaa: ActorAttributeArguments, item_impl: ItemImpl ) 
+    -> ( TokenStream, TokenStream ) {
 
 
     let mut act_model = actor_model( aaa,&item_impl,Model::Actor,None);

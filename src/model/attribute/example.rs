@@ -89,19 +89,7 @@ impl ExampleAttributeArguments {
                     }
                 });
             }
-            else if meta.path.is_ident("file") {
-                let value = meta.value()?.parse::<syn::Lit>()?;
-                match value.clone() {
-                    syn::Lit::Str(val) => {
-                        let p = val.value();
-                        return Err( meta.error(crate::error::old_file_arg(p)));
-                    },
-                    _ => {
-                        let name = meta.path.get_ident().unwrap();
-                        return Err( meta.error(format!("Expected a  'str'  value for argument '{}'.", name.to_string() )));
-                    },
-                }
-            }
+ 
             else {
                 let ident  = meta.path.get_ident().unwrap();
                 error::unknown_attr_arg("example", ident);
