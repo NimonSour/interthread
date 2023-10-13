@@ -1,5 +1,5 @@
-use crate::model::attribute::{AttributeArguments,get_list,attr_to_meta_list};
-use crate::model::argument::{Lib,Model,Edit,EditAttribute};
+use crate::model::{Lib,Model,Edit,EditAttribute,AttributeArguments,get_list,attr_to_meta_list};
+
 use crate::use_macro::UseMacro;
 
 use proc_macro_error::abort;
@@ -120,17 +120,11 @@ pub fn expand_macros( path: &std::path::PathBuf, macs: &Vec<Model>) -> (syn::Fil
 //     attr
 // }
 
+pub fn get_some_edit_attribute( attr: &Attribute,
+                           item_impl: &syn::ItemImpl,
+                                path: &std::path::PathBuf, 
+                                model: Model ) -> Option<EditAttribute> {
 
-
-
-pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<EditAttribute,String> {
-
-    let file = get_file(path);
-
-    let mut use_macro_actor   = UseMacro::new(crate::ACTOR);
-    let mut use_macro_group   = UseMacro::new(crate::GROUP);
-
-    let mut loc = Vec::new();
     let file_ident = quote::format_ident!("{}",crate::FILE);
     let edit_ident = quote::format_ident!("{}",crate::EDIT);
 
@@ -142,6 +136,37 @@ pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<EditAttribute,Str
         file_bol && edit_bol
     };
 
+    let nested = attr_to_meta_list(attr);
+    if check_file_arg(&nested){
+        for meta in nested {
+            if meta.path().is_ident(crate::EDIT){
+
+                let mut e = Edit::new(&model);
+                e.parse(&meta);
+                if e.is_any_active() {
+                    return Some(EditAttribute { 
+                        path: path.clone(),
+                        attr: attr.clone(),
+                        attrs: item_impl.attrs.clone(),
+                        remove: e.get_remove(),
+                        idents: e.get_some_ident_list(),
+                    });
+                }
+            }
+        }
+    }
+    None
+}
+
+
+pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<EditAttribute,String> {
+
+    let file = get_file(path);
+
+    let mut use_macro_actor   = UseMacro::new(crate::ACTOR);
+    let mut use_macro_group   = UseMacro::new(crate::GROUP);
+
+    let mut loc = Vec::new();
 
     for item  in file.items {
 
@@ -151,27 +176,15 @@ pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<EditAttribute,Str
                 for attr in &item_impl.attrs.clone() {
 
                     if use_macro_actor.is(attr){
-                        let nested = attr_to_meta_list(attr);
-                        if check_file_arg(&nested){
-                            for meta in nested {
-                                if meta.path().is_ident(crate::EDIT){
-                                    /*
-                                    the counting needs to be implemented here 
-                                     */
-                                    let mut edit = Edit::default();
-                                    // edit.parse_nested(&meta);
-                                    edit.parse(&meta);
-                                    if edit.is_any_active(){
-                                        let edit_attr = EditAttribute { 
-                                            path: path.clone(),
-                                            attr: attr.clone(),
-                                            attrs: item_impl.attrs.clone(),
-                                            // new_attr: attr_file_clean(&attr) 
-                                        };
-                                        loc.push(edit_attr); 
-                                    }
-                                }
-                            }
+                        if let Some( edit_attr) = 
+                        get_some_edit_attribute(attr,&item_impl,path,Model::Actor){
+                            loc.push(edit_attr);
+                        }
+                    }
+                    else if use_macro_group.is(attr){
+                        if let Some( edit_attr) = 
+                        get_some_edit_attribute(attr,&item_impl,path,Model::Group){
+                            loc.push(edit_attr);
                         }
                     }
                 }

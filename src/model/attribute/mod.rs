@@ -93,7 +93,7 @@ impl AttributeArguments {
 
 //// aux functions for attributes 
 
-fn to_usize(value: &syn::LitInt) -> usize {
+pub fn to_usize(value: &syn::LitInt) -> usize {
         
     let msg  = format!("Expected a positive integer 1..{:?}.", usize::MAX );
     value.base10_parse::<usize>()
@@ -110,11 +110,36 @@ pub fn get_list(meta: &syn::Meta, help: Option<&str>) -> Option<Punctuated::<syn
         },
         syn::Meta::NameValue(_) => { 
             if let Some(help) = help {
-                abort!(meta,"Expected a list!"; help=help) 
+                abort!(meta,error::EXPECT_LIST; help=help) 
             } else { None }
         },
     }
 }
+
+// pub fn get_lit_usize( meta:&Meta) -> usize {
+//     let ident = get_ident(&meta);
+//     match get_lit(meta) {
+//         syn::Lit::Int(val) => { 
+//             to_usize(&val)
+//         },
+//         v => abort!(v, error::error_name_type( &ident, "int (usize)"),; help=error::AVAIL_ACTOR ),
+//     }
+// }
+
+pub fn get_lit_str( meta: &syn::Meta ,arg: &str ) -> String {
+    match get_lit(meta) {
+        syn::Lit::Str(val) => {  
+            let string = val.value();
+            if &string == "" {
+                let msg = format!("Attribute argument '{arg}' value is empty.");
+                abort!(val,msg); 
+            } 
+            string
+        },
+        v => abort!(v, error::error_name_type( &meta.path(), "str"); help=error::AVAIL_ACTOR ),
+    }
+}
+
 
 pub fn get_lit( meta: &syn::Meta ) -> syn::Lit {
 
@@ -160,24 +185,107 @@ pub fn get_idents( nested: &Punctuated::<Meta,Token![,]> ) -> Vec<syn::Ident> {
     }).collect::<Vec<_>>()
 }
 
-pub fn is_set( nested: &Punctuated::<Meta,Token![,]> ){
+// pub fn check_ident_sets( nested: &Punctuated::<Meta,Token![,]> ){
+
+//     if nested.len() > 1 { 
+
+//         let mut meta_list = nested.iter().cloned().collect::<Vec<_>>();
+        
+//         for _ in 0..(meta_list.len() -1) {
+
+//             if let Some(meta) = meta_list.pop(){
+//                 let ident = get_ident(&meta);
+
+//                 if meta_list.iter().any(|x| ident.eq(&get_ident(x))){
+//                     abort!(meta, error::double_decl( &ident.to_string()));
+//                 }
+//             }
+//         }
+//     }
+// }
+
+pub fn check_path_set( nested: &Punctuated::<Meta,Token![,]> ){
 
     if nested.len() > 1 { 
 
         let mut meta_list = nested.iter().cloned().collect::<Vec<_>>();
         
         for _ in 0..(meta_list.len() -1) {
-            
-            if let Some(meta) = meta_list.pop(){
-                let ident = get_ident(&meta);
 
-                if meta_list.iter().any(|x| ident.eq(&get_ident(x))){
-                    abort!(meta, error::double_decl( &ident.to_string()));
+            if let Some(meta) = meta_list.pop(){
+                let path = meta.path();
+                if meta_list.iter().any(|x| path.eq(x.path())){
+                    let s = quote::quote!(#path).to_string();
+                    abort!(meta, error::double_decl( &s.replace(" ","")));
                 }
             }
         }
     }
 }
+
+
+pub fn get_ident_group( meta: &Meta,arg: &str) -> syn::Ident {
+    // expected path `field_name::edit`
+    let edit_ident = quote::format_ident!("{arg}");
+    let self_ident = quote::format_ident!("Self");
+    let path = meta.path();
+    if path.segments.len() == 2 { 
+        if let Some(first_path_segment) =  path.segments.last(){
+            if first_path_segment.ident.eq(&edit_ident){
+                if let Some(last_path_segment) =  path.segments.first(){
+                    let ident =  last_path_segment.ident.clone();
+                    if ident.eq(&self_ident){
+                        let msg = format!("Expected `self::{arg}`.");
+                        abort!(meta.path(),msg);
+                    } else { return ident;}
+
+                }
+            }
+        }
+    } 
+    abort!(path, error::UNEXPECTED_EDIT_GROUP_PATH; note=error::AVAIL_EDIT_GROUP );
+}
+
+
+// pub fn group_edit_split( meta: &syn::Meta ) -> Vec<(syn::Ident,syn::Meta)> {
+
+//     let mut coll = Vec::new();
+//     if let Some(list) = get_list(meta,None){
+
+//         let mut new_list = list.iter().cloned().collect::<Vec<_>>();
+
+//         for m in list.iter() {
+
+//             let path = m.path();
+//             if path.segments.len() == 1 { 
+//                 // 1) check if is file 
+//                 //         true) check if file(Self::GroupMember)
+//                 continue; 
+//             }
+
+//             else if  path.segments.len() == 2 { 
+//                 if let Some(ident) = get_some_ident_of_group_edit_path(path){
+//                     // is this one 
+//                     if let Some(pos) = new_list.iter().position(|x| x.eq(m)){
+//                         coll.push((ident,new_list.remove(pos)));
+//                     } 
+//                 }// here same error 
+//             }
+//             else {
+//                 let msg = "Group `edit` argument can take 'script' 'live' or Self::ActorFieldName";
+//                 abort!(m,msg)
+//             } 
+//         }
+//         if !new_list.is_empty(){
+
+//             let slf  =  quote::format_ident!("self");
+//             let list = new_list.into_iter().collect::<Punctuated<syn::Meta,syn::Token![,]>>();
+//             let meta_list: syn::MetaList = syn::parse_quote!{#slf(#list)};
+//             coll.push((slf,syn::Meta::List(meta_list)));
+//         }
+//     } 
+//     coll
+// }
 
 
 

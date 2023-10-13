@@ -1271,31 +1271,19 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 
     check::channels_import( &aaa.lib );
 
-    // let (code,edit) = 
-    // crate::gen_actor::macro_actor_generate_code( aaa.clone(), item_impl.clone());
-
     
     let mut act_model = model::actor::actor_model( aaa,&item_impl,model::argument::Model::Actor,None);
 
-    let (code,edit) = act_model.split_edit();
+    let (model_code,edit_code) = act_model.split_edit();
 
-
-    // if let Some( aaf ) = aaa.file {
     if let Some( edit_attr ) = &act_model.edit.attr {
 
-        parse::edit_write( edit_attr.clone(), 
-                                  &item_impl, 
-               act_model.is_empty(), 
-            //    act_model.edit.is_all(), 
-            &model::argument::Model::Actor,
-                                       edit);
+        parse::edit_write( &edit_attr, &item_impl, edit_code);
     }
-
-    // quote::quote!{#code}.into()
 
     quote::quote!{
         #item_impl
-        #code
+        #model_code
     }.into()
 
 
@@ -1343,7 +1331,9 @@ pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     let nested  = syn::parse_macro_input!(attr with syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated); 
     gaa.parse_nested(nested);
     // aaa.cross_check();
-    let msg = "Nothing yet ";
+    let msg = format!("{:?}",gaa.edit);
+    // proc_macro_error::abort!( proc_macro::Span::call_site(), msg );
+    // let msg = "Nothing yet ";
     proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
 
 }

@@ -92,7 +92,7 @@ impl ExampleAttributeArguments {
  
             else {
                 let ident  = meta.path.get_ident().unwrap();
-                error::unknown_attr_arg("example", ident);
+                error::unknown_attr_arg("example", &meta.path.clone());
                 Ok(())
             }
         };

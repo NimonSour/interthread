@@ -153,11 +153,35 @@ Examples:
     )
 )]
 
+#[interthread::group(
+    file="path/to/abc.rs",
+    edit(
+
+        self::edit(live)
+        a::edit( script( def, imp(bla), trt ),
+                   live( def, imp, trt ), 
+        ),
+
+        b::edit( script( def, imp),
+                   live( def, imp, trt ), 
+        ),
+    )
+)]
+
+edit (file ) == edit( self::edit(file),a::edit(file),b::edit(file))
 
 
+1) Check if all inputs are path ending in 'edit'.
+Error message is : Unlike the `actor`s edit 
+group edit takes a list of 'edit' lists.
 
+a) catch the first case (`edit(file)`) 
 
+2) Somwhere check if all identifiers are valid.
 
+3) After it will need a check if all are ..::edit(file),
+if so delete the macro else ( if there is a field `c`) the
+macro edit will look like so  `edit( self::edit, a::edit, b::edit)
 
 
 */
@@ -227,6 +251,19 @@ pub struct MyActor {
 // #[interthread::actor(file="examples/intro_group.rs",edit( live(imp(file))))] // <-- trable
 
  
+// #[interthread::group( edit(file(script(imp), a::edit(live,script(def)))))]
+// #[interthread::group( edit(a::edit(live,script(def))))]
+// #[interthread::group( edit(
+//     file(
+
+//         a::edit(live,script(def)),
+//     ),
+
+//     self::edit(file(live(imp))),
+//     c::edit(file)
+
+// ))]
+// #[interthread::actor(edit(live),assoc,name = "si")]
 
 impl MyActor {
     pub fn new(v: i8) -> Self {

@@ -1,9 +1,8 @@
 use crate::error;
+// use crate::model::EditActor;
 // use crate::file::get_ident;
-use crate::model::{
-    argument::{Channel,Lib,Edit,Debut},
-    attribute::{get_ident,get_lit,get_list,to_usize},
-};
+use crate::model::{Model, Channel,Lib,EditActor,Debut,get_ident,get_lit,get_lit_str,get_list,to_usize};
+
 
 use std::path::PathBuf;
 use proc_macro2::Span;
@@ -19,7 +18,7 @@ pub struct ActorAttributeArguments {
     pub lib     :  Lib,
     pub assoc   :  bool,
     pub channel :  Channel,
-    pub edit    :  Edit,
+    pub edit    :  EditActor,
     pub debut   :  Debut,
     // pub file    :  Option<AAFile>,
     pub file    :  Option<PathBuf>,
@@ -36,7 +35,7 @@ impl Default for ActorAttributeArguments {
             lib    : Lib::default(),
             assoc  : false,
             channel: Channel::default(),
-            edit   : Edit::default(),
+            edit   : EditActor::default(),
             debut  : Debut::default(),
             file   : None,
             /* ADD NEW ATTRIBUTE */
@@ -49,157 +48,109 @@ impl ActorAttributeArguments {
     pub fn parse_nested(&mut self, nested: Punctuated::<syn::Meta,syn::Token![,]>) {
 
         // check if unique options
-        super::is_set(&nested); 
+        super::check_path_set(&nested); 
+        // super::check_ident_sets(&nested); 
 
         for meta in nested.iter(){
 
-            // if let Some(ident) = get_ident(meta) {
             let ident = get_ident(meta);
-                // NAME
-                if meta.path().is_ident("name"){
+            // NAME
+            if meta.path().is_ident("name"){
 
-                    match get_lit(meta) {
-                        syn::Lit::Str(val) => {  
-                            let str_name = val.value();
-
-                            if str_name == "".to_string() {
-                                abort!(&ident,"Attribute field 'name' is empty. Enter a name.") 
-                            }
-                            else {
-                                self.name = Some(format_ident!("{}",val.value()));
-                            } 
-                        },
-                        v => abort!(v, error::error_name_type( &ident, "str"); help=error::AVAIL_ACTOR ),
-                    }
-                }
-
-
-                // LIB
-                else if meta.path().is_ident("lib"){
-
-                    match get_lit(meta) {
-                        syn::Lit::Str(val) => {
-
-                            self.lib = Lib::from(&val);
-                        },
-                        v => abort!(v, error::error_name_type( &ident, "str"); help=error::AVAIL_ACTOR ),
-                    }
-                }
-
-                // ASSOC
-                else if meta.path().is_ident("assoc"){
-
-                    match meta {
-                        syn::Meta::Path(_) => { self.assoc = true; },
-                        _ => {
-                            match get_lit(meta) {
-                                syn::Lit::Bool(val) => { self.assoc = val.value(); },
-                                v => abort!(v, error::error_name_type( &ident, "bool"); help=error::AVAIL_ACTOR ),
-                            }
-                        },
-                    }
-                }
-
-
-                // CHANNEL
-                else if meta.path().is_ident("channel"){
-
-                    match get_lit(meta) {
-                        syn::Lit::Int(val) => { 
-                            let value = to_usize(&val);
-                            if value > 0 {
-                                self.channel = Channel::Buffer(val.clone());
-                            }
-                        },
-                        v => abort!(v, error::error_name_type( &ident, "Int (usize)"),; help=error::AVAIL_ACTOR ),
-                    }
-                }
-
-
-                // EDIT
-                else if meta.path().is_ident(crate::EDIT){
-                    self.edit.parse(&meta);
-                }
-
-                // DEBUT
-
-                /*
+                let str_name = get_lit_str(&meta,"name"); 
                 
-                #[actor( channel=0, debut(legend(path="src")) )]
-                AVAIL_DEBUT
-                 */
-                else if meta.path().is_ident("debut"){
+                if &str_name == "" {
+                    abort!(&ident,"Attribute argument 'name' value is empty. Enter a name.") 
+                }
 
-                    if let Some(meta_list) = get_list( meta,Some(error::AVAIL_DEBUT) ) {
+                else { self.name = Some(format_ident!("{str_name}")); }
+            }
 
-                        for m in meta_list {
-                            if m.path().is_ident("legend"){
-                                if let Some(meta_list) = get_list( meta,Some(error::AVAIL_DEBUT) ) {
-                                    for m in meta_list{
 
-                                        if m.path().is_ident("path"){
+            // LIB
+            else if meta.path().is_ident("lib"){
 
-                                            match get_lit(&m) {
-                                                syn::Lit::Str(val) => {
-                                                    let path_str = val.value();
-                                                    todo!()
-                                                },
-                                                _ => { abort!(m, error::error_name_type( &ident, "bool"); help=error::AVAIL_ACTOR ) },
-                                            }
-                                        } else {
-                                            let msg = "Unknown option for argument 'debut'.";
-                                            abort!(m,msg;help=error::AVAIL_DEBUT);
-                                        }
-                                    }
-                                } else { self.debut.legend = Some(true); }  
-                            } else {
-                                let msg = "Unknown option for argument 'debut'.";
-                                abort!(m,msg;help=error::AVAIL_DEBUT);
-                            }
+                let lib_str = get_lit_str(&meta,"lib");
+                self.lib = Lib::from(&lib_str);
+
+            }
+
+            // ASSOC
+            else if meta.path().is_ident("assoc"){
+
+                match meta {
+                    syn::Meta::Path(_) => { self.assoc = true; },
+                    _ => { abort!(meta.path(), error::OLD_ARG_ASSOC); },
+                }
+            }
+
+
+            // CHANNEL
+            else if meta.path().is_ident("channel"){
+
+                match get_lit(meta) {
+                    syn::Lit::Int(val) => { 
+                        let value = to_usize(&val);
+                        if value > 0 {
+                            self.channel = Channel::Buffer(val.clone());
                         }
-                    } else {  self.debut.legend = Some(false);  }
-
-
-                    // match meta {
-                    //     syn::Meta::Path(_) => { self.debut.legend = Some(false); },
-                    //     syn::Meta::List(_)=> {
-                    //         if meta_list.
-                    //     },
-                    //     _ => {
-                    //         match get_lit(meta) {
-                    //             syn::Lit::Bool(val) => { self.id = val.value(); },
-                    //             v => abort!(v, error::error_name_type( &ident, "bool"); help=error::AVAIL_ACTOR ),
-                    //         }
-                    //     }
-                    // }
+                    },
+                    v => abort!(v, error::error_name_type( &meta.path(), "Int (usize)"),; help=error::AVAIL_ACTOR ),
                 }
+            }
 
-                // FILE
-                else if meta.path().is_ident(crate::FILE) {
 
-                    let value = get_lit(meta);
+            // EDIT
+            else if meta.path().is_ident(crate::EDIT){
+                self.edit.parse(&meta);
+            }
 
-                    match value.clone() {
-                        syn::Lit::Str(val) => {
+            // DEBUT
+            else if meta.path().is_ident("debut"){
 
-                            // the path needs to be checked first 
-                            let path = std::path::PathBuf::from(val.value());
-                            // one only check 
-                            if path.exists() { self.file = Some(path); }
-                            else { abort!(val, format!("Path - {:?} does not exists.",val.value())); } 
-                        },
-                        _ => { abort!(value, error::error_name_type( &ident, "str"); help=error::AVAIL_ACTOR ) },
+                if let Some(meta_list) = get_list( meta,Some(error::AVAIL_DEBUT) ) {
+
+                    for m in meta_list {
+                        if m.path().is_ident("legend"){
+                            if let Some(meta_list) = get_list( meta,Some(error::AVAIL_DEBUT) ) {
+                                for m in meta_list{
+
+                                    if m.path().is_ident("path"){
+
+                                        let path_str = get_lit_str(&meta,"path");
+                                        todo!();
+
+                                    } else {
+                                        let msg = "Unknown option for argument 'debut'.";
+                                        abort!(m,msg;help=error::AVAIL_DEBUT);
+                                    }
+                                }
+                            } else { self.debut.legend = Some(true); }  
+                        } else {
+                            let msg = "Unknown option for argument 'debut'.";
+                            abort!(m,msg;help=error::AVAIL_DEBUT);
+                        }
                     }
-                }
+                } else {  self.debut.legend = Some(false);  }
+            }
 
-                else if meta.path().is_ident("id"){ 
-                    // error "id" is "debut" since v1.2.0
-                    abort!(ident, error::OLD_ARG_ID);
-                }
+            // FILE
+            else if meta.path().is_ident(crate::FILE) {
 
+                let file_str = get_lit_str(&meta,crate::FILE);
+                let path = std::path::PathBuf::from(&file_str);
 
-                // UNKNOWN ARGUMENT
-                else { error::unknown_attr_arg("actor",&ident ) }
+                if path.exists() { self.file = Some(path); }
+                else { abort!(meta, format!("Path - {file_str:?} does not exist.")); } 
+
+            }
+
+            else if meta.path().is_ident("id"){ 
+                abort!(ident, error::OLD_ARG_ID);
+            }
+
+            // UNKNOWN ARGUMENT
+            else { error::unknown_attr_arg("actor",meta.path() ) }
 
         }
 
@@ -209,17 +160,7 @@ impl ActorAttributeArguments {
 
     pub fn cross_check(&mut self){
 
-
-        // here  needs to check 
-        // if file = path exists 
-        //        true) and  is active 
-        //              count active files
-        //                  ok 
-        //        false) and is active  -> error
-    
         if self.edit.is_any_active(){
-            // let msg = format!("script - {:?}, live - {:?}", &self.edit.script, &self.edit.live);
-            // abort!(Span::call_site(),msg);
             if let Some(file_path) = &self.file {
                 match crate::file::macro_file_count(file_path) {
                     Ok(edit_attr) => {
@@ -228,14 +169,10 @@ impl ActorAttributeArguments {
                     Err(e) => { abort!(Span::call_site(),e); },
                 }
             } else {
-                // error for using option file active but the path is not specified 
                 let msg = r#"Expected a 'file' argument ` file = "path/to/current/file.rs" ` ."#; 
                 abort!(Span::call_site(),msg;help=error::AVAIL_ACTOR)
             }
-    
         }
-        // let msg = format!("script - {:?} \n live - {:?}",self.edit.script,self.edit.live);
-        // abort!(proc_macro::Span::call_site(),msg);
     }
 } 
 

@@ -2,6 +2,7 @@
 use crate::model::method::ActorMethod;
 
 use quote::{quote,ToTokens};
+use syn::{Path,Ident,Signature};
 use proc_macro_error::abort;
 use proc_macro2::TokenStream;
 use proc_macro::Span;
@@ -48,7 +49,7 @@ pub fn met_new_note_help<T: ToTokens>(name: &T) -> (String,String) {
 }
 
 
-pub fn met_new_found<T: ToTokens>(sig: &syn::Signature, name: &T, bit: TokenStream, res_opt: Option<bool>) -> (String,String,String){
+pub fn met_new_found<T: ToTokens>(sig: &Signature, name: &T, bit: TokenStream, res_opt: Option<bool>) -> (String,String,String){
     let sig_name      = sig.ident.to_string();
     let act_name      = quote!{ #name }.to_string();
     let mut bit_str   = bit.to_string();
@@ -85,7 +86,7 @@ pub fn met_new_found<T: ToTokens>(sig: &syn::Signature, name: &T, bit: TokenStre
     (msg,note,help)
 }
 
-pub fn met_new_not_instance<T: ToTokens>(sig: &syn::Signature, name: &T, bit: TokenStream, res_opt: Option<bool>) -> (String,String,String){
+pub fn met_new_not_instance<T: ToTokens>(sig: &Signature, name: &T, bit: TokenStream, res_opt: Option<bool>) -> (String,String,String){
     let sig_name = sig.ident.to_string();
     let act_name = quote!{#name}.to_string();
     let bit_str  = bit.to_string();
@@ -107,7 +108,7 @@ pub fn met_new_not_instance<T: ToTokens>(sig: &syn::Signature, name: &T, bit: To
     (msg,note,help)
 } 
 
-pub fn abort_async_no_lib(name: &syn::Ident, met: &ActorMethod){
+pub fn abort_async_no_lib(name: &Ident, met: &ActorMethod){
 
     let (sig,_ ) = met.get_sig_and_field_name();
     let sig = quote!{#sig}.to_string();
@@ -117,23 +118,27 @@ pub fn abort_async_no_lib(name: &syn::Ident, met: &ActorMethod){
 }
 
 
-pub fn unknown_attr_arg( aa: &str, ident: &syn::Ident ){
-    
-    let msg = format!("Unknown argument option  -  {:?} for '{}' ", ident.to_string(),aa,);
+pub fn unknown_attr_arg( aa: &str, path: &Path ){
 
-    match aa.to_string() {
+    let path_str = quote!{#path}.to_string().replace(" ","");
+    let msg = format!("Unknown argument option  -  '{}'  for '{}' ", path_str,aa);
 
-        val if val == "actor".to_string()   => abort!(ident, msg ;help = AVAIL_ACTOR  ),                   
-        val if val == "expand".to_string()  => abort!(ident, msg ;help = AVAIL_EXPAND ),
-        val if val == "example".to_string() => abort!(ident, msg ;help = AVAIL_EXAMPLE),
-        val if val == "edit".to_string()    => abort!(ident, msg ;help = AVAIL_EDIT   ),
+    match aa {
+
+        val if val == "actor"   => abort!(path, msg ;help = AVAIL_ACTOR  ),                   
+        val if val == "expand"  => abort!(path, msg ;help = AVAIL_EXPAND ),
+        val if val == "example" => abort!(path, msg ;help = AVAIL_EXAMPLE),
+        val if val == "edit"    => abort!(path, msg ;help = AVAIL_EDIT   ),
+        val if val == "group"   => abort!(path, msg ;help = AVAIL_GROUP  ),
+
         _ => (),
     }
 }
 
-pub fn error_name_type(n: &syn::Ident, t: &str ) -> String {
+pub fn error_name_type(n: &syn::Path, t: &str ) -> String {
 
-    return format!("Expected a  < {} >  value for attribute argument '{}'.", t, n.to_string() );
+    let path_str = quote::quote!{#n}.to_string().replace(" ","");
+    return format!("Expected a  < {} >  value for attribute argument '{}'.", t,path_str  );
 }
 
 pub static AVAIL_EXAMPLE: &'static str = "
@@ -213,14 +218,53 @@ a statement just `edit` implies `edit(live,script)` !
 ";
 
 
+pub static AVAIL_EDIT_GROUP: &'static str = "
+
+The 'edit' option for `group` accepts a list of `actor` edits, \
+prefixed with the field's name, like 'field_name::edit(..)'.\
+Special case being `self::edit` referring to itself.
+
+
+For instance, given a struct `AB`:
+
+struct AB {
+    pub a: Type,
+    pub b: Type,
+}
+
+impl AB {
+    pub fn new() -> Self {
+        // Implementation
+    }
+}
+
+To edit the model parts include in the 'edit' list:
+
+edit(
+    a::edit(..),
+    b::edit(..), 
+    self::edit( live(imp(new)) )
+)
+
+Special case: `edit(file)` is similar to \
+`edit(a::edit(file), b::edit(file), self::edit(file))`, \
+but the former entirely writes to the file and excludes the macro,\
+while the latter only writes to the file, persisting in the form of \
+`edit(a::edit, b::edit, self::edit)`.
+
+
+";
+pub static UNEXPECTED_EDIT_GROUP_PATH: &'static str ="
+Unexpected `edit` identation option. Expected field_name::edit( args ).";
+
 pub static AVAIL_DEBUT: &'static str = "
 \navailable 'debut' options:
     debut
         (
-        legend
-             (
-              path='..'  
-             )
+         legend
+              (
+               path='..'  
+              )
         )
     
     When employing the `legend` option without providing a tuple list \
@@ -238,8 +282,7 @@ pub static AVAIL_ACTOR: &'static str = "
               \"tokio\"
               \"async_std\"
 
-        edit
-            ( 
+        edit( 
              script(..)
              live(..)
             ) 
@@ -248,18 +291,95 @@ pub static AVAIL_ACTOR: &'static str = "
         
         name = \"\" 
 
-        assoc = false *
-                 true
+       assoc 
         
-        debut 
-             (
-              legend(..)
-             )  
-            
+       debut(
+             legend(..)
+            )   
+)]
+
+*  -  default 
+";
+
+/*
+    There are two types of arguments 
+    
+    channel
+    lib
+    file
+    debut
+
+    name(..)
+    assoc(..)
+    edit(..)
+    path(..)
+
+*/
+
+pub static AVAIL_GROUP: &'static str = "
+
+#[interthread::group( 
+    
+AA  channel = 0 * 
+              n (usize)
+
+AA      lib = \"std\" *
+              \"smol\"
+              \"tokio\"
+              \"async_std\"
+
+AA     file = \"path/to/current/file.rs\"
+
+AA     debut(
+             legend(..)
+            )   
+
+(AA)   assoc(
+             self::assoc,
+             ..
+            )
+
+(AA)    edit( 
+             self::edit(
+                       script(..)
+                       live(..)
+                       ),
+             ..
+            ) 
+
+(AA)    name(
+             self::name = \"\",
+             ..
+            )
+
+(AA)    path(
+             a::path = \"path/to/type.rs\",
+             ..
+            )       
     )
 ]
 
-*  -  default 
+  *     -  default 
+  AA    -  similar to `actor` attribute argument.
+ (AA)   -  a list of similar to `actor` attribute arguments.
+
+ `self` - When specifying arguments for `(AA)`, remember \
+ to prefix them with the corresponding field name to indicate \
+ which member of the `group` they refer to. If the argument 
+ pertains to the `group` itself, use the conventional `self` notation.
+
+
+For instance, given a struct 'Group':
+
+struct Group {
+    pub a: Type,
+    pub b: Type,
+}
+
+`edit( b::edit(script) )` - edit the `script` part of the field `b` model.
+
+`path( a::path= \"path/to/type.rs\" )` - provide the path to field `a` Type definition.
+
 ";
 
 
@@ -267,7 +387,7 @@ pub static AVAIL_ACTOR: &'static str = "
 pub static HELP_EDIT_FILE_ACTOR: &'static str = "
 The 'file' identifier within the 'edit' argument customizes writing \
 behavior. It allows you selectively write portions of the \
-model to a file,  enabling edition of other parts while excluding those \
+model to the file,  enabling edition of other parts while excluding those \
 that have already been modified.
 
 Here are two key guidelines to keep in mind when using the 'file' identifier:
@@ -297,14 +417,35 @@ edit( live(file(def), imp(try_new, file(try_old))))
    write:   live(def,imp(try_old))
    exclude: live(imp(try_new))
 
-Special case: `edit(file)` is equivalent to \
-`edit(file(script, live))` and writes the entire model.
+Special case: `edit(file)` is similar to `edit(file(script, live))`, \
+but the former entirely writes to the file and excludes the macro,\
+while the latter only writes to the file, persisting in the form of \
+`edit(script, live)`.
+";
+pub static EDIT_GROUP_FILE_OUTSIDE: &'static str ="
+The 'file' option must be used within the context of a 'field_name::edit' argument or 
+special case `edit(file)`.
 ";
 
-// pub static ALREADY_ASSIGNED: &'static str = "Option has already been assigned."; 
-// pub static ALREADY_DECLARED: &'static str = "Option has already been declared.";
+pub static EXPECT_LIST: &'static str = "Expected a list!";
 pub static EXPECT_IDENT: &'static str = "Expected an identifier. Please pass only a single identifier without any namespace or path.";
 pub static NESTED_FILE: &'static str  = "Nested `file` option!"; 
+pub static NOTE_SPECIAL_FILE_EDIT: &'static str  = 
+"`edit(file)` is the only scenario where the file argument \
+can be specified as an identifier. In all other cases, it must be \
+used in the list form `file(..)`."; 
+
+pub static HELP_SPECIAL_FILE_EDIT: &'static str  =
+"`edit(file)` serves as a special writable equivalent to `edit`. \
+This notation will directly replace the macro with the actual \
+generated code. However, in explicit notation like \
+`edit(file(script, live))`, the macro will persist in the 
+file as `edit(script, live)`, despite that the whole model \
+is written to the file.";
+
+pub static ABOUT_FIELD: &'static str  =
+"Macro `group` will consider every 
+The 'field' argument should be a list containing the names of fields that are not part of the 'group' model.";
 
 pub fn double_decl(s: &str) -> String {
     format!("Double declaration of `{s}` option.")
@@ -385,19 +526,26 @@ pub fn direct_send(script_name: &syn::Ident, variant: &syn::Ident) -> TokenStrea
 // }
 
 // temp error new args 
-pub static OLD_DIRECT_ARG: &'static str = "
-    Since v1.0.0 `direct` argument is not aplicable. Use `edit(script(imp(direct)))` instead!
-";
 
-pub static OLD_PLAY_ARG: &'static str = "
-    Since v1.0.0 `play` argument is not aplicable. Use `edit(script(imp(play)))` instead!
-";
+// pub static OLD_DIRECT_ARG: &'static str = "
+//     Since v1.0.0 `direct` argument is not aplicable. Use `edit(script(imp(direct)))` instead!
+// ";
 
-pub fn old_file_arg( path: String ) -> String {
-    format!( "Since v1.0.0 `file` argument is not aplicable. Use `path= \"{}\"` instead!", &path )
-}
+// pub static OLD_PLAY_ARG: &'static str = "
+//     Since v1.0.0 `play` argument is not aplicable. Use `edit(script(imp(play)))` instead!
+// ";
 
-// v.2.0.0
+// pub fn old_file_arg( path: String ) -> String {
+//     format!( "Since v1.0.0 `file` argument is not aplicable. Use `path= \"{}\"` instead!", &path )
+// }
+
+// v1.2.0
 pub static OLD_ARG_ID: &'static str = "
-    Since v2.0.0 `id` argument is not aplicable. Use `debut` instead!
+    Since v1.2.0 `id` argument is not aplicable. Use `debut` instead!
+";
+
+pub static OLD_ARG_ASSOC: &'static str = "
+Since  v1.2.0, activation of the `assoc` option is donne by \
+declaring it as a path, like `assoc`. There's no need to \
+specify it as name-value metadata like `assoc=true`.
 ";

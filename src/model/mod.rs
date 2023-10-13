@@ -1,11 +1,3 @@
-// pub mod channels;
-// pub mod debut;
-// pub mod edit;
-
-
-// pub use channels::*;
-// pub use debut::*;
-// pub use edit::*;
 
 pub mod argument;
 pub mod attribute;
@@ -55,8 +47,18 @@ use quote::quote;
 
 pub struct GroupModelSdpl {
 
-    model: ActorModelSdpl,
-    actors: Vec<ActorModelSdpl>,
+    // model: ActorModelSdpl,
+    pub name:        Ident,
+    pub mac:         Model,
+    pub edit:    EditGroup,
+    pub actors: Vec<ActorModelSdpl>,
+}
+
+impl GroupModelSdpl {
+
+    pub fn get_edit(&self) -> Edit {
+        Edit::Group(self.edit.clone())
+    }
 }
 
 
@@ -78,7 +80,7 @@ This means there should be:
 pub struct ActorModelSdpl {
     pub name:        Ident,
     pub mac:         Model,
-    pub edit:         Edit,
+    pub edit:    EditActor,
     pub generics: Generics,
     pub script: (  TokenStream,  Vec<(Ident,TokenStream)>,  Vec<(Ident,TokenStream)> ),
     pub live:   (  TokenStream,  Vec<(Ident,TokenStream)>,  Vec<(Ident,TokenStream)> ),
@@ -87,6 +89,9 @@ pub struct ActorModelSdpl {
 
 impl ActorModelSdpl {
 
+    pub fn get_edit(&self) -> Edit {
+        Edit::Actor(self.edit.clone())
+    }
     pub fn is_empty(&self) -> bool {
         self.script.0.is_empty() && self.live.0.is_empty() &&
         self.script.1.is_empty() && self.live.1.is_empty() &&
@@ -106,8 +111,18 @@ impl ActorModelSdpl {
 
 
         let (script,live) = 
-        match &self.edit {  Edit{ script, live, ..  } => {(script.clone(),live.clone())}};
+        match &self.edit {  EditActor{ script, live, ..  } => {(script.clone(),live.clone())}};
         
+        let select = 
+        |
+        edit_cont: (Option<Vec<(Ident,bool)>>,bool),
+        model_cont: &mut Vec<(Ident,TokenStream)>,
+        | -> Option<Vec<TokenStream>>
+        {
+            let cont = edit_select(edit_cont,model_cont);
+            if cont.is_empty() { None } else { Some(cont) }
+        };
+
         let diff = 
         | ((def,scope_def),mets,trts): ( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ),
           model_def:  &mut TokenStream,
@@ -126,12 +141,8 @@ impl ActorModelSdpl {
                 }
             }
             // original 
-            // *edit_mets = Some(edit_select(mets,model_mets));
-            // *edit_trts = Some(edit_select(trts,model_trts));
-            let mets = edit_select(mets,model_mets);
-            *edit_mets = if mets.is_empty() { None } else { Some(mets) };
-            let trts = edit_select(trts,model_trts);
-            *edit_trts = if trts.is_empty() { None } else { Some(trts) };
+            *edit_mets = select(mets,model_mets);
+            *edit_trts = select(trts,model_trts);
         };
 
         diff(
@@ -154,15 +165,17 @@ impl ActorModelSdpl {
              &mut edit_live_trts 
         );
         
-    
+        let coll_token_stream = 
+        |coll: &Vec<(Ident,TokenStream)>| -> Vec<TokenStream> 
+        { coll.iter().map(|x| x.1.clone()).collect::<Vec<_>>() };
         // Prepare Token Stream Vecs
         let script_def         = &self.script.0;
-        let script_methods = self.script.1.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-        let script_traits  = self.script.2.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
+        let script_methods = coll_token_stream(&self.script.1);
+        let script_traits  = coll_token_stream(&self.script.2);
 
         let live_def           = &self.live.0;
-        let live_methods   = self.live.1.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
-        let live_traits    = self.live.2.iter().map(|x| x.1.clone()).collect::<Vec<_>>();
+        let live_methods   = coll_token_stream(&self.live.1);
+        let live_traits    = coll_token_stream(&self.live.2);
         
         let(impl_generics,ty_generics ,where_clause) = self.generics.split_for_impl();
         let (script_name,live_name) = name::get_actor_names(&self.name, &self.mac);
@@ -226,7 +239,6 @@ impl ActorModelSdpl {
         };
     
         (res_code, res_edit)
-    
     
     }
 

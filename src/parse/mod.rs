@@ -69,7 +69,9 @@ fn parse_attr( s: &str ) -> Result<Attribute,String> {
 }
 
 
-pub fn split_file( edit_attr: &EditAttribute, item_impl: &ItemImpl, edit: bool ) -> (String,String,) {
+pub fn split_file( 
+    edit_attr: &EditAttribute, 
+    item_impl: &ItemImpl ) -> (String,String,) {
 
     match  get_text(&edit_attr.path){
 
@@ -87,7 +89,7 @@ pub fn split_file( edit_attr: &EditAttribute, item_impl: &ItemImpl, edit: bool )
                         let index =  attrs[pos].0;
                         let s   = &attrs[pos].2;
 
-                        if edit {
+                        if edit_attr.remove {
 
                             let end = index + s.len();
                             prefix.replace_range(index..=end, "");
@@ -95,7 +97,7 @@ pub fn split_file( edit_attr: &EditAttribute, item_impl: &ItemImpl, edit: bool )
                         } else {
 
                             let end = index + s.len();
-                            let new_attr_str = nested::edit_remove_active_file_args(&prefix[index..=end]);
+                            let new_attr_str = nested::edit_remove_active_file_args(&prefix[index..=end], &edit_attr.idents);
                             prefix.replace_range(index..=end, &new_attr_str);
 
                         }
@@ -120,22 +122,18 @@ pub fn split_file( edit_attr: &EditAttribute, item_impl: &ItemImpl, edit: bool )
 
 
 pub fn edit_write(  
-                   edit_attr: EditAttribute, 
+                   edit_attr: &EditAttribute, 
                    item_impl: &ItemImpl, 
-                        repl: bool,
-                        _mac: &Model,  
-                        edit: proc_macro2::TokenStream ) {
+                   edit_code: proc_macro2::TokenStream ) {
 
     let (name, _, _)     =  get_ident_type_generics(&item_impl);
-    let edifile    =  syn::parse2::<syn::File>(edit).unwrap();
+    let edifile    =  syn::parse2::<syn::File>(edit_code).unwrap();
     let edifix   =  prettyplease::unparse(&edifile);
 
-    let (mut prefix, suffix) = split_file( &edit_attr, item_impl, repl );
-    
-    let attr = &edit_attr.attr;
-    let mut attr_str = quote::quote!{ #attr }.to_string();
-    attr_str = (&attr_str).replace(LINE_ENDING,"");
-    attr_str = (&attr_str).replace(" ","");
+
+
+    let (mut prefix, suffix) = split_file( &edit_attr, item_impl );
+    let attr_str = edit_attr.get_attr_str();
     
     let obj_name = format!("// Object Name   : {}  {LINE_ENDING}", name.to_string() );
     let init_by  = format!("// Initiated By  : {}  {LINE_ENDING}", attr_str );
@@ -168,45 +166,70 @@ pub fn edit_write(
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_func_group_edit(){
+        let attr_str = r#"
+#[interthread::group(
+    file="path/to/abc.rs",
+    edit(
+        a::edit( script( def, file(imp(bla,file)), trt(file)),
+        live(file(def), imp, trt ), 
+     ),
+        c::edit(file) , 
+        b::edit(file(live), script( def, imp),
+        live(file(def, imp(file), trt)), 
+     ),
+      
+    )
+)]"#;
+
+    let a = quote::format_ident!("a");
+    let b = quote::format_ident!("b");
+    let c = quote::format_ident!("c");
+    let new_attr_str = 
+    nested::edit_remove_active_file_args(attr_str,&Some(vec![a,b,c]));
+
+    let expect_attr_str = r#"
+#[interthread::group(
+    file="path/to/abc.rs",
+    edit(
+        a::edit( script( def, imp(bla,file), trt(file)),
+        live(def, imp, trt ), 
+     ),
+        c::edit , 
+        b::edit(live, script( def, imp),
+        live(def, imp(file), trt), 
+     ),
+      
+    )
+)]"#;
+
+    assert_eq!(expect_attr_str,new_attr_str);
+    // println!("{new_attr_str}");
+
+    }
+    
 
     #[test]
-    fn test_functions(){
+    fn test_func_actor_edit(){
         let attr_str = r#"
 #[interthread::actor(
     file="path/to/abc.rs",
     edit(
-         
-        file ,
-        script( def, imp, trt ),
+        script( def, file(imp), trt(file) ),
         file(live(   def, imp, trt)),
-
-        Self::a( script( def, imp(file(bla),file), trt(file)),
-           live(   file(def), imp, trt ), 
-        ),
-
-        Self::b( file(script( def, imp)),
-           live(   def, imp(file), trt), 
-        ),
     )
 )]"#;
 
 
-    let new_attr_str = nested::edit_remove_active_file_args(attr_str);
+    let new_attr_str = nested::edit_remove_active_file_args(attr_str,&None);
 
     let expect_attr_str = r#"
 #[interthread::actor(
     file="path/to/abc.rs",
     edit(
-        script( def, imp, trt ),
+        script( def, imp, trt(file) ),
         live(   def, imp, trt),
-
-        Self::a( script( def, imp(bla,file), trt(file)),
-           live(   def, imp, trt ), 
-        ),
-
-        Self::b( script( def, imp),
-           live(   def, imp(file), trt), 
-        ),
     )
 )]"#;
 
