@@ -1,10 +1,10 @@
-use crate::model::{Lib,Model,Edit,EditAttribute,AttributeArguments,get_list,attr_to_meta_list};
+use crate::model::{Lib,Model,Edit,EditAttribute,AttributeArguments,get_list,attr_to_meta_list, get_actor_names};
 
 use crate::use_macro::UseMacro;
 
 use proc_macro_error::abort;
 use proc_macro2::Span;
-use syn::{Attribute,Meta,Token,punctuated::Punctuated};
+use syn::{Ident,ItemStruct,ItemImpl,Attribute,Meta,Token,punctuated::Punctuated};
 
 
 
@@ -41,18 +41,7 @@ pub fn get_file( path: &std::path::PathBuf ) -> syn::File {
 }
 
 
-pub fn expand_macros( path: &std::path::PathBuf, macs: &Vec<Model>) -> (syn::File, Lib){
-    let mut file    = get_file(path);
-    let mut libr = Lib::default();
-    for mac in macs {
-        let(fil,lib) = expand_macro(file,mac);
-        file = fil;
-        if Lib::default()!= lib{
-            libr = lib;
-        }
-    }
-    (file,libr)
-}
+
 
 
 // pub fn to_nested(attr: &Attribute) -> Punctuated::<Meta,Token![,]>{
@@ -159,7 +148,7 @@ pub fn get_some_edit_attribute( attr: &Attribute,
 }
 
 
-pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<EditAttribute,String> {
+pub fn active_file_count( path: &std::path::PathBuf ) -> Result<EditAttribute,String> {
 
     let file = get_file(path);
 
@@ -217,10 +206,77 @@ pub fn macro_file_count( path: &std::path::PathBuf ) -> Result<EditAttribute,Str
 }
 
 
+pub fn find_group_items( path: &std::path::PathBuf, ident: &Ident ) -> (ItemStruct,ItemImpl){//Result<(ItemStruct,ItemImpl)> {
+
+    let file = get_file(path);
+
+    let mut item_struct = None;
+    let mut item_impl    = None;
+
+
+    for item  in file.items {
+
+        match item {
+            syn::Item::Struct(i_struct) => {
+                if  i_struct.ident.eq(ident) {
+                    if item_struct.is_none() {
+                        item_struct = Some(i_struct.clone());
+                    }
+                }
+            },
+            syn::Item::Impl(i_impl) => {
+                let (name,_,_) = crate::model::get_ident_type_generics(&i_impl);
+                if name.eq(ident){
+                    item_impl = Some(i_impl);
+                    if item_struct.is_some(){
+                        break;
+                    } 
+                }
+
+            },
+            _ => (),
+        } 
+    }
+    
+    let error_msg = |s:&str|{
+        format!("Type `{ident}` {s} not foud in `{}`.",path.to_string_lossy()) 
+    };
+    match (item_struct,item_impl){
+
+        (Some(strct),Some(imp)) => {return (strct,imp);},
+        (Some(_),None) => {
+            // let msg = format!("Type {ident} implement block not foud in {}.",path.to_string_lossy());
+            abort!(proc_macro::Span::call_site(),error_msg("implement block"));
+        },
+        (None,Some(_)) => {
+            // let msg = format!("Type {ident} definition block not foud in {}.",path.to_string_lossy());
+            abort!(proc_macro::Span::call_site(),error_msg("definition block"));
+        },
+        (None,None) => {
+            // let msg = format!("Type {ident} not foud in {}.",path.to_string_lossy());
+            abort!(proc_macro::Span::call_site(),error_msg(""));
+        },
+    }
+
+}
+
+pub fn expand_macros( path: &std::path::PathBuf, macs: &Vec<Model>) -> (syn::File, Lib){
+    let mut file    = get_file(path);
+    let mut libr = Lib::default();
+    for mac in macs {
+        let(fil,lib) = expand_macro(file,mac);
+        file = fil;
+        if Lib::default()!= lib{
+            libr = lib;
+        }
+    }
+    (file,libr)
+}
+
 pub fn expand_macro( mut file: syn::File, mac: &Model  ) -> (syn::File, Lib) { 
 
     let mut lib            = Lib::default();
-    let mut use_macro   = UseMacro::new(mac.to_str());
+    let mut use_macro   = UseMacro::new(&mac.to_string());
     let mut use_example = UseMacro::new(crate::EXAMPLE);
 
     let mut new_items_file: Vec<Vec<syn::Item>> = Vec::new();

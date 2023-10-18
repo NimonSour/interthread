@@ -213,3 +213,54 @@ fn actor_smol_unbounded() {
     });
 }
 
+
+// RESULT OPTION
+
+#[test]
+fn actor_async_std_unbounded_option() {
+    pub struct Actor<T>(T);
+    #[life(lib="async_std",debut)]
+    impl <T:Clone> Actor <T> 
+      where T: core::ops::AddAssign + std::fmt::Debug,
+    {
+        pub fn new(v:T) -> Option<Self>{ Some(Self(v))}
+        pub fn input(&mut self, v:T){self.0 = v}
+        pub fn output(&self)->T{self.0.clone()}
+        pub fn in_out(&self,v:T)->T{v}
+        pub fn add<I:Into<T>>(&mut self, v:I) -> T{self.0 += v.into();self.0.clone()}
+
+    }
+    async_std::task::block_on(async {
+            let mut live = ActorLive::new(0).unwrap();
+            live.input(3).await; 
+            assert_eq!( live.output().await,  3); 
+            assert_eq!( live.in_out(4).await, 4); 
+            assert_eq!( live.add(5i8).await,      8); 
+    });
+}
+
+#[test]
+fn actor_tokio_unbounded_result() {
+    pub struct Actor<T>(T);
+    #[life(lib="tokio",debut)]
+    impl <T:Clone> Actor <T> 
+      where T: core::ops::AddAssign + std::fmt::Debug,
+    {
+        pub fn new(v:T) -> Result<Self,String>{Ok(Self(v))}
+        pub fn input(&mut self, v:T){self.0 = v}
+        pub fn output(&self)->T{self.0.clone()}
+        pub fn in_out(&self,v:T)->T{v}
+        pub fn add<I:Into<T>>(&mut self, v:I) -> T{self.0 += v.into();self.0.clone()}
+
+    }
+    tokio::runtime::Runtime::new()
+    .unwrap()
+    .block_on( async {
+        let mut live = ActorLive::new(0).unwrap();
+        live.input(3).await; 
+        assert_eq!( live.output().await,  3); 
+        assert_eq!( live.in_out(4).await, 4); 
+        assert_eq!( live.add(5i8).await,  8); 
+    });
+}
+

@@ -5,8 +5,6 @@ use crate::model::{
 };
 
 use crate::error;
-use crate::model::name;
-
 
 use quote::quote;
 use syn::{punctuated::Punctuated,Ident,Generics,};
@@ -14,6 +12,8 @@ use syn::{punctuated::Punctuated,Ident,Generics,};
 
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
+
+use std::collections::BTreeMap;
 
 
 
@@ -557,23 +557,18 @@ explain this to the user.
 */
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct EditGroup {
-
     pub attr:      Option<EditAttribute>,
-    pub remove:                    bool,
-    pub edits: Option<Vec<(Ident,EditActor)>>,
-
+    pub remove:                     bool,
+    pub edits: Option<BTreeMap<Ident,EditActor>>,  //Option<Vec<(Ident,EditActor)>>,
 }
-
 
 impl EditGroup {
 
     pub fn parse(&mut self, meta: &syn::Meta ) {
 
 
-        if let Some(meta_list) = 
-            get_list( meta,Some(error::AVAIL_EDIT_GROUP) ) {
+        if let Some(meta_list) = get_list( meta,Some(error::AVAIL_EDIT_GROUP) ) {
             
-
             if meta_list.len() == 1 { 
                 if let Some(meta_value) = meta_list.first(){
 
@@ -585,7 +580,7 @@ impl EditGroup {
                             abort!(meta_value,error::EDIT_GROUP_FILE_OUTSIDE;note=error::AVAIL_EDIT_GROUP);
                         } else {
 
-                            self.edits = Some(Vec::new());
+                            self.edits = Some(BTreeMap::new());
                             self.remove = true;
                         }
                     } else {
@@ -608,7 +603,7 @@ impl EditGroup {
                 }
             }
 
-        } else { self.edits = Some(Vec::new()); }
+        } else { self.edits = Some(BTreeMap::new()); }
 
     }
 
@@ -619,9 +614,9 @@ impl EditGroup {
         let mut new_edit = EditActor::default();
         new_edit.parse(meta);
         if self.edits.is_some() {
-            self.edits.as_mut().map(|x| x.push((ident,new_edit)));
+            self.edits.as_mut().map(|x| x.insert(ident,new_edit));
         } else { 
-            self.edits = Some(vec![(ident,new_edit)]);
+            self.edits = Some(BTreeMap::from([(ident,new_edit)]));
         }
     } 
 

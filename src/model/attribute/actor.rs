@@ -106,6 +106,7 @@ impl ActorAttributeArguments {
             }
 
             // DEBUT
+            // pub fn check_legend_path( model: &Model, name: &syn::Ident, path: &PathBuf ) -> (PathBuf, PathBuf) {
             else if meta.path().is_ident("debut"){
 
                 if let Some(meta_list) = get_list( meta,Some(error::AVAIL_DEBUT) ) {
@@ -113,12 +114,17 @@ impl ActorAttributeArguments {
                     for m in meta_list {
                         if m.path().is_ident("legend"){
                             if let Some(meta_list) = get_list( meta,Some(error::AVAIL_DEBUT) ) {
+                                super::check_path_set(&nested);
                                 for m in meta_list{
 
                                     if m.path().is_ident("path"){
 
                                         let path_str = get_lit_str(&meta,"path");
-                                        todo!();
+                                        let path = std::path::PathBuf::from(&path_str);
+
+                                        if path.exists() { 
+                                            self.debut.path = Some(path);
+                                        }
 
                                     } else {
                                         let msg = "Unknown option for argument 'debut'.";
@@ -151,28 +157,25 @@ impl ActorAttributeArguments {
 
             // UNKNOWN ARGUMENT
             else { error::unknown_attr_arg("actor",meta.path() ) }
-
         }
-
-
     }
 
 
     pub fn cross_check(&mut self){
-
+        // file count 
         if self.edit.is_any_active(){
             if let Some(file_path) = &self.file {
-                match crate::file::macro_file_count(file_path) {
+                match crate::file::active_file_count(file_path) {
                     Ok(edit_attr) => {
                         self.edit.attr = Some(edit_attr);
                     },
                     Err(e) => { abort!(Span::call_site(),e); },
                 }
-            } else {
-                let msg = r#"Expected a 'file' argument ` file = "path/to/current/file.rs" ` ."#; 
-                abort!(Span::call_site(),msg;help=error::AVAIL_ACTOR)
-            }
+            } else { abort!(Span::call_site(),error::REQ_FILE;help=error::AVAIL_ACTOR); }
         }
+
+        // debut paths check 
+        // get debut script live in generating function
     }
 } 
 

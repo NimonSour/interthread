@@ -93,12 +93,12 @@ impl ActorMethodNew {
         vec![]
     }
 
-    pub fn  live_ret_statement(&self,  live_var: &Ident ) -> TokenStream {
+    pub fn  live_ret_statement(&self,  init_live: &TokenStream ) -> TokenStream {
        
         match self.res_opt {
-            Some(true)  =>  quote!{ Ok ( #live_var )},
-            Some(false) =>  quote!{ Some( #live_var )},
-            None        =>  quote!{ #live_var },
+            Some(true)  =>  quote!{ Ok ( #init_live )},
+            Some(false) =>  quote!{ Some( #init_live )},
+            None        =>  quote!{ #init_live },
         }
     }
 
@@ -131,17 +131,7 @@ where
     abort!(Span::call_site(), msg);
 }
 
-// pub fn is_trait(ty: &Type) -> bool {
-//     match ty {
-//         syn::Type::ImplTrait(_) => true,
-//         _ => false,
-//     }
-// }
 pub fn get_new_sig( sig: &Signature, ty: &Type) -> Signature {
-
-    // let ty_name = if is_trait(ty)  { 
-    //     quote!{#ty + Send + 'static}.to_string() 
-    // } else { quote!{#ty}.to_string() };
 
     let ty_name = quote!{#ty}.to_string() ;
     let mut signature = replace(sig, "Self",&ty_name);
@@ -166,69 +156,64 @@ fn check_self_return( sig: &Signature, ty_name: &Type ) -> (Signature,Option<boo
             else if ty_name.eq(ty_path) { 
                 return (get_new_sig(sig,ty_name), None);
             }
-            // if !is_trait(ty_name){
 
-                match ty_path.as_ref(){ 
-                    Type::Path( p ) => {
-                        let segment = &mut p.path.segments.last().unwrap();
-                        let mut res_opt : Option<bool> = None;
-                        
-                        if  option_ident.eq(&segment.ident) {
-                            res_opt = Some(false);
-                        }
-    
-                        else if result_ident.eq(&segment.ident) {
-                            res_opt = Some(true);
-                        }
-    
-                        if res_opt.is_some(){
-    
-                            match &segment.arguments {
-    
-                                syn::PathArguments::AngleBracketed(gen_arg) => {
-                                    if let Some(arg)  = gen_arg.args.first(){
-    
-                                        match arg {   
-                                            syn::GenericArgument::Type( ty ) => {
-                                                if ty_self.eq(ty){ 
-                                                    return (get_new_sig(sig,ty_name), res_opt);
-                                                }
-    
-                                                else if ty_name.eq(ty){
-                                                    return (get_new_sig(sig,ty_name), res_opt);
-                                                }
-                                                else {
-                                                    let (msg,note,help) = error::met_new_not_instance(sig, ty_name, quote!{#ty},res_opt);
-                                                    abort!(ty,msg;note=note;help=help); 
-                                                }
-                                            },
-                                            bit => {
-                                                let (msg,note,help) = met_new_found(sig, ty_name, quote!{#segment},res_opt);
-                                                abort!(bit,msg;note=note;help=help); 
-                                            },
-                                        }
+            match ty_path.as_ref(){ 
+                Type::Path( p ) => {
+                    let segment = &mut p.path.segments.last().unwrap();
+                    let mut res_opt : Option<bool> = None;
+                    
+                    if  option_ident.eq(&segment.ident) {
+                        res_opt = Some(false);
+                    }
+
+                    else if result_ident.eq(&segment.ident) {
+                        res_opt = Some(true);
+                    }
+
+                    if res_opt.is_some(){
+
+                        match &segment.arguments {
+
+                            syn::PathArguments::AngleBracketed(gen_arg) => {
+                                if let Some(arg)  = gen_arg.args.first(){
+
+                                    match arg {   
+                                        syn::GenericArgument::Type( ty ) => {
+                                            if ty_self.eq(ty){ 
+                                                return (get_new_sig(sig,ty_name), res_opt);
+                                            }
+
+                                            else if ty_name.eq(ty){
+                                                return (get_new_sig(sig,ty_name), res_opt);
+                                            }
+                                            else {
+                                                let (msg,note,help) = error::met_new_not_instance(sig, ty_name, quote!{#ty},res_opt);
+                                                abort!(ty,msg;note=note;help=help); 
+                                            }
+                                        },
+                                        bit => {
+                                            let (msg,note,help) = met_new_found(sig, ty_name, quote!{#segment},res_opt);
+                                            abort!(bit,msg;note=note;help=help); 
+                                        },
                                     }
-                                    let (msg,note,help) = met_new_found(sig, ty_name, quote!{#segment},res_opt);
-                                    abort!(segment.arguments,msg;note=note;help=help); 
-                                },
-                                bit => {
-                                    let (msg,note,help) = met_new_found(sig, ty_name, quote!{#segment},res_opt);
-                                    abort!(bit,msg;note=note;help=help);
-                                },
-                            }
+                                }
+                                let (msg,note,help) = met_new_found(sig, ty_name, quote!{#segment},res_opt);
+                                abort!(segment.arguments,msg;note=note;help=help); 
+                            },
+                            bit => {
+                                let (msg,note,help) = met_new_found(sig, ty_name, quote!{#segment},res_opt);
+                                abort!(bit,msg;note=note;help=help);
+                            },
                         }
-                        let (msg,note,help) = met_new_found(sig, ty_name, quote!{#p},None);
-                        abort!(p,msg;note=note;help=help);
-                    },
-                    bit => {
-                        let (msg,note,help) = met_new_found(sig, ty_name, quote!{#bit},None);
-                        abort!(bit,msg;note=note;help=help);
-                    },
-                }
-            // } else {
-            //     let ( msg, note ) = error::trait_new_sig(ty_name,true);
-            //     abort!(sig,msg;note=note);
-            // }
+                    }
+                    let (msg,note,help) = met_new_found(sig, ty_name, quote!{#p},None);
+                    abort!(p,msg;note=note;help=help);
+                },
+                bit => {
+                    let (msg,note,help) = met_new_found(sig, ty_name, quote!{#bit},None);
+                    abort!(bit,msg;note=note;help=help);
+                },
+            }
         },
         
         bit => { 
@@ -275,57 +260,8 @@ fn is_vis( v: &Visibility ) -> bool {
     }
 }
 
-// fn get_sigs(item_impl: &syn::ItemImpl) -> (Option<Visibility>, Vec<(Visibility,Signature)>){
-//     let mut res :(Option<Visibility>, Vec<(Visibility,Signature)>) = (None,Vec::new());
-
 fn get_sigs(item_impl: &syn::ItemImpl) -> Vec<(Visibility,Signature)>{
     let mut res :Vec<(Visibility,Signature)> = Vec::new();
-
-    // match item {
-    //     syn::Item::Fn(item_fn) => {
-    //         if is_vis(&item_fn.vis){
-    //             res.0 = Some(item_fn.vis.clone());
-    //             for stmt in &item_fn.block.stmts {
-    //                 match stmt {
-    //                     syn::Stmt::Item(itm) => {
-    //                         match itm {
-    //                             syn::Item::Fn(itm_fn) => {
-    //                                 // match visibility
-    //                                 if is_vis(&itm_fn.vis){
-    //                                     res.1.push((itm_fn.vis.clone(),itm_fn.sig.clone()));
-    //                                 }
-    //                             },
-    //                             _ => (),
-    //                         }
-    //                     },
-    //                     _ => (),
-    //                 }
-    //             }
-    //         } else {
-    //             let msg = "Expected explicit visibility.";
-    //             let (note,help) = error::item_vis();
-    //             abort!(item,msg;note=note;help=help)
-    //         }
-    //     },
-    //     syn::Item::Trait(item_trait) => {
-    //         if is_vis(&item_trait.vis){
-    //             res.0 = Some(item_trait.vis.clone());
-    //             for itm in &item_trait.items {
-    //                 match itm {
-    //                     syn::TraitItem::Fn(trait_item_fn) => {
-    //                         res.1.push((item_trait.vis.clone(),trait_item_fn.sig.clone()));
-    //                     },
-    //                     _ => (),
-    //                 }
-    //             }
-    //         } else {
-    //             let msg = "Expected explicit visibility.";
-    //             let (note,help) = error::item_vis();
-    //             abort!(item,msg;note=note;help=help) 
-    //         }
-    //     },
-        // syn::Item::Impl(item_impl) => {
-
 
     for itm in &item_impl.items {
         match itm {
@@ -337,14 +273,6 @@ fn get_sigs(item_impl: &syn::ItemImpl) -> Vec<(Visibility,Signature)>{
             _ => (),
         }
     }
-
-
-        // },
-        // v => {
-        //     let msg = "Internal Error. 'methods::get_sigs' Expected Item  `Fn`, `Trait` or `Impl`.";
-        //     abort!(v,msg);
-        // },
-    // }
     res
 }
 
@@ -436,7 +364,38 @@ pub fn change_signature_refer( signature: &mut Signature ) {
     signature.inputs.insert(0,slf);
 }
 
+// NEW
+
+pub fn args_to_pat_type(args: &Vec<FnArg>) -> (Vec<Box<syn::Pat>>, Vec<Box<Type>>) {
+
+    let mut pats = Vec::new();
+    let mut types  = Vec::new();
+
+    for i in args  { 
+        match i { 
+            FnArg::Typed(arg) => { 
+                pats.push(arg.pat.clone());
+                types.push(arg.ty.clone());
+            },
+            _ => (),
+        }
+    }
+    (pats,types)    
+}
+
+
+//OLD
+/*
 pub fn args_to_ident_type(args: &Vec<FnArg>) -> (Vec<Ident>, Vec<Box<Type>>){
+    let mut tuple = 0usize;
+    let mut new_tuple_ident = || {tuple +=1; format_ident!("tuple_{}",&tuple)};
+
+    let mut tuple_struct = 0usize;
+    let mut new_tuple_struct_ident = || {tuple_struct +=1; format_ident!("tuple_struct_{}",&tuple_struct)};
+
+    let mut strct = 0usize; 
+    let mut new_struct_ident = || {strct +=1; format_ident!("struct_{}",&strct)};
+
 
     let mut idents = Vec::new();
     let mut types  = Vec::new();
@@ -446,21 +405,28 @@ pub fn args_to_ident_type(args: &Vec<FnArg>) -> (Vec<Ident>, Vec<Box<Type>>){
             FnArg::Typed(arg) => { 
                 if let Some(id) = match *arg.pat.clone() {
                     syn::Pat::Ident(pat_id) => Some(pat_id.ident.clone()),
-                    _ => None,
+                    syn::Pat::Tuple(_pat_tuple) => Some(new_tuple_ident()),
+                    syn::Pat::TupleStruct(_pat_struct) => Some(new_tuple_struct_ident()),
+                    syn::Pat::Struct(_pat_tuple_struct) => Some(new_struct_ident()),
+                    _ => abort!(Span::call_site(),error::invalid_fn_arg_pattern(i)),
                 }{
                     idents.push(id);
                     types.push(arg.ty.clone());
                 }
             },
+            // this needs an error so bad
             _ => (),
         }
     }
     (idents,types)    
 }
 
-pub fn arguments_ident_type( args: &Vec<FnArg> ) -> (TokenStream, TokenStream) { 
+ */
 
-    let (idents,types) = args_to_ident_type(args); 
+
+pub fn arguments_pat_type( args: &Vec<FnArg> ) -> (TokenStream, TokenStream) { 
+
+    let (idents,types) = args_to_pat_type(args); 
     let args_ident =  quote!{ (#(#idents),*)};
     let args_type  =  quote!{ (#(#types),*) };
     ( args_ident, args_type )
@@ -475,5 +441,239 @@ pub fn to_async( lib: &Lib, sig: &mut Signature ) {
         }
     }
 }
+
+
+// TOKENSTREAM FROM METHODS 
+
+pub fn live_static_method( 
+    actor_name: &Ident,
+         ident: Ident, 
+           vis: Visibility,
+       mut sig: Signature,
+          args: TokenStream,
+     live_mets: &mut Vec<(Ident,TokenStream)> ) {
+
+    change_signature_refer(&mut sig);
+    let await_call = sig.asyncness.as_ref().map(|_|quote!{.await});
+    let stat_met = quote! {
+        #vis #sig {
+            #actor_name::#ident #args #await_call
+        }
+    };
+    live_mets.push((ident,stat_met));
+}
+
+
+
+
+
+pub fn to_raw_parts (
+    actor:                    &Ident,
+    actor_name:               &Ident,
+    script_name:              &Ident,
+    lib:                       & Lib,
+    actor_methods:  Vec<ActorMethod>,
+
+    live_meth_send_recv: TokenStream, 
+    live_send_input:     TokenStream, 
+    live_recv_output:    TokenStream,
+    script_field_output: Box<dyn Fn(Box<Type>) -> TokenStream>, 
+    
+    live_mets: &mut Vec<(Ident,TokenStream)>,
+    debug_arms:        &mut Vec<TokenStream>,
+    direct_arms:       &mut Vec<TokenStream>,
+    script_fields:     &mut Vec<TokenStream>,
+
+){
+
+
+
+    for method in actor_methods.clone() {
+        
+        let (mut sig, script_field_name) = method.get_sig_and_field_name();
+        let await_call = sig.asyncness.as_ref().map(|_|quote!{.await});
+        to_async(lib, &mut sig);
+
+        let error_send = error::direct_send(&script_name,&script_field_name);
+
+        // Debug arm
+        let add_arm = | debug_arms: &mut Vec<TokenStream>,ident: &Ident | {
+
+            let str_field_name = format!("{}::{}",script_name.to_string() ,ident.to_string());
+
+            let debug_arm = quote! {
+                #script_name :: #script_field_name {..} => write!(f, #str_field_name),
+            };
+            debug_arms.push(debug_arm);
+        };
+
+        match method {
+
+            ActorMethod::Io   { vis, ident, stat,  arguments, output,.. } => {
+                let (args_ident,args_type) = arguments_pat_type(&arguments);
+                
+                if stat {
+                    live_static_method(&actor_name,ident, vis, sig, args_ident,live_mets)
+                }
+                else {
+                    // Debug Arm push
+                    add_arm(debug_arms, &script_field_name);
+
+                    // Direct Arm
+                    let arm_match        = quote! { 
+                        #script_field_name { input: #args_ident,  output: inter_send }
+                    };
+                    let direct_arm       = quote! {
+                        #script_name :: #arm_match => {inter_send.send( #actor.#ident #args_ident #await_call ) #error_send ;}
+                    };
+                    direct_arms.push(direct_arm);
+                    
+                    // Live Method
+                    let live_met      = quote! {
+
+                        #vis #sig {
+                            #live_meth_send_recv
+                            let msg = #script_name :: #arm_match;
+                            #live_send_input
+                            #live_recv_output
+                        }
+                    };
+
+                    live_mets.push((ident,live_met));
+
+                    // Script Field Struct
+                    let output_type      = (&*script_field_output)(output);
+
+                    let script_field = quote! {
+                        #script_field_name {
+                            input: #args_type,
+                            #output_type
+                        }
+                    };
+
+                    script_fields.push(script_field);
+                }
+            },
+            ActorMethod::I    { vis, ident, arguments ,..} => {
+                
+                let (args_ident,args_type) = arguments_pat_type(&arguments);
+                
+                // Debug Arm push
+                add_arm(debug_arms, &script_field_name);
+
+                // Direct Arm
+                let arm_match = quote!{ 
+                    #script_field_name{ input: #args_ident }
+                };
+    
+                let direct_arm = quote!{
+                    #script_name::#arm_match => {#actor.#ident #args_ident #await_call;},
+                };
+                direct_arms.push(direct_arm);
+
+                // Live Method
+                let live_met = quote!{
+    
+                    #vis #sig {
+                        let msg = #script_name::#arm_match ;
+                        #live_send_input
+                    }
+                };
+                live_mets.push((ident,live_met));
+            
+
+
+                // Script Field Struct
+                let script_field = quote!{
+                    #script_field_name {
+                        input: #args_type,
+                    }
+                };
+                script_fields.push(script_field);
+
+            },
+            ActorMethod::O    { vis, ident, stat, output ,..} => {
+                let (args_ident,_) = arguments_pat_type(&vec![]);
+
+                if stat {
+                    live_static_method(&actor_name,ident, vis, sig, args_ident,live_mets)
+                }
+                else {
+                    
+                    // Debug Arm push
+                    add_arm(debug_arms, &script_field_name);
+
+                    // Direct Arm
+                    let arm_match = quote!{ 
+                        #script_field_name{  output: inter_send }
+                    };
+        
+                    let direct_arm = quote!{
+                        #script_name::#arm_match => {inter_send.send(#actor.#ident #args_ident #await_call) #error_send ;}
+                    };
+                    direct_arms.push(direct_arm);
+
+
+
+                    // Live Method
+                    let live_met = quote!{
+                    
+                        #vis #sig {
+                            #live_meth_send_recv
+                            let msg = #script_name::#arm_match ;
+                            #live_send_input
+                            #live_recv_output
+                        }
+                    };
+                    live_mets.push((ident, live_met));
+                
+                    // Script Field Struct
+                    let output_type  = (&*script_field_output)(output);
+
+                    let script_field = quote!{
+                        #script_field_name {
+                            #output_type
+                        }
+                    };
+                    script_fields.push(script_field);
+                }
+            },
+            ActorMethod::None { vis, ident ,..} => {
+
+                // Debug Arm push
+                add_arm(debug_arms, &script_field_name);
+
+                // Direct Arm
+                let arm_match = quote!{ 
+                    #script_field_name {} 
+                };
+    
+                let direct_arm = quote!{
+                    #script_name::#arm_match => {#actor.#ident () #await_call;},
+                };
+                direct_arms.push(direct_arm);
+
+                // Live Method
+                let live_met = quote!{
+                
+                    #vis #sig {
+                        let msg = #script_name::#arm_match ;
+                        #live_send_input
+                    }
+                };
+                live_mets.push((ident,live_met));
+            
+                // Script Field Struct
+                let script_field = quote!{
+                    
+                    #script_field_name {}
+                };
+                script_fields.push(script_field);
+            },
+        }
+    } 
+}
+
+
 
 

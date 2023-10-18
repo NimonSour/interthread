@@ -1330,7 +1330,14 @@ pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     let mut gaa = model::attribute::GroupAttributeArguments::default();
     let nested  = syn::parse_macro_input!(attr with syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated); 
     gaa.parse_nested(nested);
-    // aaa.cross_check();
+    gaa.cross_check(&item_impl);
+
+    check::channels_import( &gaa.lib );
+
+    let mut group_model = 
+    model::group::group_model( &gaa,&item_impl,model::argument::Model::Group,None);
+    
+    
     let msg = format!("{:?}",gaa.edit);
     // proc_macro_error::abort!( proc_macro::Span::call_site(), msg );
     // let msg = "Nothing yet ";

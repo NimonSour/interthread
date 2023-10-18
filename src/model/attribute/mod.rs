@@ -11,7 +11,6 @@ use proc_macro2::TokenStream;
 use crate::model::argument::Model;
 use syn::{ punctuated::Punctuated,ItemImpl,Meta,Token,Attribute };
 use proc_macro_error::abort;
-// use std::path::PathBuf;
 
 
 //-----------------------  ACTOR CHANNEL 
@@ -91,7 +90,7 @@ impl AttributeArguments {
 }
 
 
-//// aux functions for attributes 
+//  aux functions for attributes 
 
 pub fn to_usize(value: &syn::LitInt) -> usize {
         
@@ -243,6 +242,7 @@ pub fn get_ident_group( meta: &Meta,arg: &str) -> syn::Ident {
             }
         }
     } 
+    
     abort!(path, error::UNEXPECTED_EDIT_GROUP_PATH; note=error::AVAIL_EDIT_GROUP );
 }
 

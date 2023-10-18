@@ -10,13 +10,11 @@ pub use edit::*;
 
 
 use crate::error;
-// use crate::file::get_ident;
 
 use proc_macro2::{Span,TokenStream};
 use proc_macro_error::abort;
 use quote::{quote,format_ident};
 use syn::{Ident,Meta};
-// use syn::punctuated::Punctuated;
 
 use std::path::PathBuf;
 
@@ -30,13 +28,22 @@ pub enum Model {
     Group,
 }
 
-impl Model {
+// impl Model {
 
-    pub fn to_str(&self) -> &'static str {
+//     pub fn to_str(&self) -> &'static str {
 
+//         match self {
+//             Self::Actor => crate::ACTOR,
+//             Self::Group => crate::GROUP,
+//         }
+//     }
+// }
+impl std::fmt::Display for Model {
+
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Actor => crate::ACTOR,
-            Self::Group => crate::GROUP,
+            Self::Actor => write!(f,"{}",crate::ACTOR),
+            Self::Group => write!(f,"{}",crate::GROUP),
         }
     }
 }
@@ -53,7 +60,6 @@ pub enum Lib {
 
 impl Lib {
 
-    // pub fn from( s: &syn::LitStr  ) -> Self {
     pub fn from( s: &str  ) -> Self {
 
         match s {
@@ -73,7 +79,7 @@ impl Lib {
 
         match &self {
             Lib::Std      => {
-                quote!{ std::thread::spawn(|| { #script_name :: play(#play_args) } );}
+                quote!{ std::thread::spawn(move|| { #script_name :: play(#play_args) } );}
             },
             Lib::Smol     => {
                 quote!{ smol::spawn( #script_name :: play(#play_args) ).detach();} 
@@ -212,6 +218,9 @@ mod tests {
         }
         println!("Edit  - {:?}", edit);  
     }
+
+
+
     #[test]
     fn test_split_edit_group() {
 

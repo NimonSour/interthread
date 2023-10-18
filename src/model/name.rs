@@ -8,26 +8,18 @@ use crate::model::argument::Model;
 
 pub fn get_ident_type_generics(item_impl: &syn::ItemImpl) -> (syn::Ident,syn::Type,syn::Generics) {
 
-    // match item {
-        // syn::Item::Impl(item_impl)  => {
-            match &*item_impl.self_ty {
-                syn::Type::Path(tp) => {
-                    let ident = tp.path.segments.last().unwrap().ident.clone();
-                    let typ :syn::Type = syn::parse_quote!{ #ident };
-                    let generics = item_impl.generics.clone();
-                    (ident,typ,generics)
-                },
-                _ => {
-                    let msg ="Internal Error.'actor_gen::impl_get_name'. Could not get item Impl's name!";
-                    abort!(item_impl,msg);
-                }
-            }
-        // },
-        // v => {
-        //     let msg = "Macro `actror` expected an `impl` item.";
-        //     abort!( v, msg ); 
-        // },
-    // }
+    match &*item_impl.self_ty {
+        syn::Type::Path(tp) => {
+            let ident = tp.path.segments.last().unwrap().ident.clone();
+            let typ :syn::Type = syn::parse_quote!{ #ident };
+            let generics = item_impl.generics.clone();
+            (ident,typ,generics)
+        },
+        _ => {
+            let msg ="Internal Error.'actor_gen::impl_get_name'. Could not get item Impl's name!";
+            abort!(item_impl,msg);
+        }
+    }
 }
 
 // Actor
@@ -68,7 +60,9 @@ pub fn live_group(name: &Ident) -> Ident{
     format_ident!("{}",new_name)
 }
 
-
+pub fn get_group_names(name: &Ident) ->  ( Ident, Ident ){
+    ( group_script(name), group_live(name) )
+}
 
 pub fn get_actor_names(name: &Ident, mac: &Model) -> ( Ident, Ident ){
 

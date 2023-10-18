@@ -1,20 +1,6 @@
 
 
 
-pub struct AnyOtherType;
-
-
-pub struct Aa(pub u8);
-pub struct Bb(pub u8);
-pub struct Cc(pub u8);
-
-
-pub struct AaBbCc {
-    pub a: Aa,
-    pub b: Bb, 
-    pub c: Cc,
-    any: AnyOtherType,
-}
 
 /*
 For a struct
@@ -200,6 +186,7 @@ macro edit will look like so  `edit( self::edit, a::edit, b::edit)
 pub struct MyActor {
     value: i8,
 }
+
 // #[interthread::actor(edit(live(imp(get_value))))]  V
 
 // #[interthread::actor(edit(live(imp(increment))))]   
@@ -280,6 +267,86 @@ impl MyActor {
         self.value
     }
 }
+
+
+
+
+
+//_____________________________________________________________
+pub struct AnyOtherType;
+
+pub struct Aa(pub u8);
+
+impl Aa {
+    pub fn add(&mut self, v: u8){
+        self.0 += v;
+    }
+}
+pub struct Bb(pub u8);
+
+impl Bb {
+    pub fn add(&mut self, v: u8){
+        self.0 += v;
+    }
+}
+pub struct Cc(pub u8);
+impl Cc {
+    pub fn add(&mut self, v: u8){
+        self.0 += v;
+    }
+}
+
+pub struct AaBbCc {
+    pub a: Aa,
+    pub b: Bb, 
+    pub c: Cc,
+    any: AnyOtherType,
+}
+
+
+/*
+
+AaScriptGroup {
+    Add{input: u8}
+}
+
+BbScriptGroup {
+    Add{input: u8}
+}
+
+CcScriptGroup {
+    Add{input: u8}
+}
+
+
+AaBbCcGroupScript {
+
+    AddToA{ input:u8, send:Sender },
+    A(AaScriptGroup),
+    B(BbScriptGroup),
+    C(CcScriptGroup),
+
+}
+
+direct ( )
+*/
+
+// #[interthread::group( file= "examples/intro_group.rs" )]
+impl AaBbCc {
+
+    pub fn new( ) -> Self {
+        let a = Aa(0);
+        let b = Bb(0);
+        let c = Cc(0);
+        let any = AnyOtherType;
+
+        Self{ a,b,c,any }
+    }
+    pub fn add_to_a(&mut self, v:u8){
+        self.a.0 += v;
+    }
+}
+
 
 
 // #[interthread::example(path = "examples/intro_group.rs")]

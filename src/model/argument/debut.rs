@@ -16,6 +16,9 @@ pub static DEBUT: &'static str           = "debut";
 pub struct Debut {
     pub path:      Option<PathBuf>,
     pub legend:       Option<bool>,
+    pub leg_script: Option<PathBuf>,   
+    pub leg_live:   Option<PathBuf>,   
+    
 }
 
 impl Debut {
@@ -33,7 +36,12 @@ impl Debut {
 
 impl Default for Debut {
     fn default() -> Debut {
-        Self{ path: None, legend: None } 
+        Self{ 
+              path: None, 
+            legend: None,
+        leg_script: None,   
+          leg_live: None,
+        } 
     }
 }
 

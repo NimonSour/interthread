@@ -1,14 +1,15 @@
 use crate::error;
-// use crate::model::{Model, Channel,Lib,EditGroup,Debut,get_ident,get_lit,get_list,to_usize};
-use crate::model::{Model, Channel,Lib,EditGroup,Debut,get_ident,get_ident_group,get_lit,get_lit_str,get_list,to_usize};
+use crate::model::{Model,ActorModelSdpl, Channel,Lib,EditGroup,Debut,get_ident,get_ident_group,get_lit,get_lit_str,get_list,to_usize};
 
 
 use std::path::PathBuf;
 use proc_macro2::Span;
 use proc_macro_error::abort;
 use quote::format_ident;
-use syn::{Ident,punctuated::Punctuated};
+use syn::{Ident,ItemStruct,ItemImpl,Visibility,Type,punctuated::Punctuated,Meta};
+use std::collections::BTreeMap;
 
+use super::ActorAttributeArguments;
 
 // GROUP ARGUMENTS 
 // pub struct  AGEdit {
@@ -83,12 +84,16 @@ pub struct GroupAttributeArguments {
     pub lib     :  Lib,
     pub file    :  Option<PathBuf>,
 
-    pub name    :  Vec<(Ident,String)>,
-    pub assoc   :  Option<Vec<(Ident,bool)>>,
+    pub name    :  BTreeMap<Ident,Ident>,
+    pub assoc   :  Option<BTreeMap<Ident,bool>>,
     pub edit    :  EditGroup,
-    pub path    :  Vec<(Ident,PathBuf)>,
- 
+    pub path    :  BTreeMap<Ident,PathBuf>,
+    pub allow   :  BTreeMap<Ident,Meta>,
+    
+    pub members :  BTreeMap<Ident,(ItemImpl,Visibility)>,
 }
+
+
 
 impl GroupAttributeArguments {
 
@@ -136,8 +141,8 @@ impl GroupAttributeArguments {
 
                         let ident = get_ident_group(&met,"name");
                         let name_str = get_lit_str(&met,"name");
-                        self.name.push((ident,name_str));
-
+                        // self.name.push((ident,name_str));
+                        self.name.insert(ident, format_ident!("{name_str}"));
                     }
 
                 } else { abort!(meta,error::EXPECT_LIST;help=error::AVAIL_GROUP); }
@@ -153,16 +158,20 @@ impl GroupAttributeArguments {
                             
                             syn::Meta::Path(_) => { 
                                 if self.assoc.is_some() {
-                                    self.assoc.as_mut().map(|x| x.push((ident,true)));
+                                    // self.assoc.as_mut().map(|x| x.push((ident,true)));
+                                    self.assoc.as_mut().map(|x| x.insert(ident,true));
             
-                                } else { self.assoc = Some(vec![(ident,true)]); }
+                                } else { 
+                                    // self.assoc = Some(vec![(ident,true)]); 
+                                    self.assoc = Some(BTreeMap::from([(ident,true)])); 
+                                }
                             },
 
                             _ => { abort!(meta.path(), error::OLD_ARG_ASSOC); },
                         }
                     }
 
-                } else { self.assoc = Some( Vec::new());  }
+                } else { self.assoc = Some( BTreeMap::new());  }
                 
             }
 
@@ -181,7 +190,7 @@ impl GroupAttributeArguments {
                         let path_str = get_lit_str(&met,"path");
                         let path = std::path::PathBuf::from(&path_str);
 
-                        if path.exists() { self.path.push((ident,path)); }
+                        if path.exists() { self.path.insert(ident,path); }
 
                         else { abort!(met, format!("Path - {path_str:?} does not exist.")); } 
                     }
@@ -189,28 +198,159 @@ impl GroupAttributeArguments {
                 } else { abort!(meta,error::EXPECT_LIST;help=error::AVAIL_GROUP); }
             }
 
-            else if meta.path().is_ident("field") { 
+            else if meta.path().is_ident("allow") { 
+
                 if let Some(meta_list) = get_list( meta,Some(error::AVAIL_GROUP) ) { 
                     super::check_path_set(&meta_list);
+
                     for met in meta_list {
-                        let ident = get_ident_group(&met,"field");
-
-                        // let ident = get_ident_group(&met,"path");
-                        // let path_str = get_lit_str(&met,"path");
-                        // let path = std::path::PathBuf::from(&path_str);
-
-                        // if path.exists() { self.path.push((ident,path)); }
-
-                        // else { abort!(met, format!("Path - {path_str:?} does not exist.")); } 
+                        let ident = get_ident(&met);
+                        self.allow.insert(ident,meta.clone());
                     }
 
-                } else { abort!(meta,error::EXPECT_LIST;help=error::AVAIL_GROUP); }
+                } else { abort!(meta,error::EXPECT_LIST;help=error::ABOUT_ALLOW); }
             }
 
             // UNKNOWN ARGUMENT
             else { error::unknown_attr_arg("group",meta.path() ) }
         }
     }
+
+
+
+    pub fn get_vis_ident_ty<'a> (&self, strct: &'a ItemStruct ) -> Vec<(&'a Visibility,&'a Ident,&'a Type)> {
+
+        let mut loc = Vec::new();
+
+        for field in strct.fields.iter() {
+
+            if let Some(ident) = &field.ident {
+
+                let private = match &field.vis {
+                    Visibility::Inherited  => true,
+                    _ => false,
+                };
+                let exclude = self.allow.get(ident);
+                // if let Some(pos) = allow.iter().position(|x| x.0.eq(ident)){
+                //     Some(&allow[pos].1)
+                // } else { None };
+
+                match (private,exclude) {
+                    (true,Some(met)) => {
+                        abort!(met,error::PRIVATE_ALLOW_FIELD;note=error::ABOUT_ALLOW);
+                    },
+                    (true,None)     => (),
+                    (false,Some(_)) => (),
+                    (false,None)    => { loc.push((&field.vis,ident,&field.ty)); },
+                }
+                
+            } else { abort!(Span::call_site(),error::TUPLE_STRUCT_NOT_ALLOWED); }
+        }
+        loc
+    }
+
+    // pub fn 
+    pub fn cross_check(&mut self,item_impl: &ItemImpl){
+
+        // if there if file
+        if let Some(file) = &self.file {
+
+            // check edit 
+            if self.edit.is_any_active() {
+
+                match crate::file::active_file_count(file) {
+                    Ok(edit_attr) => {
+                        self.edit.attr = Some(edit_attr);
+                    },
+                    Err(e) => { abort!(Span::call_site(),e); },
+                }
+            }
+
+            // -------
+
+            let (group_ident,_,_)  = crate::model::get_ident_type_generics(item_impl);
+            let (i_strct,_) = crate::file::find_group_items(file,&group_ident);
+            // may be check for equality  impl 
+
+            let fields = self.get_vis_ident_ty(&i_strct);
+            for (vis,ident_field, ty) in fields {
+                
+                // type identifier
+                let ident_ty = match ty {
+                    syn::Type::Path(ty_path) => {
+                        ty_path.path.segments.last().unwrap().ident.clone()
+                    },
+                    _ => {
+                        let p = quote::quote!{#ty}.to_string();
+                        let msg = format!("Expected identifier found : {}.",p);
+                        abort!(Span::call_site(),msg;note=error::GROUP_FIELD_TYPE);
+                    },
+                };
+
+                // member file path 
+                let mem_path = if let Some(new_path) = self.path.get(ident_field){
+                    new_path
+                } else { file };
+                // get impl block 
+                let (_,i_impl) = crate::file::find_group_items(mem_path,&ident_ty);
+                self.members.insert(ident_field.clone(),(i_impl,vis.clone()));
+            }
+
+        } else { abort!(Span::call_site(),error::REQ_FILE;help=error::AVAIL_ACTOR); }
+
+    }
+    
+    /*
+    pub channel :  Channel,
+    pub lib     :  Lib,
+    pub file    :  Option<PathBuf>,
+
+    pub name    :  BTreeMap<Ident,String>,//Vec<(Ident,String)>,
+    pub assoc   :  Option<BTreeMap<Ident,bool>>,// Option<Vec<(Ident,bool)>>,
+    pub edit    :  EditGroup,
+    pub path    :  BTreeMap<Ident,PathBuf>,//Vec<(Ident,PathBuf)>,
+    pub allow   :  BTreeMap<Ident,Meta>,//Vec<(Ident,Meta)>,
+    
+    pub members :  BTreeMap<Ident,(ItemImpl,Visibility)>,
+     */
+
+
+
+    pub fn get_aaa(&self, slf: Option<&Ident>) -> ActorAttributeArguments {
+
+        let slf = & if let Some(s) = slf { s.clone() } else { format_ident!("self") };
+
+        let mut aaa = ActorAttributeArguments::default();
+
+        aaa.channel = self.channel.clone();
+        aaa.lib = self.lib.clone();
+        aaa.file = self.file.clone();
+
+        aaa.name = self.name.get(slf).cloned();
+
+        if self.assoc.is_some(){
+            self.assoc
+                .as_ref()
+                .map(|x| 
+                    if x.is_empty() { aaa.assoc = true; } 
+                    else { if let Some(_) = x.get(slf){ aaa.assoc = true; } }
+                );
+        }
+
+        if let Some(edt) = &self.edit.edits{
+            if let Some(mut edit)  = edt.get(slf).cloned(){
+                edit.remove = self.edit.remove;
+                edit.attr = self.edit.attr.clone();
+                aaa.edit = edit;
+            }
+        }
+        aaa
+    }
+
+    // pub fn get_all_actors(&self) -> Vec<crate::model::ActorModelSdpl> {
+        // let slf = format_ident!("self");
+        // let coll = self.members.keys().filter(|&x| slf)
+
 
 
 }
@@ -225,10 +365,12 @@ impl Default for GroupAttributeArguments {
             lib     :  Lib::default(),
             file    :  None,
         
-            name    :  Vec::new(),
+            name    :  BTreeMap::new(),
             assoc   :  None,
             edit    :  EditGroup::default(),
-            path    :  Vec::new(),
+            path    :  BTreeMap::new(),
+            allow   :  BTreeMap::new(),
+            members :  BTreeMap::new(),
         }
     }
 }

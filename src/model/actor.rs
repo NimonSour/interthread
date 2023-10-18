@@ -7,23 +7,23 @@ use syn::{Ident,Signature,ItemImpl,Visibility };
 use quote::{quote,format_ident};
 use proc_macro2::TokenStream;
 
-pub fn live_static_method( 
-    actor_name: &Ident,
-         ident: Ident, 
-           vis: Visibility,
-       mut sig: Signature,
-          args: TokenStream,
-     live_mets: &mut Vec<(Ident,TokenStream)> ) {
+// pub fn live_static_method( 
+//     actor_name: &Ident,
+//          ident: Ident, 
+//            vis: Visibility,
+//        mut sig: Signature,
+//           args: TokenStream,
+//      live_mets: &mut Vec<(Ident,TokenStream)> ) {
 
-    method::change_signature_refer(&mut sig);
-    let await_call = sig.asyncness.as_ref().map(|_|quote!{.await});
-    let stat_met = quote! {
-        #vis #sig {
-            #actor_name::#ident #args #await_call
-        }
-    };
-    live_mets.push((ident,stat_met));
-}
+//     method::change_signature_refer(&mut sig);
+//     let await_call = sig.asyncness.as_ref().map(|_|quote!{.await});
+//     let stat_met = quote! {
+//         #vis #sig {
+//             #actor_name::#ident #args #await_call
+//         }
+//     };
+//     live_mets.push((ident,stat_met));
+// }
 
 
 pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Model, mut new_vis: Option<Visibility> ) 
@@ -83,8 +83,9 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
     // Giving a new name if specified 
     let cust_name   = if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { actor_name.clone() }; 
     
-    let script_name = &name::script(&cust_name);
-    let live_name   = &name::live(&cust_name);
+    // let script_name = &name::script(&cust_name);
+    // let live_name   = &name::live(&cust_name);
+    let ( script_name, live_name) = &name::get_actor_names(&cust_name,&mac);
     
 
     let (live_field_sender,
@@ -115,197 +116,234 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
             _ => { Some(quote!{async}) },
         };
 
-
-
-    for method in actor_methods.clone() {
+    
+    let actor = &format_ident!("actor");
+    method::to_raw_parts(
+        &actor,
+        &actor_name,
+        &script_name,
+        &aaa.lib,
+        actor_methods,
+    
+        live_meth_send_recv, 
+        live_send_input, 
+        live_recv_output,
+        script_field_output, 
         
-        let (mut sig, script_field_name) = method.get_sig_and_field_name();
+        &mut live_mets,
+        &mut debug_arms,
+        &mut direct_arms,
+        &mut script_fields,
 
-        let await_call = sig.asyncness.as_ref().map(|_|quote!{.await});
-        method::to_async(&aaa.lib, &mut sig);
+    );
 
-        let error_send = error::direct_send(&script_name,&script_field_name);
 
-        // Debug arm
-        let add_arm = | debug_arms: &mut Vec<TokenStream>,ident: &Ident | {
 
-            let str_field_name = format!("{}::{}",script_name.to_string() ,ident.to_string());
+    // This is file_path for legend 
+    let ( script_legend_file, live_legend_file ) = 
+    if aaa.debut.is_legend(){
+        let (s,l) = crate::show::check_legend_path(&mac, &cust_name, &aaa.debut.path.as_ref().unwrap());
+        (Some(s),Some(l))
+    } else {
+        (None, None)
+    };
 
-            let debug_arm = quote! {
-                #script_name :: #script_field_name {..} => write!(f, #str_field_name),
-            };
-            debug_arms.push(debug_arm);
-        };
 
-        match method {
 
-            method::ActorMethod::Io   { vis, ident, stat,  arguments, output,.. } => {
-                let (args_ident,args_type) = method::arguments_ident_type(&arguments);
+    /*
+    
+
+    // for method in actor_methods.clone() {
+        
+    //     let (mut sig, script_field_name) = method.get_sig_and_field_name();
+
+    //     let await_call = sig.asyncness.as_ref().map(|_|quote!{.await});
+    //     method::to_async(&aaa.lib, &mut sig);
+
+    //     let error_send = error::direct_send(&script_name,&script_field_name);
+
+    //     // Debug arm
+    //     let add_arm = | debug_arms: &mut Vec<TokenStream>,ident: &Ident | {
+
+    //         let str_field_name = format!("{}::{}",script_name.to_string() ,ident.to_string());
+
+    //         let debug_arm = quote! {
+    //             #script_name :: #script_field_name {..} => write!(f, #str_field_name),
+    //         };
+    //         debug_arms.push(debug_arm);
+    //     };
+
+    //     match method {
+
+    //         method::ActorMethod::Io   { vis, ident, stat,  arguments, output,.. } => {
+    //             let (args_ident,args_type) = method::arguments_ident_type(&arguments);
                 
-                if stat {
-                    live_static_method(&actor_name,ident, vis, sig, args_ident,&mut live_mets)
-                }
-                else {
-                    // Debug Arm push
-                    add_arm(&mut debug_arms, &script_field_name);
+    //             if stat {
+    //                 live_static_method(&actor_name,ident, vis, sig, args_ident,&mut live_mets)
+    //             }
+    //             else {
+    //                 // Debug Arm push
+    //                 add_arm(&mut debug_arms, &script_field_name);
 
-                    // Direct Arm
-                    let arm_match        = quote! { 
-                        #script_field_name { input: #args_ident,  output: send }
-                    };
-                    let direct_arm       = quote! {
-                        #script_name :: #arm_match => {send.send( actor.#ident #args_ident #await_call ) #error_send ;}
-                    };
-                    direct_arms.push(direct_arm);
+    //                 // Direct Arm
+    //                 let arm_match        = quote! { 
+    //                     #script_field_name { input: #args_ident,  output: send }
+    //                 };
+    //                 let direct_arm       = quote! {
+    //                     #script_name :: #arm_match => {send.send( actor.#ident #args_ident #await_call ) #error_send ;}
+    //                 };
+    //                 direct_arms.push(direct_arm);
                     
-                    // Live Method
-                    let live_met      = quote! {
+    //                 // Live Method
+    //                 let live_met      = quote! {
 
-                        #vis #sig {
-                            #live_meth_send_recv
-                            let msg = #script_name :: #arm_match;
-                            #live_send_input
-                            #live_recv_output
-                        }
-                    };
+    //                     #vis #sig {
+    //                         #live_meth_send_recv
+    //                         let msg = #script_name :: #arm_match;
+    //                         #live_send_input
+    //                         #live_recv_output
+    //                     }
+    //                 };
 
-                    live_mets.push((ident,live_met));
+    //                 live_mets.push((ident,live_met));
 
-                    // Script Field Struct
-                    let output_type      = (&*script_field_output)(output);
+    //                 // Script Field Struct
+    //                 let output_type      = (&*script_field_output)(output);
 
-                    let script_field = quote! {
-                        #script_field_name {
-                            input: #args_type,
-                            #output_type
-                        }
-                    };
+    //                 let script_field = quote! {
+    //                     #script_field_name {
+    //                         input: #args_type,
+    //                         #output_type
+    //                     }
+    //                 };
 
-                    script_fields.push(script_field);
-                }
-            },
-            method::ActorMethod::I    { vis, ident, arguments ,..} => {
+    //                 script_fields.push(script_field);
+    //             }
+    //         },
+    //         method::ActorMethod::I    { vis, ident, arguments ,..} => {
                 
-                let (args_ident,args_type) = method::arguments_ident_type(&arguments);
+    //             let (args_ident,args_type) = method::arguments_ident_type(&arguments);
                 
-                // Debug Arm push
-                add_arm(&mut debug_arms, &script_field_name);
+    //             // Debug Arm push
+    //             add_arm(&mut debug_arms, &script_field_name);
 
-                // Direct Arm
-                let arm_match = quote!{ 
-                    #script_field_name{ input: #args_ident }
-                };
+    //             // Direct Arm
+    //             let arm_match = quote!{ 
+    //                 #script_field_name{ input: #args_ident }
+    //             };
     
-                let direct_arm = quote!{
-                    #script_name::#arm_match => {actor.#ident #args_ident #await_call;},
-                };
-                direct_arms.push(direct_arm);
+    //             let direct_arm = quote!{
+    //                 #script_name::#arm_match => {actor.#ident #args_ident #await_call;},
+    //             };
+    //             direct_arms.push(direct_arm);
 
-                // Live Method
-                let live_met = quote!{
+    //             // Live Method
+    //             let live_met = quote!{
     
-                    #vis #sig {
-                        let msg = #script_name::#arm_match ;
-                        #live_send_input
-                    }
-                };
-                live_mets.push((ident,live_met));
+    //                 #vis #sig {
+    //                     let msg = #script_name::#arm_match ;
+    //                     #live_send_input
+    //                 }
+    //             };
+    //             live_mets.push((ident,live_met));
             
 
 
-                // Script Field Struct
-                let script_field = quote!{
-                    #script_field_name {
-                        input: #args_type,
-                    }
-                };
-                script_fields.push(script_field);
+    //             // Script Field Struct
+    //             let script_field = quote!{
+    //                 #script_field_name {
+    //                     input: #args_type,
+    //                 }
+    //             };
+    //             script_fields.push(script_field);
 
-            },
-            method::ActorMethod::O    { vis, ident, stat, output ,..} => {
-                let (args_ident,_) = method::arguments_ident_type(&vec![]);
+    //         },
+    //         method::ActorMethod::O    { vis, ident, stat, output ,..} => {
+    //             let (args_ident,_) = method::arguments_ident_type(&vec![]);
 
-                if stat {
-                    live_static_method(&actor_name,ident, vis, sig, args_ident,&mut live_mets)
-                }
-                else {
+    //             if stat {
+    //                 live_static_method(&actor_name,ident, vis, sig, args_ident,&mut live_mets)
+    //             }
+    //             else {
                     
-                    // Debug Arm push
-                    add_arm(&mut debug_arms, &script_field_name);
+    //                 // Debug Arm push
+    //                 add_arm(&mut debug_arms, &script_field_name);
 
-                    // Direct Arm
-                    let arm_match = quote!{ 
-                        #script_field_name{  output: send }
-                    };
+    //                 // Direct Arm
+    //                 let arm_match = quote!{ 
+    //                     #script_field_name{  output: send }
+    //                 };
         
-                    let direct_arm = quote!{
-                        #script_name::#arm_match => {send.send(actor.#ident #args_ident #await_call) #error_send ;}
-                    };
-                    direct_arms.push(direct_arm);
+    //                 let direct_arm = quote!{
+    //                     #script_name::#arm_match => {send.send(actor.#ident #args_ident #await_call) #error_send ;}
+    //                 };
+    //                 direct_arms.push(direct_arm);
 
 
 
-                    // Live Method
-                    let live_met = quote!{
+    //                 // Live Method
+    //                 let live_met = quote!{
                     
-                        #vis #sig {
-                            #live_meth_send_recv
-                            let msg = #script_name::#arm_match ;
-                            #live_send_input
-                            #live_recv_output
-                        }
-                    };
-                    live_mets.push((ident, live_met));
+    //                     #vis #sig {
+    //                         #live_meth_send_recv
+    //                         let msg = #script_name::#arm_match ;
+    //                         #live_send_input
+    //                         #live_recv_output
+    //                     }
+    //                 };
+    //                 live_mets.push((ident, live_met));
                 
-                    // Script Field Struct
-                    let output_type  = (&*script_field_output)(output);
+    //                 // Script Field Struct
+    //                 let output_type  = (&*script_field_output)(output);
 
-                    let script_field = quote!{
-                        #script_field_name {
-                            #output_type
-                        }
-                    };
-                    script_fields.push(script_field);
-                }
-            },
-            method::ActorMethod::None { vis, ident ,..} => {
+    //                 let script_field = quote!{
+    //                     #script_field_name {
+    //                         #output_type
+    //                     }
+    //                 };
+    //                 script_fields.push(script_field);
+    //             }
+    //         },
+    //         method::ActorMethod::None { vis, ident ,..} => {
 
-                // Debug Arm push
-                add_arm(&mut debug_arms, &script_field_name);
+    //             // Debug Arm push
+    //             add_arm(&mut debug_arms, &script_field_name);
 
-                // Direct Arm
-                let arm_match = quote!{ 
-                    #script_field_name {} 
-                };
+    //             // Direct Arm
+    //             let arm_match = quote!{ 
+    //                 #script_field_name {} 
+    //             };
     
-                let direct_arm = quote!{
-                    #script_name::#arm_match => {actor.#ident () #await_call;},
-                };
-                direct_arms.push(direct_arm);
+    //             let direct_arm = quote!{
+    //                 #script_name::#arm_match => {actor.#ident () #await_call;},
+    //             };
+    //             direct_arms.push(direct_arm);
 
-                // Live Method
-                let live_met = quote!{
+    //             // Live Method
+    //             let live_met = quote!{
                 
-                    #vis #sig {
-                        let msg = #script_name::#arm_match ;
-                        #live_send_input
-                    }
-                };
-                live_mets.push((ident,live_met));
+    //                 #vis #sig {
+    //                     let msg = #script_name::#arm_match ;
+    //                     #live_send_input
+    //                 }
+    //             };
+    //             live_mets.push((ident,live_met));
             
-                // Script Field Struct
-                let script_field = quote!{
+    //             // Script Field Struct
+    //             let script_field = quote!{
                     
-                    #script_field_name {}
-                };
-                script_fields.push(script_field);
-            },
-        }
-    } 
+    //                 #script_field_name {}
+    //             };
+    //             script_fields.push(script_field);
+    //         },
+    //     }
+    // } 
 
+    */
 
-    // METHOD NEW
-
+    // METHOD NEW OLD
+    /*
+    
     if Model::Actor.eq(&mac) { 
 
         if met_new.is_none() {
@@ -322,28 +360,28 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
         let new_sig             = &met_new.new_sig;
         let func_new_name           = &new_sig.ident;
         let (args_ident, _ )   = method::arguments_ident_type(&met_new.get_arguments());
-        let live_var                 = format_ident!("actor_live");
+        let live_var                 = format_ident!("inter_{actor}_live");
         let unwrapped          = met_new.unwrap_sign();
         let return_statement   = met_new.live_ret_statement(&live_var);
         let vis                = &met_new.vis.clone();
 
         let (init_actor, play_args) = {
-            let id_debut_name = if aaa.debut.active() {quote!{ ,debut,name}} else {quote!{}};
-            ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, actor } )
+            let id_debut_name = if aaa.debut.active() {quote!{ ,inter_debut,inter_name}} else {quote!{}};
+            ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, #actor } )
         };
 
         let spawn = aaa.lib.method_new_spawn(&play_args,script_name);
         let turbofish = ty_generics.as_turbofish();
         let (id_debut,id_name)  =  
         if aaa.debut.active() {
-            (quote!{let debut =  #script_name #turbofish ::debut();},
-                quote!{let name  = String::from("");})
+            (quote!{let inter_debut =  #script_name #turbofish ::debut();},
+                quote!{let inter_name  = String::from("");})
         } else { (quote!{}, quote!{}) };
         
         let func_new_body = quote!{
 
             #vis #new_sig {
-                let actor = #actor_name:: #func_new_name #args_ident #unwrapped;
+                let #actor = #actor_name:: #func_new_name #args_ident #unwrapped;
                 #new_live_send_recv
                 #id_debut
                 #id_name
@@ -352,8 +390,70 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
                 #return_statement
             }
         };
+
+
+
         live_mets.insert(0,(new_sig.ident.clone(),func_new_body));
     };
+     */
+
+     if Model::Actor.eq(&mac) { 
+
+        if met_new.is_none() {
+
+            let msg = format!("Can not find public/restricted  method `new` or `try_new` for {:?} object.",actor_name.to_string());
+            let (note,help) = error::met_new_note_help(&actor_name);
+            abort!(item_impl,msg;note=note;help=help);
+        }
+        
+        // Change visibility of model methods 
+        new_vis = met_new.as_ref().map(|m| m.vis.clone());
+
+        let met_new         = met_new.unwrap();
+        let new_sig             = &met_new.new_sig;
+        let func_new_name           = &new_sig.ident;
+        let (args_ident, _ )   = method::arguments_pat_type(&met_new.get_arguments());
+        let unwrapped          = met_new.unwrap_sign();
+        let vis                = &met_new.vis.clone();
+
+        let (init_live, play_args) = {
+            if aaa.debut.active() {
+                (quote!{ Self { sender,debut: std::sync::Arc::clone(&debut), name:format!("{:?}",*debut) }} ,
+                 quote!{ receiver, #actor, debut_play})
+            } else {
+
+                (quote!{ Self{ sender } }, 
+                 quote!{ receiver, #actor } )
+            }
+        };
+
+        let spawn = aaa.lib.method_new_spawn(&play_args,script_name);
+        let turbofish = ty_generics.as_turbofish();
+
+        let vars_debut = 
+        if aaa.debut.active() {
+            quote!{let debut =  #script_name #turbofish ::debut();
+                   let debut_play = *std::sync::Arc::clone(&debut); }
+        } else {quote!{}};
+
+        let return_statement   = met_new.live_ret_statement(&init_live);
+        
+        let func_new_body = quote!{
+
+            #vis #new_sig {
+                let #actor = #actor_name:: #func_new_name #args_ident #unwrapped;
+                #new_live_send_recv
+                #vars_debut
+                #spawn
+                #return_statement
+            }
+        };
+
+        live_mets.insert(0,(new_sig.ident.clone(),func_new_body));
+    };
+
+     
+
 
     // LIVE INTER METHODS AND TRAITS
     // model::debut()
@@ -384,7 +484,7 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
 
         script_mets.push((format_ident!("direct"),
         quote!{
-            #new_vis #direct_async_decl fn direct (self, actor: &mut #actor_type #actor_ty_generics ) {
+            #new_vis #direct_async_decl fn direct (self, #actor: &mut #actor_type #actor_ty_generics ) {
                 match self {
                     #(#direct_arms)*
                 }
@@ -394,10 +494,15 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
 
 
     // PLAY
-    {
+    if Model::Actor.eq(&mac) {
+
         let direct_await  = direct_async_decl.as_ref().map(|_| quote!{.await});
-        let recv_await=  play_async_decl.as_ref().map(|_| quote!{.await});
-        let end_of_play = error::end_of_life(&actor_name); 
+        let recv_await    =  play_async_decl.as_ref().map(|_| quote!{.await});
+        let end_of_play = error::end_of_life( &actor_name, &aaa.debut.clone() ); // <- include 
+      
+
+
+        let debut = if aaa.debut.active(){quote!{,debut: std::time::SystemTime }} else { quote!{} };
 
 
         let play_method = {
@@ -407,9 +512,9 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
                 _ => quote!{Ok}
             };
             quote! {
-                #new_vis #play_async_decl fn play ( #play_input_receiver mut actor: #actor_type #actor_ty_generics ) {
+                #new_vis #play_async_decl fn play ( #play_input_receiver mut #actor: #actor_type #actor_ty_generics #debut ) {
                     while let #ok_or_some (msg) = receiver.recv() #recv_await {
-                        msg.direct ( &mut actor ) #direct_await;
+                        msg.direct ( &mut #actor ) #direct_await;
                     }
                     #end_of_play
                 }
@@ -441,7 +546,7 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
 
 
     // LIVE DEFINITION
-    live_def = {
+    live_def =  if Model::Actor.eq(&mac) {
         let (debut_field, name_field) = if aaa.debut.active() {
             ( quote!{ pub debut: std::sync::Arc<std::time::SystemTime>,},
             quote!{ pub name: String,} )
@@ -455,16 +560,21 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
                 #name_field
             }
         }
+    } else { 
+
+        quote!{
+            #[derive(Clone)]
+            #new_vis struct #live_name #ty_generics #where_clause {
+                #live_field_sender
+            }
+        }
+
     };
     
-    if Model::Group.eq(&mac){
-        //we have to extract play from the model
-        // ???
-        let play = format_ident!("play");
 
-    }
     crate::model::ActorModelSdpl {
         name:          cust_name,
+        asyncness: direct_async_decl,
         mac:         mac.clone(),
         edit:           aaa.edit,
         generics: model_generics,

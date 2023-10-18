@@ -19,13 +19,16 @@ impl MyActor {
     pub fn get_value(&self) -> i8 {
         self.value
     }
+    pub fn send_value(&self,(s,m):(i8,u8)) -> i8 {
+        self.value
+    }
 }
 
 
 //  uncomment to see the generated code
 //  #[interthread::example(path="src/main.rs")] 
 //   in examples 
-//  #[interthread::example(path="examples/intro_std.rs")]  
+//  #[interthread::example(main(path="examples/intro_std.rs"))]  
 fn main() {
 
     let actor = MyActorLive::new(5);

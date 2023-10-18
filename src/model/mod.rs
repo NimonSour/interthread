@@ -16,6 +16,7 @@ pub use name::*;
 pub use actor::*;
 pub use group::*;
 
+
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use syn::{Generics,Ident};
@@ -49,8 +50,9 @@ pub struct GroupModelSdpl {
 
     // model: ActorModelSdpl,
     pub name:        Ident,
-    pub mac:         Model,
+    // pub mac:         Model,
     pub edit:    EditGroup,
+    // pub generics: Generics,
     pub actors: Vec<ActorModelSdpl>,
 }
 
@@ -79,6 +81,7 @@ This means there should be:
 
 pub struct ActorModelSdpl {
     pub name:        Ident,
+    pub asyncness: Option<TokenStream>,
     pub mac:         Model,
     pub edit:    EditActor,
     pub generics: Generics,
@@ -277,5 +280,24 @@ pub fn edit_select((edit_idents,scope): (Option<Vec<(Ident,bool)>>,bool),
 
 
 
+
+
+#[test]
+fn test_split_edit_group() {
+
+    let attr: syn::Attribute = 
+    syn::parse_quote!{#[actor( edit(script(imp), 
+                            a::edit(live,script(def))))] };
+
+    let mut edit = EditGroup::default();
+
+    for meta in crate::model::attribute::attr_to_meta_list(&attr){
+
+        if meta.path().is_ident("edit"){
+            edit.parse(&meta);
+        }
+    }
+    println!("Edit - {:?}", edit);  
+}
 
 

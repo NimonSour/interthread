@@ -1,9 +1,12 @@
 // use crate::attribute;
 
-use crate::model::argument::Lib ;
+// use crate::model::Model;
+use crate::model::{ Model, Lib };
 use std::path::PathBuf;
-use std::fs::OpenOptions;
+use std::fs::{self,OpenOptions};
 use std::io::{self,Read,Write};
+use proc_macro_error::abort;
+use proc_macro::Span;
 
 
 pub fn get_text (path: &PathBuf) -> io::Result<String>{
@@ -131,6 +134,84 @@ fn be_main( path: &PathBuf ,lib: Lib ) ->  Option<syn::File> {
     let msg = "Internal Error.'show::be_main'. Could not get 'file_stem' from provided path!";
     proc_macro_error::abort!(proc_macro2::Span::call_site(),msg);
 }
+
+    /*
+        1) debut takes a directory path
+        2) check if path contains:
+                    a) dir 'legends'
+                        `model` = actor/group.
+                        `name = full_actor_cust_name  
+                        `model-part` = script/live
+
+
+                    b) check if 
+                        legends/`model`_`name`_script.rs  
+                        legends/`model`_`name`_live.rs  
+
+                    c) if not create some 
+    */
+
+
+pub fn check_legend_path( model: &Model, name: &syn::Ident, path: &PathBuf ) -> (PathBuf, PathBuf) {
+
+
+    // let legends_dir = path.join("legends");
+
+    let legends_dir = if path.ends_with("legends") {
+        path.to_path_buf()
+    } else {
+        path.join("legends")
+    };
+
+    let script_file = legends_dir.join(format!("{model}_{name}_script.txt"));
+    let live_file = legends_dir.join(format!("{model}_{name}_live.txt"));
+
+    // Create "legends" directory if it doesn't exist
+    if !legends_dir.exists() {
+        if let Err(_) = fs::create_dir(&legends_dir){
+            abort!(Span::call_site(),"Internal Error. Failed to create `legends` directory.")
+        }
+    }
+    
+    // Check if script and live files exist, if not, create them
+    if !script_file.exists() {
+        if let Err(_) = fs::File::create(&script_file){
+            abort!(Span::call_site(),"Internal Error. Failed to create `script` file.")
+        }
+    }
+
+    if !live_file.exists() {
+        if let Err(_) = fs::File::create(&live_file){
+            abort!(Span::call_site(),"Internal Error. Failed to create `live` file.")
+        }
+    }
+
+    (script_file, live_file)
+}
+
+
+
+
+// pub fn check_legend_path ( model: &str, name: &str, path: &std::path::PathBuf  ) -> (std::path::PathBuf,std::path::PathBuf) {
+//     let (script_file,live_file) = 
+//     ( std::path::PathBuf::from(format!("{model}_{name}_script.txt")),
+//       std::path::PathBuf::from(format!("{model}_{name}_live.txt"))   );
+
+
+
+//     // check if path exists
+
+//     // check if contains a direcory "legends"
+//     //      false ) crate a dir "legends" 
+//     //      true  ) check if "legends" contains  `script_file` and `live_file`
+//     //                false ) create `script_file` and `live_file`
+
+//     // return full paths as 
+//     // ( `path`/legends/`script_file`, `path`/legends/`live_file` )
+
+
+// }
+
 
 
 

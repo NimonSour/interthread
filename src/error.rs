@@ -1,5 +1,5 @@
 // use crate::name;
-use crate::model::method::ActorMethod;
+use crate::model::{Debut,ActorMethod};
 
 use quote::{quote,ToTokens};
 use syn::{Path,Ident,Signature};
@@ -443,9 +443,22 @@ generated code. However, in explicit notation like \
 file as `edit(script, live)`, despite that the whole model \
 is written to the file.";
 
-pub static ABOUT_FIELD: &'static str  =
-"Macro `group` will consider every 
-The 'field' argument should be a list containing the names of fields that are not part of the 'group' model.";
+pub static ABOUT_ALLOW: &'static str  =
+"The `group` macro automatically considers any non-private field as a \
+member of the group. The `allow` option is used to provide a list of \
+non-private fields to be excluded from `group` membership.";
+
+pub static PRIVATE_ALLOW_FIELD: &'static str  =
+"Use of private field. Please ensure you only include non-private fields in the `allow` list.";
+
+pub static TUPLE_STRUCT_NOT_ALLOWED: &'static str  =
+"The `group` macro cannot be applied to a tuple struct. Please use it with a regular struct instead.";
+
+pub static GROUP_FIELD_TYPE: &'static str =
+"The non-private fields in the `group` struct must be paths or identifiers representing potential valid 'actor' types.";
+
+pub static REQ_FILE: &'static str  =
+r#"Expected a 'file' argument `file = "path/to/current/file.rs"`."#;
 
 pub fn double_decl(s: &str) -> String {
     format!("Double declaration of `{s}` option.")
@@ -467,9 +480,16 @@ pub fn live_send_recv(live_name:&syn::Ident ) -> (TokenStream, TokenStream){
     (quote!{#send_msg},quote!{#recv_msg})
 }
 
-pub fn end_of_life(name: &syn::Ident) -> TokenStream {
-    let msg    = format!("{name} end of life ...");
-    quote!{ eprintln!(#msg); }
+pub fn end_of_life( name: &syn::Ident, debut: &Debut ) -> TokenStream {
+    if debut.active(){
+        let msg = if debut.is_legend(){
+            format!("{name} [ {{:?}} ] to be continued ...")
+        } else { format!("{name} [ {{:?}} ] the end ...")};
+        quote!{ eprintln!(#msg,debut); }
+    } else { 
+        let msg = format!("{name} the end ...");
+        quote!{ eprintln!(#msg); }
+    }
 }
 
 pub fn direct_send(script_name: &syn::Ident, variant: &syn::Ident) -> TokenStream {
@@ -538,6 +558,25 @@ pub fn direct_send(script_name: &syn::Ident, variant: &syn::Ident) -> TokenStrea
 // pub fn old_file_arg( path: String ) -> String {
 //     format!( "Since v1.0.0 `file` argument is not aplicable. Use `path= \"{}\"` instead!", &path )
 // }
+
+pub fn invalid_fn_arg_pattern(arg: &syn::FnArg) -> String {
+    
+    format!( 
+
+"Invalid function argument pattern -`{}`!
+
+
+Valid patterns include:
+
+- Identifiers            `a : Type `    
+- Tuple patterns         `(a,b): (TypeA,TypeB)`
+- Tuple struct patterns  `Foo(a,b) : Foo`
+- Struct patterns        `Foo{{a,b}} : Foo`
+
+",quote!{#arg}.to_string() )
+
+}
+
 
 // v1.2.0
 pub static OLD_ARG_ID: &'static str = "
