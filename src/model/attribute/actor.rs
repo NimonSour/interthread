@@ -22,6 +22,8 @@ pub struct ActorAttributeArguments {
     pub debut   :  Debut,
     // pub file    :  Option<AAFile>,
     pub file    :  Option<PathBuf>,
+    pub interact:  bool,
+
     /* ADD NEW OPTION */
 }
 
@@ -31,13 +33,14 @@ impl Default for ActorAttributeArguments {
     fn default() -> ActorAttributeArguments {
 
         Self { 
-            name   : None,
-            lib    : Lib::default(),
-            assoc  : false,
-            channel: Channel::default(),
-            edit   : EditActor::default(),
-            debut  : Debut::default(),
-            file   : None,
+            name    : None,
+            lib     : Lib::default(),
+            assoc   : false,
+            channel : Channel::default(),
+            edit    : EditActor::default(),
+            debut   : Debut::default(),
+            file    : None,
+            interact: false,
             /* ADD NEW ATTRIBUTE */
         }  
     }
@@ -49,7 +52,6 @@ impl ActorAttributeArguments {
 
         // check if unique options
         super::check_path_set(&nested); 
-        // super::check_ident_sets(&nested); 
 
         for meta in nested.iter(){
 
@@ -80,7 +82,7 @@ impl ActorAttributeArguments {
 
                 match meta {
                     syn::Meta::Path(_) => { self.assoc = true; },
-                    _ => { abort!(meta.path(), error::OLD_ARG_ASSOC); },
+                    _ => { abort!(meta.path(),"Expected an identifier.";help=error::OLD_ARG_ASSOC); },
                 }
             }
 
@@ -149,6 +151,17 @@ impl ActorAttributeArguments {
                 if path.exists() { self.file = Some(path); }
                 else { abort!(meta, format!("Path - {file_str:?} does not exist.")); } 
 
+            }
+
+            else if meta.path().is_ident("interact"){
+                match meta {
+                    syn::Meta::Path(_) => { self.interact = true; },
+                    _ => { abort!(meta, "Expected an identifier.";help=error::AVAIL_ACTOR) },
+                }
+            }
+
+            else if meta.path().is_ident("debug") {
+                abort!(meta,"Did you mean `debut`?"; help=error::AVAIL_ACTOR);
             }
 
             else if meta.path().is_ident("id"){ 

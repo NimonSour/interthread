@@ -1273,13 +1273,15 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 
     
     let mut act_model = model::actor::actor_model( aaa,&item_impl,model::argument::Model::Actor,None);
-
     let (model_code,edit_code) = act_model.split_edit();
 
     if let Some( edit_attr ) = &act_model.edit.attr {
 
         parse::edit_write( &edit_attr, &item_impl, edit_code);
     }
+
+    // let msg = model_code.to_string();
+    // proc_macro_error::abort!(proc_macro::Span::call_site(), msg);
 
     quote::quote!{
         #item_impl
@@ -1320,9 +1322,6 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_attribute]
 pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
-
-    // let msg = "The \"group\" macro is currently under development and is not yet implemented in the `interthread` crate.";
-    // proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
 
     let mac  = model::argument::Model::Group;
     let item_impl = syn::parse_macro_input!(item as syn::ItemImpl);

@@ -1,6 +1,6 @@
 
 use quote::format_ident;
-use syn::Ident;
+use syn::{Type,Ident};
 use proc_macro_error::abort;
 
 // use crate::attribute::AAExpand;
@@ -11,9 +11,9 @@ pub fn get_ident_type_generics(item_impl: &syn::ItemImpl) -> (syn::Ident,syn::Ty
     match &*item_impl.self_ty {
         syn::Type::Path(tp) => {
             let ident = tp.path.segments.last().unwrap().ident.clone();
-            let typ :syn::Type = syn::parse_quote!{ #ident };
+            // let typ :syn::Type = syn::parse_quote!{ #ident };
             let generics = item_impl.generics.clone();
-            (ident,typ,generics)
+            (ident,Type::Path(tp.clone()),generics)
         },
         _ => {
             let msg ="Internal Error.'actor_gen::impl_get_name'. Could not get item Impl's name!";
@@ -71,6 +71,17 @@ pub fn get_actor_names(name: &Ident, mac: &Model) -> ( Ident, Ident ){
         Model::Group => ( script_group(name), live_group(name) ),
     }
 }
+
+pub fn get_names(name: &Ident, mac: Model, model: &Model) -> ( Ident, Ident ){
+
+    match mac {
+        Model::Actor => ( script(name), live(name) ),
+        Model::Group => ( script_group(name), live_group(name) ),
+    }
+}
+
+
+
 
 
 fn fn_to_struct(input: &str) -> String {

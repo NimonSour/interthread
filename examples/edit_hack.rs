@@ -11,6 +11,7 @@ pub struct MyActor {
 // will change to 
 #[actor(channel=2, edit(script(imp(play))))]
 
+
 impl MyActor {
 
     pub fn new( value: i8 ) -> Self {
@@ -50,8 +51,8 @@ impl MyActorScript {
                 // the name of the `Script` variant 
                 // your text editor does it for you
                 // so just choose the variant
-                MyActorScript::PlayGetCounter { output  } =>
-                { let _ = output.send(Some(call_counter));},
+                MyActorScript::PlayGetCounter { inter_send  } =>
+                { let _ = inter_send.send(Some(call_counter));},
                 
                 // else as usual 
                 _ => { msg.direct(&mut actor); }

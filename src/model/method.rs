@@ -1,5 +1,5 @@
 use crate::error::{self,met_new_found};
-use crate::model::{name,argument::{Lib,Model}};
+use crate::model::{name,Lib,Model,interact::{self,InteractVariables}};
 
 use syn::{Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Receiver,Token};
 use proc_macro_error::abort;
@@ -9,7 +9,7 @@ use quote::{quote,format_ident};
 #[derive(Debug,Clone)]
 pub enum ActorMethod {
     Io  { vis: Visibility, sig: Signature, ident: Ident, stat: bool,  arguments: Vec<FnArg>, output: Box<Type> },   
-    I   { vis: Visibility, sig: Signature, ident: Ident,              arguments: Vec<FnArg>                    },    
+    I   { vis: Visibility, sig: Signature, ident: Ident,              arguments: Vec<FnArg>,                   },    
     O   { vis: Visibility, sig: Signature, ident: Ident, stat: bool,                         output: Box<Type> },    
     None{ vis: Visibility, sig: Signature, ident: Ident                                                        }, 
 }
@@ -277,7 +277,7 @@ fn get_sigs(item_impl: &syn::ItemImpl) -> Vec<(Visibility,Signature)>{
 }
 
 
-pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac: &Model ) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
+pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat: bool, mac: &Model) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
 
     let mut loc              = vec![];
     let mut method_new = None;
@@ -291,7 +291,7 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac:
     for (vis,sig) in sigs {
 
         if is_self_refer(&sig){
-            loc.push(sieve(vis,explicit(&sig,actor_type),Some(false)));
+            loc.push(sieve( vis,explicit(&sig,actor_type),Some(false)));
         } else {
             
             if actor {
@@ -299,7 +299,7 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac:
                 if sig.ident.eq(&ident_new) || sig.ident.eq(&ident_try_new){
                 
                     let(new_sig,res_opt) = check_self_return(&mut sig.clone(),actor_type);
-                    let method = sieve(vis,sig.clone(),Some(true));
+                    let method = sieve( vis,sig.clone(),Some(true));
                     method_new = ActorMethodNew::try_new( method, new_sig, res_opt );
                     actor = false;
                     continue; 
@@ -308,7 +308,7 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac:
     
             if stat {
                 if is_return(&sig){
-                    loc.push(sieve(vis,explicit(&sig,actor_type),Some(true)));
+                    loc.push(sieve( vis,explicit(&sig,actor_type),Some(true)));
                 }
             }
 
@@ -317,15 +317,55 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac:
     (loc, method_new)
 }
 
-pub fn sieve( vis: Visibility, sig: Signature, stat: Option<bool> ) -> ActorMethod {
+pub fn sieve( vis: Visibility, sig: Signature, stat: Option<bool>) -> ActorMethod {
 
     let stat = if stat.is_some(){ stat.unwrap() } else { is_self_refer(&sig) };
     let (ident,arguments,output) = ident_arguments_output(&sig);
 
     let arg_bool = { arguments.iter()
         .any( |a| match a { FnArg::Typed(_) => true, _ => false}) };
+    
 
 
+    match output.clone() {
+        ReturnType::Type(_,output) => { 
+
+            if arg_bool {
+                // let vars = 
+                    // if interact {
+                    //     // Get variables
+                    //     interact::get_variables(actor_type, &sig, &arguments,true)
+                    // } else {
+                    //     // here checking for inter_variables
+                    //     interact::check_send_recv(actor_type, &sig, &arguments,None);
+                    //     None
+                    // };
+                return ActorMethod::Io{ vis, sig, stat, ident, arguments, output };
+            } else {
+                return ActorMethod::O{ vis, sig, stat, ident, output };
+            }
+        },
+        ReturnType::Default => {
+
+            if arg_bool {
+                // let vars = 
+                    // if interact {
+                    //     // Get variables
+                    //     interact::get_variables(actor_type, &sig, &arguments,false)
+                    // } else {
+                    //     // here checking for inter_variables
+                    //     interact::check_send_recv(actor_type, &sig, &arguments,None);
+                    //     None
+                    // };
+                return ActorMethod::I{ vis, sig, ident, arguments };
+            } else {
+                return ActorMethod::None{ vis, sig, ident };
+            }
+        },
+    }
+
+    // old 
+    /*
     match output.clone() {
 
         ReturnType::Type(_,output) => { 
@@ -345,6 +385,9 @@ pub fn sieve( vis: Visibility, sig: Signature, stat: Option<bool> ) -> ActorMeth
             }
         },
     }
+     */
+
+
 }
 
 pub fn ident_arguments_output( sig: &Signature  ) -> (Ident,Vec<FnArg>,ReturnType) {
@@ -374,6 +417,13 @@ pub fn args_to_pat_type(args: &Vec<FnArg>) -> (Vec<Box<syn::Pat>>, Vec<Box<Type>
     for i in args  { 
         match i { 
             FnArg::Typed(arg) => { 
+                // check 
+                // let words = vec!["inter_send","inter_recv"];
+                // if let Some(pos) = 
+                // contains_inter_words(&arg.pat,&words).iter().position(|&x| x == true){
+                //     let msg = format!("Conflicting name case `{}`.",words[pos]);
+                //     abort!(Span::call_site(),msg);
+                // }
                 pats.push(arg.pat.clone());
                 types.push(arg.ty.clone());
             },
@@ -383,6 +433,129 @@ pub fn args_to_pat_type(args: &Vec<FnArg>) -> (Vec<Box<syn::Pat>>, Vec<Box<Type>
     (pats,types)    
 }
 
+
+// pub fn contains_inter_words( pat: &syn::Pat, names: &Vec<&str> ) -> Vec<bool> {
+
+//     let mut s = quote!{ #pat }.to_string();
+//     let char_set = vec![ '(', ')', '{', '}', '[', ']', ':', '<', '>', ',' ];
+//     for c in char_set {
+//         s = s.replace(c,&format!(" {c} "))
+//     }
+
+//     let mut loc = Vec::new();
+
+//     for &name in names {
+
+//         if s.contains(&format!(" {name} ")){ loc.push(true); } 
+        
+//         else { loc.push(false) }
+//     }
+//     return loc
+// }
+
+/*
+
+
+Interact Arguments Limitations ( per method ): 
+
+    1) One of `inter_send` or `inter_recv`.
+    2) Unlimeted user arguments.
+    3) Unlimeted `inter` getters.
+
+implementing `interact`
+
+if 
+   off) 
+    just check the `inter` words cases
+    need a better error messaging 
+    explaining the where this error occurs 
+
+
+   on ) 
+   a) check if the `pat` is an `Ident`
+            false) check the `inter` words cases
+
+            true) check if the ident is prefixed with ` inter_`
+                 false)  push and continue
+
+                 true) extract the second part of the ident
+                       `inter_ident`  `ident`
+
+                       check if the arg type is 
+                       a) Sender
+                               ident     type            return 
+                               send  =>  Sender<T>  
+                                                        true)  whaits inside the function returns the type 
+                                                        false) returns the channel receiver     
+
+                               any   =>  Sender<T>     
+                                                        true) whaits inside the function on
+                                                              a) Receiver<any> and mutates through inter_set_any
+                                                              b) Receiver<return type> and  returns the type 
+
+                                                        false) waits on  Receiver<any> and mutates through inter_set_any
+                                                               and returns ()  
+
+
+                       b) Receiver
+                                 ident     type            return 
+                                recv => Receiver<T>      
+                                                        true) Raise error unspecified behaviour 
+                                                        false) return the Sender<type>
+
+                                any => Receiver<T>  
+                                                        true) Raise error
+                                                        false) Raise error  use recv for this sort of actions    
+
+
+
+                       c) Type  
+                                ident     type            return 
+
+                                any       AnyType         create a variable any 
+                                                          let any = inter_get_any()
+
+
+
+
+The check will happen for inter_recv and inter_send in all 
+cases as they are the only 
+
+"Conflicting name case"
+
+
+
+
+
+I has to check for iter_recv and inter_send in all pats
+
+    false) check for othe inter_values
+
+    true) check for 
+
+
+// THE NOTE MESSAGE 
+"In situations where user-defined variables, types, or other \
+ elements could potentially overlap with model internals (such \
+ as method names, arguments, and generic types), the model \
+ employs a naming convention. It prefixes its variables and \
+ types with `inter` in any style, ensuring a clear distinction \
+ and preventing any inadvertent collisions."
+
+
+
+
+Interthread naming convention.
+
+
+ 1. For function arguments never use words that are prepended with `inter_` or `Inter`.
+    Specifically every method block will start with declaration of 'oneshot' channel with 
+    sequent `inter_send` and `inter_recv` variables. Also method `inter_set_name` hase 
+    a generic type `InterName` so the only way to make sure user variables and types do not 
+    collide with internal model types the rule of thumb is not using any type names that start with 
+    'inter' in any form 'inter_', 'INTER' or 'Inter'. 
+
+*/
 
 //OLD
 /*
@@ -467,26 +640,86 @@ pub fn live_static_method(
 
 
 
-pub fn to_raw_parts (
-    actor:                    &Ident,
-    actor_name:               &Ident,
-    script_name:              &Ident,
-    lib:                       & Lib,
-    actor_methods:  Vec<ActorMethod>,
+// pub fn to_raw_parts (
+//     actor:                    &Ident,
+//     actor_name:               &Ident,
+//     script_name:              &Ident,
+//     lib:                       & Lib,
+//     actor_methods:  Vec<ActorMethod>,
 
-    live_meth_send_recv: TokenStream, 
-    live_send_input:     TokenStream, 
-    live_recv_output:    TokenStream,
-    script_field_output: Box<dyn Fn(Box<Type>) -> TokenStream>, 
+//     live_meth_send_recv: TokenStream, 
+//     live_send_input:     TokenStream, 
+//     live_recv_output:    TokenStream,
+//     script_field_output: Box<dyn Fn(Box<Type>) -> TokenStream>, 
     
-    live_mets: &mut Vec<(Ident,TokenStream)>,
-    debug_arms:        &mut Vec<TokenStream>,
-    direct_arms:       &mut Vec<TokenStream>,
-    script_fields:     &mut Vec<TokenStream>,
+//     live_mets: &mut Vec<(Ident,TokenStream)>,
+//     debug_arms:        &mut Vec<TokenStream>,
+//     direct_arms:       &mut Vec<TokenStream>,
+//     script_fields:     &mut Vec<TokenStream>,
+
+// ){
+use crate::model::{Cont,Vars};
+
+use super::{ActorAttributeArguments, OneshotChannel, MpscChannel};
+pub fn to_raw_parts (
+    
+    Vars {
+        actor,
+        cust_name,
+        actor_name,
+        script_name,..
+    }: &Vars,
+    Cont{
+        live_mets,
+        debug_arms,
+        direct_arms,
+        script_fields,..
+    }: &mut Cont,
+     ActorAttributeArguments{
+        lib,..
+    } : &ActorAttributeArguments,
+    actor_methods:  Vec<ActorMethod>,
+    oneshot: &OneshotChannel,
+    MpscChannel{
+        sender_call,..
+    }: &MpscChannel,
+
+
+    // actor:                    &Ident,
+    // actor_name:               &Ident,
+    // script_name:              &Ident,
+    // lib:                        &Lib,
+    // actor_methods:  Vec<ActorMethod>,
+
+    // live_meth_send_recv: TokenStream, 
+    // live_send_input:     TokenStream, 
+    // live_recv_output:    TokenStream,
+    // script_field_output: Box<dyn Fn(Box<Type>) -> TokenStream>, 
+    
+    // live_mets: &mut Vec<(Ident,TokenStream)>,
+    // debug_arms:        &mut Vec<TokenStream>,
+    // direct_arms:       &mut Vec<TokenStream>,
+    // script_fields:     &mut Vec<TokenStream>,
 
 ){
 
 
+
+    // let Cont{
+    //     live_mets,
+    //     debug_arms,
+    //     direct_arms,
+    //     script_fields,..
+    //  } = cont;
+
+    // let Vars {
+    //     actor,
+    //     actor_name,
+    //     script_name,..
+    // }
+
+    let live_meth_send_recv = oneshot.decl(None);
+    
 
     for method in actor_methods.clone() {
         
@@ -507,6 +740,9 @@ pub fn to_raw_parts (
             debug_arms.push(debug_arm);
         };
 
+
+
+
         match method {
 
             ActorMethod::Io   { vis, ident, stat,  arguments, output,.. } => {
@@ -521,7 +757,7 @@ pub fn to_raw_parts (
 
                     // Direct Arm
                     let arm_match        = quote! { 
-                        #script_field_name { input: #args_ident,  output: inter_send }
+                        #script_field_name { input: #args_ident,  inter_send }
                     };
                     let direct_arm       = quote! {
                         #script_name :: #arm_match => {inter_send.send( #actor.#ident #args_ident #await_call ) #error_send ;}
@@ -529,31 +765,35 @@ pub fn to_raw_parts (
                     direct_arms.push(direct_arm);
                     
                     // Live Method
-                    let live_met      = quote! {
+                    let recv_output = oneshot.recv_call(cust_name,&ident);
+                    let live_met    = quote! {
 
                         #vis #sig {
                             #live_meth_send_recv
+                            // declaring getters here
                             let msg = #script_name :: #arm_match;
-                            #live_send_input
-                            #live_recv_output
+                            #sender_call
+                            #recv_output
                         }
                     };
 
                     live_mets.push((ident,live_met));
 
                     // Script Field Struct
-                    let output_type      = (&*script_field_output)(output);
-
+                    let send_pat_type = oneshot.pat_type_send(&*output);
                     let script_field = quote! {
                         #script_field_name {
                             input: #args_type,
-                            #output_type
+                            #send_pat_type,
                         }
                     };
 
                     script_fields.push(script_field);
                 }
             },
+
+
+
             ActorMethod::I    { vis, ident, arguments ,..} => {
                 
                 let (args_ident,args_type) = arguments_pat_type(&arguments);
@@ -576,7 +816,8 @@ pub fn to_raw_parts (
     
                     #vis #sig {
                         let msg = #script_name::#arm_match ;
-                        #live_send_input
+                        #sender_call
+                        // here may be a return  statement other contr-part of the channel (change the output )
                     }
                 };
                 live_mets.push((ident,live_met));
@@ -587,6 +828,7 @@ pub fn to_raw_parts (
                 let script_field = quote!{
                     #script_field_name {
                         input: #args_type,
+                        // here can be i_send or i_recv  ( remember to change the return Type of method )
                     }
                 };
                 script_fields.push(script_field);
@@ -605,7 +847,7 @@ pub fn to_raw_parts (
 
                     // Direct Arm
                     let arm_match = quote!{ 
-                        #script_field_name{  output: inter_send }
+                        #script_field_name{ inter_send }
                     };
         
                     let direct_arm = quote!{
@@ -616,28 +858,35 @@ pub fn to_raw_parts (
 
 
                     // Live Method
+                    let recv_output = oneshot.recv_call(cust_name,&ident);
                     let live_met = quote!{
                     
                         #vis #sig {
                             #live_meth_send_recv
                             let msg = #script_name::#arm_match ;
-                            #live_send_input
-                            #live_recv_output
+                            #sender_call
+                            #recv_output
                         }
                     };
                     live_mets.push((ident, live_met));
                 
                     // Script Field Struct
-                    let output_type  = (&*script_field_output)(output);
+                    // let output_type  = (&*script_field_output)(output);
+                    let send_pat_type = oneshot.pat_type_send(&*output);
+
 
                     let script_field = quote!{
                         #script_field_name {
-                            #output_type
+                            // inter_send: #output_type
+                            #send_pat_type,
                         }
                     };
                     script_fields.push(script_field);
                 }
             },
+
+
+
             ActorMethod::None { vis, ident ,..} => {
 
                 // Debug Arm push
@@ -658,7 +907,7 @@ pub fn to_raw_parts (
                 
                     #vis #sig {
                         let msg = #script_name::#arm_match ;
-                        #live_send_input
+                        #sender_call
                     }
                 };
                 live_mets.push((ident,live_met));

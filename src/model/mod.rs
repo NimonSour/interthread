@@ -19,31 +19,149 @@ pub use group::*;
 
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
-use syn::{Generics,Ident};
-use quote::quote;
-// use crate::attribute::{AAEdit,AGEdit};
+use syn::{Generics,Type,Ident};
+use quote::{format_ident,quote};
 
 
 
+// ----------------
 
-// actor generate has to return this a vector of this types 
-// pub enum Sdpl {
-//     Script{ name: Ident, def: TokenStream, imp: Vec<(Ident,TokenStream)>, trt: Vec<(Ident,TokenStream)> },
-//     Live  { name: Ident, def: TokenStream, imp: Vec<(Ident,TokenStream)>, trt: Vec<(Ident,TokenStream)> },
-// }
+pub fn get_channels_one_mpsc( 
+            aaa: &ActorAttributeArguments, 
+           vars: &Vars, 
+    script_type: &Type) -> ( OneshotChannel, MpscChannel ){
+
+    let Vars{  
+            inter_send,
+            inter_recv,.. } = vars;
+
+    let ActorAttributeArguments{ channel, lib,..} = aaa;
+
+    (
+        OneshotChannel::new(inter_send,inter_recv,lib),
+        MpscChannel::new(vars,aaa,script_type)   
+    )
+}
+pub struct Cont {
+    script_mets  : Vec<(Ident,TokenStream)>,
+    script_trts  : Vec<(Ident,TokenStream)>,
+    live_mets    : Vec<(Ident,TokenStream)>,
+    live_trts    : Vec<(Ident,TokenStream)>,
+
+    script_fields: Vec<TokenStream>,
+    direct_arms  : Vec<TokenStream>,
+    debug_arms   : Vec<TokenStream>,
+}
+
+impl Cont {
+
+    pub fn new() -> Self{
+        Self{
+            script_mets  : vec![],
+            script_trts  : vec![],
+            live_mets    : vec![],
+            live_trts    : vec![],
+            script_fields: vec![],
+            direct_arms  : vec![],
+            debug_arms   : vec![],
+        }
+    }
+}
 
 
+// pub static INTER_GET_DEBUT: &'static str = "inter_get_debut";
+// pub static INTER_GET_COUNT: &'static str = "inter_get_count";
+// pub static INTER_SET_NAME: &'static str  = "inter_set_name";
+// pub static INTER_GET_NAME: &'static str  = "inter_get_name";
+// pub static INTER_NAME: &'static str      = "InterName";
+// pub static DEBUT: &'static str           = "debut";
+
+pub struct Vars {
+
+    actor:           Ident,
+    actor_name:      Ident,
+    name:            Ident,
+    debut:           Ident,
+    debut_play:      Ident,
+    sender:          Ident,
+    receiver:        Ident,
+    play:            Ident,
+    direct:          Ident,
+    inter_send:      Ident,
+    inter_recv:      Ident,
+    inter_name:      Ident,
+    inter_debut:     Ident,
+    inter_count:     Ident,
+    inter_get_debut: Ident,
+    inter_get_count: Ident,
+    inter_set_name:  Ident,
+    inter_get_name:  Ident,
+    intername:       Ident,
+    msg:             Ident,
+
+    cust_name:       Ident,
+    script_name:     Ident,
+    live_name:       Ident,
+}
 
 
+impl Vars {
 
-// pub struct GroupModelSdpl {
-//     pub name:                Ident,
-//     pub edit:               AGEdit,
-//     pub generics:         Generics,
-//     pub parts: Vec<ActorModelSdpl>,
-//     pub script: (  TokenStream,  Vec<(Ident,TokenStream)>,  Vec<(Ident,TokenStream)> ),
-//     pub live:   (  TokenStream,  Vec<(Ident,TokenStream)>,  Vec<(Ident,TokenStream)> ),
-// }
+    pub fn new( aaa: &ActorAttributeArguments, actor_name: &Ident, mac: Model,model: &Model )  -> Self {
+        let cust_name  = if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { actor_name.clone() }; 
+        let script_name;
+        let live_name  ;
+        let actor ;
+        match (mac,model){
+            (Model::Actor,Model::Actor) => {
+                actor = format_ident!("actor");
+                script_name = name::script(&cust_name);
+                live_name   = name::live(&cust_name);
+             },
+            (Model::Actor,Model::Group)|
+            (Model::Group,Model::Actor) => { 
+                actor = format_ident!("actor");
+                script_name = name::script_group(&cust_name);
+                live_name   = name::live_group(&cust_name);
+            },
+            (Model::Group,Model::Group) => { 
+                actor = format_ident!("group");
+                script_name = name::group_script(&cust_name);
+                live_name   = name::group_live(&cust_name);
+            },
+        }
+
+        Self{
+
+            actor,
+            actor_name:      actor_name.clone(),
+            name:            format_ident!("name"),
+            debut:           format_ident!("debut"),
+            debut_play:      format_ident!("debut_play"),
+            sender:          format_ident!("sender"),
+            receiver:        format_ident!("receiver"),
+            play:            format_ident!("play"),
+            direct:          format_ident!("direct"),
+            inter_send:      format_ident!("inter_send"),
+            inter_recv:      format_ident!("inter_recv"),
+            inter_name:      format_ident!("inter_name"),
+            inter_debut:     format_ident!("inter_debut"),
+            inter_count:     format_ident!("inter_count"),
+            inter_get_debut: format_ident!("inter_get_debut"),
+            inter_get_count: format_ident!("inter_get_count"),
+            inter_set_name:  format_ident!("inter_set_name"),
+            inter_get_name:  format_ident!("inter_get_name"),
+            intername:       format_ident!("InterName"),
+            msg:             format_ident!("msg"),
+
+            cust_name,
+            script_name,
+            live_name ,
+        }
+
+
+    }
+}
 
 
 pub struct GroupModelSdpl {
@@ -62,19 +180,6 @@ impl GroupModelSdpl {
         Edit::Group(self.edit.clone())
     }
 }
-
-
-/*
-This means there should be:
-    a)  struct  AGEdit {
-            pub script:( bool, Option<Vec<syn::Ident>>, Option<Vec<syn::Ident>> ),
-            pub live:  ( bool, Option<Vec<syn::Ident>>, Option<Vec<syn::Ident>> ),
-
-            pub group: Vec< ( Ident, AAEdit )>
-
-    }
-
-*/
 
 
 // Sdpl Actor 
@@ -240,7 +345,9 @@ impl ActorModelSdpl {
             #res_edit_live_mets
             #res_edit_live_trts
         };
-    
+        // let msg = res_code.to_string();
+        
+        // abort!(proc_macro::Span::call_site(),msg );
         (res_code, res_edit)
     
     }
@@ -281,23 +388,46 @@ pub fn edit_select((edit_idents,scope): (Option<Vec<(Ident,bool)>>,bool),
 
 
 
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-#[test]
-fn test_split_edit_group() {
+    #[test]
+    fn test_split_edit_group() {
 
-    let attr: syn::Attribute = 
-    syn::parse_quote!{#[actor( edit(script(imp), 
-                            a::edit(live,script(def))))] };
+        let attr: syn::Attribute = 
+        syn::parse_quote!{#[actor( edit(script(imp), 
+                                a::edit(live,script(def))))] };
 
-    let mut edit = EditGroup::default();
+        let mut edit = EditGroup::default();
 
-    for meta in crate::model::attribute::attr_to_meta_list(&attr){
+        for meta in crate::model::attribute::attr_to_meta_list(&attr){
 
-        if meta.path().is_ident("edit"){
-            edit.parse(&meta);
+            if meta.path().is_ident("edit"){
+                edit.parse(&meta);
+            }
         }
+        println!("Edit - {:?}", edit);  
     }
-    println!("Edit - {:?}", edit);  
+
+
+    #[test]
+    fn parse_types () {
+
+        let actor = quote::format_ident!{"Actor"};
+        let actor_ty: syn::Type = syn::parse_quote!(#actor);
+
+
+        match &actor_ty {
+
+            syn::Type::Path(_) => println!(" True type "),
+            _ => println!(" Not a type that I expect"),
+        }
+        let str_actor_ty = quote!(#actor_ty);
+
+        println!("{str_actor_ty}");
+
+    }
 }
 
 

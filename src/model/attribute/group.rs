@@ -211,6 +211,10 @@ impl GroupAttributeArguments {
                 } else { abort!(meta,error::EXPECT_LIST;help=error::ABOUT_ALLOW); }
             }
 
+            else if meta.path().is_ident("debug") {
+                abort!(meta,"Did you mean `debut`?"; help=error::AVAIL_ACTOR);
+            }
+
             // UNKNOWN ARGUMENT
             else { error::unknown_attr_arg("group",meta.path() ) }
         }

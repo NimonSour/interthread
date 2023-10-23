@@ -1,51 +1,23 @@
 
 use crate::error;
-use crate::model::{name,method,generics,attribute::ActorAttributeArguments,argument::{Lib,Model}};
+use crate::model::{self,get_ident_type_generics,MpscChannel,Cont,Vars,method,generics,attribute::ActorAttributeArguments,argument::{Lib,Model}};
 
 use proc_macro_error::abort;
-use syn::{Ident,Signature,ItemImpl,Visibility };
+use syn::{Ident,Type,Signature,ItemImpl,Visibility };
 use quote::{quote,format_ident};
 use proc_macro2::TokenStream;
 
-// pub fn live_static_method( 
-//     actor_name: &Ident,
-//          ident: Ident, 
-//            vis: Visibility,
-//        mut sig: Signature,
-//           args: TokenStream,
-//      live_mets: &mut Vec<(Ident,TokenStream)> ) {
-
-//     method::change_signature_refer(&mut sig);
-//     let await_call = sig.asyncness.as_ref().map(|_|quote!{.await});
-//     let stat_met = quote! {
-//         #vis #sig {
-//             #actor_name::#ident #args #await_call
-//         }
-//     };
-//     live_mets.push((ident,stat_met));
-// }
-
 
 pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Model, mut new_vis: Option<Visibility> ) 
-->  crate::model::ActorModelSdpl{ 
-    
-    let script_def;
-    let mut script_mets = vec![];
-    let mut script_trts = vec![];
-  
-    let live_def;
-    let mut live_mets = vec![];
-    let mut live_trts = vec![];
+    ->  crate::model::ActorModelSdpl{ 
+ 
 
-
-    let mut script_fields   = vec![];
-    let mut direct_arms     = vec![];
-    let mut debug_arms      = vec![];
-
+    //-------------(1)
+    let mut cont = model::Cont::new();
 
     let (actor_name,
         actor_type,
-        generics) = name::get_ident_type_generics(item_impl);
+        generics) = get_ident_type_generics(item_impl);
     
 
 
@@ -54,9 +26,8 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
          method::get_methods( &actor_type,item_impl.clone(),aaa.assoc ,&mac);
 
 
-    
     let mut model_generics = generics.clone();
-    let actor_ty_generics  = generics.split_for_impl().1;
+    // let actor_ty_generics  = generics.split_for_impl().1;
 
     let ( impl_generics,
             ty_generics,
@@ -71,85 +42,52 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
 
             met_new = Some(mn);
 
-        } else {
-            generics::get_parts( &mut model_generics, sigs);
-        }
+        } else { generics::get_parts( &mut model_generics, sigs); }
+        
         model_generics.split_for_impl()
 
     };
     
-
-
     // Giving a new name if specified 
-    let cust_name   = if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { actor_name.clone() }; 
+
+    let vars = &Vars::new(&aaa,&actor_name,Model::Actor,&mac) ;
+    let Vars { script_name,live_name,.. } = vars;
+    let script_type: Type = syn::parse_quote!{ #script_name #ty_generics };
+    let live_type: Type   = syn::parse_quote!{ #live_name #ty_generics };
+    let (oneshot,mpsc) = &model::get_channels_one_mpsc(&aaa,vars,&script_type);
     
-    // let script_name = &name::script(&cust_name);
-    // let live_name   = &name::live(&cust_name);
-    let ( script_name, live_name) = &name::get_actor_names(&cust_name,&mac);
-    
 
-    let (live_field_sender,
-        play_input_receiver, 
-        new_live_send_recv , 
-        live_meth_send_recv, 
-        script_field_output, 
-        live_send_input,
-        live_recv_output ) = aaa.channel.get_all( &aaa.lib, &script_name,&live_name, &ty_generics);
-
-
-    
-    let direct_async_decl = 
-    if actor_methods.iter().any(|x| x.is_async()) { 
-        Some(quote!{async})
-    } else { None };
-
-    let play_async_decl   = 
+    let async_decl   = 
 
         match &aaa.lib {
             Lib::Std => {
-                if direct_async_decl.is_some(){ 
-                    let pos = actor_methods.iter().position(|x| x.is_async()).unwrap();
+                if let Some(pos) = actor_methods.iter().position(|x| x.is_async()){
                     error::abort_async_no_lib(&actor_name,&actor_methods[pos]);
-                } 
+                }
                 None
             },
             _ => { Some(quote!{async}) },
         };
 
+    let Vars{actor,play,direct,
+             debut, msg,debut_play,
+             sender,receiver,name,..} = vars;
     
-    let actor = &format_ident!("actor");
-    method::to_raw_parts(
-        &actor,
-        &actor_name,
-        &script_name,
-        &aaa.lib,
-        actor_methods,
-    
-        live_meth_send_recv, 
-        live_send_input, 
-        live_recv_output,
-        script_field_output, 
-        
-        &mut live_mets,
-        &mut debug_arms,
-        &mut direct_arms,
-        &mut script_fields,
 
-    );
-
+    method::to_raw_parts( vars,&mut cont,&aaa,actor_methods,oneshot,mpsc );
 
 
     // This is file_path for legend 
     let ( script_legend_file, live_legend_file ) = 
     if aaa.debut.is_legend(){
-        let (s,l) = crate::show::check_legend_path(&mac, &cust_name, &aaa.debut.path.as_ref().unwrap());
+        let (s,l) = crate::show::check_legend_path(&mac, &vars.cust_name, &aaa.debut.path.as_ref().unwrap());
         (Some(s),Some(l))
     } else {
         (None, None)
     };
 
 
-
+    //-------------(2)
     /*
     
 
@@ -397,7 +335,7 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
     };
      */
 
-     if Model::Actor.eq(&mac) { 
+    if Model::Actor.eq(&mac) { 
 
         if met_new.is_none() {
 
@@ -418,12 +356,12 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
 
         let (init_live, play_args) = {
             if aaa.debut.active() {
-                (quote!{ Self { sender,debut: std::sync::Arc::clone(&debut), name:format!("{:?}",*debut) }} ,
-                 quote!{ receiver, #actor, debut_play})
+                (quote!{ Self { #sender,#debut: std::sync::Arc::clone(&#debut), #name : format!("{:?}",* #debut) }} ,
+                 quote!{ #receiver, #actor, #debut_play})
             } else {
 
-                (quote!{ Self{ sender } }, 
-                 quote!{ receiver, #actor } )
+                (quote!{ Self{ #sender } }, 
+                 quote!{ #receiver, #actor } )
             }
         };
 
@@ -432,17 +370,20 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
 
         let vars_debut = 
         if aaa.debut.active() {
-            quote!{let debut =  #script_name #turbofish ::debut();
-                   let debut_play = *std::sync::Arc::clone(&debut); }
+            quote!{let #debut =  #script_name #turbofish ::#debut();
+                   let #debut_play = *std::sync::Arc::clone(&#debut); }
         } else {quote!{}};
 
         let return_statement   = met_new.live_ret_statement(&init_live);
         
+        let MpscChannel{declaration, ..} = mpsc;
+        let Cont{live_mets,..} = &mut cont;
+
         let func_new_body = quote!{
 
             #vis #new_sig {
                 let #actor = #actor_name:: #func_new_name #args_ident #unwrapped;
-                #new_live_send_recv
+                #declaration
                 #vars_debut
                 #spawn
                 #return_statement
@@ -453,38 +394,30 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
     };
 
      
-
+    
 
     // LIVE INTER METHODS AND TRAITS
-    // model::debut()
     if aaa.debut.active(){
-        aaa.debut.impl_debut(
-            &mut live_mets,
-            &mut live_trts,
-            &mut script_mets,
-            &live_name,
-            &new_vis,
-            &ty_generics,
-            &where_clause
-        )
+        aaa.debut.impl_debut( &mut cont, vars, &new_vis, &ty_generics, &where_clause)
     }
-
+    
     // SCRIPT DEFINITION
-    script_def = {
-
+    let script_def = {
+        let Cont{ script_fields,..} = &mut cont;
         quote! {
             #new_vis enum #script_name #ty_generics #where_clause {
                 #(#script_fields),*
             }
         }
-    };
+    };        
+
 
     // DIRECT
     {
-
-        script_mets.push((format_ident!("direct"),
+        let Cont{script_mets,direct_arms,..} = &mut cont;
+        script_mets.push((direct.clone(),
         quote!{
-            #new_vis #direct_async_decl fn direct (self, #actor: &mut #actor_type #actor_ty_generics ) {
+            #new_vis #async_decl fn #direct (self, #actor: &mut #actor_type /*#actor_ty_generics*/ ) {
                 match self {
                     #(#direct_arms)*
                 }
@@ -496,15 +429,14 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
     // PLAY
     if Model::Actor.eq(&mac) {
 
-        let direct_await  = direct_async_decl.as_ref().map(|_| quote!{.await});
-        let recv_await    =  play_async_decl.as_ref().map(|_| quote!{.await});
+        let await_call  = async_decl.as_ref().map(|_| quote!{.await});
+        // let recv_await    =  play_async_decl.as_ref().map(|_| quote!{.await});
         let end_of_play = error::end_of_life( &actor_name, &aaa.debut.clone() ); // <- include 
       
+        let debut_pat_type = if aaa.debut.active(){quote!{,#debut: std::time::SystemTime }} else { quote!{} };
 
-
-        let debut = if aaa.debut.active(){quote!{,debut: std::time::SystemTime }} else { quote!{} };
-
-
+        let MpscChannel{pat_type_receiver,..}      = mpsc;
+        let Cont{script_mets,..} = &mut cont;
         let play_method = {
         
             let ok_or_some = match aaa.lib {
@@ -512,20 +444,21 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
                 _ => quote!{Ok}
             };
             quote! {
-                #new_vis #play_async_decl fn play ( #play_input_receiver mut #actor: #actor_type #actor_ty_generics #debut ) {
-                    while let #ok_or_some (msg) = receiver.recv() #recv_await {
-                        msg.direct ( &mut #actor ) #direct_await;
+                #new_vis #async_decl fn #play ( #pat_type_receiver mut #actor: #actor_type /*#actor_ty_generics*/ #debut_pat_type ) {
+                    while let #ok_or_some (#msg) = #receiver.recv() #await_call {
+                        #msg.#direct ( &mut #actor ) #await_call;
                     }
                     #end_of_play
                 }
             }
         };
-        script_mets.push(( format_ident!("play"), play_method ));
+        script_mets.push(( play.clone(), play_method ));
+
     }
-    
+
     // SCRIPT TRAIT (Debug)
     {   
-
+        let Cont{ script_trts,debug_arms,..} = &mut cont;
         let str_script_name = script_name.to_string();
         let body = 
         if debug_arms.is_empty() { 
@@ -546,38 +479,48 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
 
 
     // LIVE DEFINITION
-    live_def =  if Model::Actor.eq(&mac) {
-        let (debut_field, name_field) = if aaa.debut.active() {
-            ( quote!{ pub debut: std::sync::Arc<std::time::SystemTime>,},
-            quote!{ pub name: String,} )
-        } else { (quote!{}, quote!{})};   
-
-        quote!{
-            #[derive(Clone)]
-            #new_vis struct #live_name #ty_generics #where_clause {
-                #live_field_sender
-                #debut_field
-                #name_field
+    let live_def = {
+        let MpscChannel{pat_type_sender,..} = &mpsc;
+        if Model::Actor.eq(&mac) {
+            let (debut_field, name_field) = if aaa.debut.active() {
+                ( quote!{ pub #debut: std::sync::Arc<std::time::SystemTime>,},
+                quote!{ pub #name: String,} )
+            } else { (quote!{}, quote!{})};   
+            
+            quote!{
+                #[derive(Clone)]
+                #new_vis struct #live_name #ty_generics #where_clause {
+                    #pat_type_sender
+                    #debut_field
+                    #name_field
+                }
             }
-        }
-    } else { 
+        } else { 
 
-        quote!{
-            #[derive(Clone)]
-            #new_vis struct #live_name #ty_generics #where_clause {
-                #live_field_sender
+            quote!{
+                #[derive(Clone)]
+                #new_vis struct #live_name #ty_generics #where_clause {
+                    #pat_type_sender
+                }
             }
+
         }
 
     };
-    
+
+    //-------------(3)
+
+    let Vars { cust_name,..} = vars;
+    let Cont { script_mets, script_trts,
+               live_mets, live_trts,..} = cont;
 
     crate::model::ActorModelSdpl {
-        name:          cust_name,
-        asyncness: direct_async_decl,
-        mac:         mac.clone(),
-        edit:           aaa.edit,
-        generics: model_generics,
+        name:      cust_name.clone(),
+        asyncness:        async_decl,
+        mac:             mac.clone(),
+        edit:               aaa.edit,
+        generics:     model_generics,
+
         script: ( script_def, script_mets, script_trts ),
         live:   (   live_def,   live_mets,   live_trts ),
     }
@@ -588,11 +531,12 @@ pub fn macro_actor_generate_code( aaa: ActorAttributeArguments, item_impl: ItemI
 
 
     let mut act_model = actor_model( aaa,&item_impl,Model::Actor,None);
-
+    
     let (mut code,edit) = act_model.split_edit();
     
     // abort!(item_impl,code.to_string());
-    
+  
+
     code = quote!{
 
         #item_impl
@@ -601,6 +545,9 @@ pub fn macro_actor_generate_code( aaa: ActorAttributeArguments, item_impl: ItemI
     (code,edit)
     
 }
+    // let msg = live_mets.last().unwrap().1.to_string();
+    // let msg = live_def.to_string();
+    // abort!(proc_macro::Span::call_site(),msg );
 
 
 

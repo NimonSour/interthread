@@ -1,14 +1,15 @@
+use crate::model::{Cont,Vars};
 use quote::{quote,format_ident};
 use syn::{Visibility,Ident,TypeGenerics,WhereClause};
 use proc_macro2::TokenStream;
 use std::path::PathBuf;
 
-pub static INTER_GET_DEBUT: &'static str = "inter_get_debut";
-pub static INTER_GET_COUNT: &'static str = "inter_get_count";
-pub static INTER_SET_NAME: &'static str  = "inter_set_name";
-pub static INTER_GET_NAME: &'static str  = "inter_get_name";
-pub static INTER_NAME: &'static str      = "InterName";
-pub static DEBUT: &'static str           = "debut";
+// pub static INTER_GET_DEBUT: &'static str = "inter_get_debut";
+// pub static INTER_GET_COUNT: &'static str = "inter_get_count";
+// pub static INTER_SET_NAME: &'static str  = "inter_set_name";
+// pub static INTER_GET_NAME: &'static str  = "inter_get_name";
+// pub static INTER_NAME: &'static str      = "InterName";
+// pub static DEBUT: &'static str           = "debut";
 
 
 //-----------------------  ACTOR DEBUT
@@ -49,53 +50,85 @@ impl Default for Debut {
 impl Debut {
 
     pub fn impl_debut(&self,
-        live_mets:   &mut Vec<(Ident,TokenStream)>,
-        live_trts:   &mut Vec<(Ident,TokenStream)>,
-        script_mets: &mut Vec<(Ident,TokenStream)>,
-        live_name: &Ident,
-        new_vis: &Option<Visibility>,
-        ty_generics: &TypeGenerics,
+        Cont{
+
+            live_mets,
+            live_trts,
+            script_mets,..
+        }: &mut Cont,
+        Vars{
+            live_name,
+            inter_get_debut,
+            inter_get_name,
+            inter_set_name,
+            inter_get_count,
+            debut,
+            intername,..
+        }: &Vars,
+        // live_name: &Ident,
+        new_vis:        &Option<Visibility>,
+        ty_generics:          &TypeGenerics,
         where_clause: &Option<&WhereClause>,
         
     ){  
-        let inter_get_debut = format_ident!("{INTER_GET_DEBUT}");
-        let ts  = quote!{
-            #new_vis fn #inter_get_debut (&self) -> std::time::SystemTime {
-                *self.debut
+        // let inter_get_debut = format_ident!("{INTER_GET_DEBUT}");
+        // let ts  = quote!{
+        //     #new_vis fn #inter_get_debut (&self) -> std::time::SystemTime {
+        //         *self.debut
+        //     }
+        // };
+        live_mets.push((inter_get_debut.clone(),
+            quote!{
+                #new_vis fn #inter_get_debut (&self) -> std::time::SystemTime {
+                    *self.debut
+                }
             }
-        };
-        live_mets.push((inter_get_debut,ts));
+        ));
         
     
-        let inter_get_count = format_ident!("{INTER_GET_COUNT}");
-        let ts = quote!{
-            #new_vis fn #inter_get_count (&self) -> usize {
-                std::sync::Arc::strong_count(&self.debut)
+        // let inter_get_count = format_ident!("{INTER_GET_COUNT}");
+        // let ts = quote!{
+        //     #new_vis fn #inter_get_count (&self) -> usize {
+        //         std::sync::Arc::strong_count(&self.debut)
+        //     }
+        // };
+        live_mets.push((inter_get_count.clone(),
+            quote!{
+                #new_vis fn #inter_get_count (&self) -> usize {
+                    std::sync::Arc::strong_count(&self.debut)
+                }
             }
-        };
-        live_mets.push((inter_get_count,ts));
+        ));
     
     
-        let inter_set_name  = format_ident!("{INTER_SET_NAME}");
-        let gen_type = format_ident!("{INTER_NAME}");
-        let ts = quote!{
-            #new_vis fn #inter_set_name < #gen_type: std::string::ToString>(&mut self, name:  #gen_type) {
-                self.name = name.to_string();
+        // let inter_set_name  = format_ident!("{INTER_SET_NAME}");
+        // let gen_type = format_ident!("{INTER_NAME}");
+        // let ts = 
+        live_mets.push((inter_set_name.clone(),
+            quote!{
+                #new_vis fn #inter_set_name < #intername: std::string::ToString>(&mut self, name:  #intername) {
+                    self.name = name.to_string();
+                }
             }
-        };
-        live_mets.push((inter_set_name,ts));
+        ));
     
     
-        let inter_get_name = format_ident!("{INTER_GET_NAME}");
-        let ts = quote!{    
-            #new_vis fn #inter_get_name (&self) -> &str {
-                &self.name
-            } 
-        };
-        live_mets.push((inter_get_name,ts));
+        // let inter_get_name = format_ident!("{INTER_GET_NAME}");
+        // let ts = quote!{    
+        //     #new_vis fn #inter_get_name (&self) -> &str {
+        //         &self.name
+        //     } 
+        // };
+        live_mets.push((inter_get_name.clone(),
+            quote!{    
+                #new_vis fn #inter_get_name (&self) -> &str {
+                    &self.name
+                } 
+            }
+        ));
     
     
-        let debut = format_ident!("{DEBUT}");
+        // let debut = format_ident!("{DEBUT}");
         let ts = quote!{
             // we need this function to return as much an id as it is possible
             // the model will build some options on top of this "id"
@@ -122,7 +155,7 @@ impl Debut {
                 std::sync::Arc::new(next_time)
             }
         };
-        script_mets.push((debut,ts));
+        script_mets.push((debut.clone(),ts));
         
     
         live_trts.push((format_ident!("PartialEq"),

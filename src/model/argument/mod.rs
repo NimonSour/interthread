@@ -1,11 +1,12 @@
 pub mod channel;
 pub mod debut;
 pub mod edit;
+pub mod interact;
 
-
-pub use channel::Channel;
+pub use channel::*;
 pub use debut::*;
 pub use edit::*;
+pub use interact::*;
 
 
 
@@ -73,6 +74,8 @@ impl Lib {
                 abort!( s, msg; help=error::AVAIL_LIB );   
             } 
         }
+        
+
     }
     
     pub fn method_new_spawn(&self, play_args: &TokenStream, script_name: &Ident) -> TokenStream {
@@ -203,40 +206,48 @@ mod tests {
     #[test]
     fn test_functions(){
 
-        let attr: syn::Attribute = syn::parse_quote!{#[actor( edit(file))] };
+        let sig: syn::Signature     = syn::parse_quote!{ fn foo ( send: oneshot::Sender<&'static str>) -> i8 };  
+        let mut my_type:  syn::Type = syn::parse_quote!{ oneshot::Receiver };
+        let argument  =  sig.inputs.last().unwrap();
+        
+        let target = quote::format_ident!("Sender");
+        
+        if let syn::FnArg::Typed(arg) = &argument{
+            // ty = arg.ty.clone();
+
+            if let syn::Type::Path(type_path) = &*arg.ty {
+                if let Some(seg) = type_path.path.segments.last(){
+                    if target.eq(&seg.ident) {
+                        
+                        let gen_args = seg.arguments.clone();
+                        if let syn::PathArguments::AngleBracketed(ang_brck_gen_arg) = &gen_args{
+                            if let Some( gen ) = ang_brck_gen_arg.args.first(){
+                                if let syn::GenericArgument::Type(ty) = gen {
+                                    let ty_str = quote!{#ty}.to_string();
+                                    println!("ty - {}",ty_str); 
+                                } else { println!("Not generic argument Type "); }
+                            } else { println!("Not first arg"); }
+                        } else { println!("Not angle bracketed"); }
+                         
+                        // let mut my_type:  syn::Type = syn::parse_quote!{ oneshot::Receiver #gen_args };
+
+                        // println!(" new Receiver -  {}", quote::quote!{#my_type}.to_string())
+                    } else { println!("Not equal to Sender!") }
+                }
+            };
+        };
+        
 
 
-        println!("{}", quote::quote!{#attr}.to_string());
 
-        let mut edit = EditActor::default();
 
-        for meta in crate::model::attribute::attr_to_meta_list(&attr){
 
-            if meta.path().is_ident("edit"){
-                edit.parse(&meta);
-            }
-        }
-        println!("Edit  - {:?}", edit);  
+
+        println!("fn argument -  {}", quote::quote!{#argument}.to_string() );
+
     }
 
 
 
-    #[test]
-    fn test_split_edit_group() {
-
-        let attr: syn::Attribute = 
-        syn::parse_quote!{#[actor( edit(script(imp), 
-                                a::edit(live,script(def))))] };
-
-        let mut edit = EditGroup::default();
-
-        for meta in crate::model::attribute::attr_to_meta_list(&attr){
-
-            if meta.path().is_ident("edit"){
-                edit.parse(&meta);
-            }
-        }
-        println!("Edit - {:?}", edit);  
-    }
     
 }

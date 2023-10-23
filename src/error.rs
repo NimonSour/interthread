@@ -2,7 +2,7 @@
 use crate::model::{Debut,ActorMethod};
 
 use quote::{quote,ToTokens};
-use syn::{Path,Ident,Signature};
+use syn::{Type,Path,Ident,Signature};
 use proc_macro_error::abort;
 use proc_macro2::TokenStream;
 use proc_macro::Span;
@@ -559,24 +559,30 @@ pub fn direct_send(script_name: &syn::Ident, variant: &syn::Ident) -> TokenStrea
 //     format!( "Since v1.0.0 `file` argument is not aplicable. Use `path= \"{}\"` instead!", &path )
 // }
 
-pub fn invalid_fn_arg_pattern(arg: &syn::FnArg) -> String {
+// pub fn invalid_fn_arg_pattern(arg: &syn::FnArg) -> String {
     
-    format!( 
+// format!( 
+// "Invalid function argument pattern -`{}`!
 
-"Invalid function argument pattern -`{}`!
+
+// Valid patterns include:
+
+// - Identifiers            `a : Type `    
+// - Tuple patterns         `(a,b): (TypeA,TypeB)`
+// - Tuple struct patterns  `Foo(a,b) : Foo`
+// - Struct patterns        `Foo{{a,b}} : Foo`
+
+// ",quote!{#arg}.to_string() )
+
+// }
 
 
-Valid patterns include:
+pub fn origin( actor_type: &Type, sig: &Signature ) -> String {
 
-- Identifiers            `a : Type `    
-- Tuple patterns         `(a,b): (TypeA,TypeB)`
-- Tuple struct patterns  `Foo(a,b) : Foo`
-- Struct patterns        `Foo{{a,b}} : Foo`
-
-",quote!{#arg}.to_string() )
-
+    let actor     = quote!(#actor_type).to_string();
+    let sig       = quote!(#sig).to_string();
+    format!("Actor `{}` method `{}`.",actor, sig)
 }
-
 
 // v1.2.0
 pub static OLD_ARG_ID: &'static str = "
