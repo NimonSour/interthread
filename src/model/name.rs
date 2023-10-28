@@ -1,10 +1,12 @@
 
 use quote::format_ident;
 use syn::{Type,Ident};
+use proc_macro::Span;
 use proc_macro_error::abort;
 
 // use crate::attribute::AAExpand;
-use crate::model::argument::Model;
+use crate::model::Model;
+use crate::error;
 
 pub fn get_ident_type_generics(item_impl: &syn::ItemImpl) -> (syn::Ident,syn::Type,syn::Generics) {
 
@@ -81,7 +83,18 @@ pub fn get_names(name: &Ident, mac: Model, model: &Model) -> ( Ident, Ident ){
 }
 
 
+pub fn check_name_conflict( names: Vec<&Ident> ){
 
+    let mut names = 
+    names.iter().map(|&x| (x.clone(), script_field(x))).collect::<Vec<_>>();
+
+    while let Some((o_name,m_name)) = names.pop(){
+        if let Some(pos) =  names.iter().position(|(_,x)| m_name.eq(x)){
+            let msg = crate::error::type_nameing_conflict(&o_name,&names[pos].0);
+            abort!(Span::call_site(), msg;help=error::HELP_TYPE_NAMING_CONFLICT )
+        }
+    } 
+}
 
 
 fn fn_to_struct(input: &str) -> String {

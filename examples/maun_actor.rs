@@ -49,6 +49,8 @@ where
         s
     }
 }
+
+//  #[interthread::example(main(path="examples/maun_actor.rs"))] 
 fn main() {
 
     let act = MaunActorLive::<String,&'static str,char>::new();

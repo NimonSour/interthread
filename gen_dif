@@ -1,0 +1,3182 @@
+diff --git a/Cargo.toml b/Cargo.toml
+index fc3f071..501d17c 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -1,3 +1,4 @@
++
+ [package]
+ name = "interthread"
+ version = "1.1.7"
+diff --git a/examples/edit_hack.rs b/examples/edit_hack.rs
+index 82d39a8..1626a75 100644
+--- a/examples/edit_hack.rs
++++ b/examples/edit_hack.rs
+@@ -11,6 +11,7 @@ pub struct MyActor {
+ // will change to 
+ #[actor(channel=2, edit(script(imp(play))))]
+ 
++
+ impl MyActor {
+ 
+     pub fn new( value: i8 ) -> Self {
+@@ -50,8 +51,8 @@ impl MyActorScript {
+                 // the name of the `Script` variant 
+                 // your text editor does it for you
+                 // so just choose the variant
+-                MyActorScript::PlayGetCounter { output  } =>
+-                { let _ = output.send(Some(call_counter));},
++                MyActorScript::PlayGetCounter { inter_send  } =>
++                { let _ = inter_send.send(Some(call_counter));},
+                 
+                 // else as usual 
+                 _ => { msg.direct(&mut actor); }
+diff --git a/examples/inter/id_arg.rs b/examples/inter/id_arg.rs
+deleted file mode 100644
+index 660591c..0000000
+--- a/examples/inter/id_arg.rs
++++ /dev/null
+@@ -1,92 +0,0 @@
+-use std::thread::spawn;
+-pub struct MyActor;
+-impl MyActor {
+-    pub fn new() -> Self {
+-        Self {}
+-    }
+-}
+-pub enum MyActorScript {}
+-impl MyActorScript {
+-    pub fn debut() -> std::sync::Arc<std::time::SystemTime> {
+-        static LAST: std::sync::Mutex<std::time::SystemTime> = std::sync::Mutex::new(
+-            std::time::SystemTime::UNIX_EPOCH,
+-        );
+-        let mut last_time = LAST.lock().unwrap();
+-        let mut next_time = std::time::SystemTime::now();
+-        while !(*last_time < next_time) {
+-            if *last_time == next_time {
+-                next_time += std::time::Duration::new(0, 1);
+-            } else {
+-                next_time = std::time::SystemTime::now();
+-            }
+-        }
+-        *last_time = next_time.clone();
+-        std::sync::Arc::new(next_time)
+-    }
+-    pub fn direct(self, actor: &mut MyActor) {
+-        match self {}
+-    }
+-    pub fn play(
+-        receiver: std::sync::mpsc::Receiver<MyActorScript>,
+-        mut actor: MyActor,
+-        debut: std::time::SystemTime,
+-    ) {
+-        while let Ok(msg) = receiver.recv() {
+-            msg.direct(&mut actor);
+-        }
+-        eprintln!("MyActor [ {debut:?} ] the end ...");
+-    }
+-}
+-impl std::fmt::Debug for MyActorScript {
+-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+-        write!(f, "MyActorScript")
+-    }
+-}
+-#[derive(Clone)]
+-pub struct MyActorLive {
+-    sender: std::sync::mpsc::SyncSender<MyActorScript>,
+-    pub debut: std::sync::Arc<std::time::SystemTime>,
+-    pub name: String,
+-}
+-impl MyActorLive {
+-    pub fn new() -> Self {
+-        let actor = MyActor::new();
+-        let (sender, receiver) = std::sync::mpsc::sync_channel(2);
+-        let debut = MyActorScript::debut();
+-        let debut_play = *std::sync::Arc::clone(&debut);
+-        std::thread::spawn(move || { MyActorScript::play(receiver, actor, debut_play) });
+-        Self {
+-            sender,
+-            debut: std::sync::Arc::clone(&debut),
+-            name: format!("{:?}", * debut),
+-        }
+-    }
+-    pub fn inter_get_debut(&self) -> std::time::SystemTime {
+-        *self.debut
+-    }
+-    pub fn inter_get_count(&self) -> usize {
+-        std::sync::Arc::strong_count(&self.debut)
+-    }
+-    pub fn inter_set_name<InterName: std::string::ToString>(&mut self, name: InterName) {
+-        self.name = name.to_string();
+-    }
+-    pub fn inter_get_name(&self) -> &str {
+-        &self.name
+-    }
+-}
+-impl std::cmp::PartialEq for MyActorLive {
+-    fn eq(&self, other: &Self) -> bool {
+-        *self.debut == *other.debut
+-    }
+-}
+-impl std::cmp::Eq for MyActorLive {}
+-impl std::cmp::PartialOrd for MyActorLive {
+-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+-        other.debut.partial_cmp(&self.debut)
+-    }
+-}
+-impl std::cmp::Ord for MyActorLive {
+-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+-        other.debut.cmp(&self.debut)
+-    }
+-}
+\ No newline at end of file
+diff --git a/examples/inter/intro_std.rs b/examples/inter/intro_std.rs
+new file mode 100644
+index 0000000..d8d75b8
+--- /dev/null
++++ b/examples/inter/intro_std.rs
+@@ -0,0 +1,148 @@
++pub struct MyActor {
++    value: i8,
++}
++impl MyActor {
++    pub fn new(v: i8) -> Self {
++        Self { value: v }
++    }
++    pub fn increment(&mut self) {
++        self.value += 1;
++    }
++    pub fn add_number(&mut self, num: i8) -> i8 {
++        self.value += num;
++        self.value
++    }
++    pub fn get_value(&self) -> i8 {
++        self.value
++    }
++    pub fn send_value(&self, (s, m): (i8, u8)) -> i8 {
++        self.value
++    }
++}
++pub struct Bla { i: u8, c:u8 }
++pub enum MyActorScript {
++    Increment {},
++    AddNumber { input: (i8), output: oneshot::Sender<i8> },
++    GetValue { output: oneshot::Sender<i8> },
++    SendValue { input: (i8, u8), output: oneshot::Sender<i8> },
++}
++impl MyActorScript {
++    pub fn direct(self, actor: &mut MyActor) {
++        match self {
++            MyActorScript::Increment {} => {
++                actor.increment();
++            }
++            MyActorScript::AddNumber { input: (num), output: inter_send } => {
++                inter_send
++                    .send(actor.add_number(num))
++                    .unwrap_or_else(|_error| {
++                        core::panic!(
++                            "'MyActorScript::AddNumber.direct'. Sending on a closed channel."
++                        )
++                    });
++            }
++            MyActorScript::GetValue { output: inter_send } => {
++                inter_send
++                    .send(actor.get_value())
++                    .unwrap_or_else(|_error| {
++                        core::panic!(
++                            "'MyActorScript::GetValue.direct'. Sending on a closed channel."
++                        )
++                    });
++            }
++            MyActorScript::SendValue { input: (s, m), output: inter_send } => {
++                inter_send
++                    .send(actor.send_value((s, m)))
++                    .unwrap_or_else(|_error| {
++                        core::panic!(
++                            "'MyActorScript::SendValue.direct'. Sending on a closed channel."
++                        )
++                    });
++            }
++        }
++    }
++    pub fn play(receiver: std::sync::mpsc::Receiver<MyActorScript>, mut actor: MyActor) {
++        while let Ok(msg) = receiver.recv() {
++            msg.direct(&mut actor);
++        }
++        eprintln!("MyActor the end ...");
++    }
++}
++impl std::fmt::Debug for MyActorScript {
++    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
++        match self {
++            MyActorScript::Increment { .. } => write!(f, "MyActorScript::Increment"),
++            MyActorScript::AddNumber { .. } => write!(f, "MyActorScript::AddNumber"),
++            MyActorScript::GetValue { .. } => write!(f, "MyActorScript::GetValue"),
++            MyActorScript::SendValue { .. } => write!(f, "MyActorScript::SendValue"),
++        }
++    }
++}
++#[derive(Clone)]
++pub struct MyActorLive {
++    sender: std::sync::mpsc::SyncSender<MyActorScript>,
++}
++impl MyActorLive {
++    pub fn new(v: i8) -> Self {
++        let actor = MyActor::new(v);
++        let (sender, receiver) = std::sync::mpsc::sync_channel(2);
++        std::thread::spawn(move || { MyActorScript::play(receiver, actor) });
++        Self { sender }
++    }
++    pub fn increment(&mut self) {
++        let msg = MyActorScript::Increment {};
++        let _ = self
++            .sender
++            .send(msg)
++            .expect("'MyActorLive::method.send'. Channel is closed!");
++    }
++    pub fn add_number(&mut self, num: i8) -> i8 {
++        let (inter_send, inter_recv) = oneshot::channel();
++        let msg = MyActorScript::AddNumber {
++            input: (num),
++            output: inter_send,
++        };
++        let _ = self
++            .sender
++            .send(msg)
++            .expect("'MyActorLive::method.send'. Channel is closed!");
++        inter_recv.recv().expect("'MyActorLive::method.recv'. Channel is closed!")
++    }
++    pub fn get_value(&self) -> i8 {
++        let (inter_send, inter_recv) = oneshot::channel();
++        let msg = MyActorScript::GetValue {
++            output: inter_send,
++        };
++        let _ = self
++            .sender
++            .send(msg)
++            .expect("'MyActorLive::method.send'. Channel is closed!");
++        inter_recv.recv().expect("'MyActorLive::method.recv'. Channel is closed!")
++    }
++    pub fn send_value(&self, (s, m): (i8, u8)) -> i8 {
++        let (inter_send, inter_recv) = oneshot::channel();
++        let msg = MyActorScript::SendValue {
++            input: ((s, m)),
++            output: inter_send,
++        };
++        let _ = self
++            .sender
++            .send(msg)
++            .expect("'MyActorLive::method.send'. Channel is closed!");
++        inter_recv.recv().expect("'MyActorLive::method.recv'. Channel is closed!")
++    }
++}
++fn main() {
++    let actor = MyActorLive::new(5);
++    let mut actor_a = actor.clone();
++    let mut actor_b = actor.clone();
++    let handle_a = std::thread::spawn(move || {
++        actor_a.increment();
++    });
++    let handle_b = std::thread::spawn(move || {
++        actor_b.add_number(5);
++    });
++    let _ = handle_a.join();
++    let _ = handle_b.join();
++    assert_eq!(actor.get_value(), 11)
++}
+diff --git a/examples/inter/main.rs b/examples/inter/main.rs
+index 03a4946..65995e9 100644
+--- a/examples/inter/main.rs
++++ b/examples/inter/main.rs
+@@ -1,5 +1,10 @@
+-mod id_arg;
+-fn main() {
++mod intro_std;
++
++
++
++
++async fn main() {
++    
++
+ 
+-    let actor = id_arg::MyActorLive::new();
+ }
+diff --git a/examples/intro_std.rs b/examples/intro_std.rs
+index 207602b..273f8ef 100644
+--- a/examples/intro_std.rs
++++ b/examples/intro_std.rs
+@@ -28,7 +28,8 @@ impl MyActor {
+ //  uncomment to see the generated code
+ //  #[interthread::example(path="src/main.rs")] 
+ //   in examples 
+-//  #[interthread::example(main(path="examples/intro_std.rs"))]  
++//  #[interthread::example(main(path="examples/intro_std.rs"))] 
++ 
+ fn main() {
+ 
+     let actor = MyActorLive::new(5);
+diff --git a/examples/send_actor_tokio.rs b/examples/send_actor_tokio.rs
+index ef7efa1..9c65479 100644
+--- a/examples/send_actor_tokio.rs
++++ b/examples/send_actor_tokio.rs
+@@ -2,8 +2,10 @@
+ use tokio::sync::oneshot::Sender;
+ use std::sync::{Arc,Mutex};
+ pub struct MyActor(Arc<Mutex<u32>>);
+-// we use argument `id`
+-#[interthread::actor(channel=2,lib="tokio",debut)] 
++
++
++// we use argument `debut`
++#[interthread::actor(channel=1,lib="tokio",debut)]
+ impl MyActor {
+ 
+     pub fn new() -> Self {Self(Arc::new(Mutex::new(0)))}
+diff --git a/src/error.rs b/src/error.rs
+index 214dcc7..f4481e4 100644
+--- a/src/error.rs
++++ b/src/error.rs
+@@ -2,7 +2,7 @@
+ use crate::model::{Debut,ActorMethod};
+ 
+ use quote::{quote,ToTokens};
+-use syn::{Path,Ident,Signature};
++use syn::{Type,Path,Ident,Signature};
+ use proc_macro_error::abort;
+ use proc_macro2::TokenStream;
+ use proc_macro::Span;
+@@ -559,24 +559,30 @@ pub fn direct_send(script_name: &syn::Ident, variant: &syn::Ident) -> TokenStrea
+ //     format!( "Since v1.0.0 `file` argument is not aplicable. Use `path= \"{}\"` instead!", &path )
+ // }
+ 
+-pub fn invalid_fn_arg_pattern(arg: &syn::FnArg) -> String {
++// pub fn invalid_fn_arg_pattern(arg: &syn::FnArg) -> String {
+     
+-    format!( 
++// format!( 
++// "Invalid function argument pattern -`{}`!
+ 
+-"Invalid function argument pattern -`{}`!
+ 
++// Valid patterns include:
+ 
+-Valid patterns include:
++// - Identifiers            `a : Type `    
++// - Tuple patterns         `(a,b): (TypeA,TypeB)`
++// - Tuple struct patterns  `Foo(a,b) : Foo`
++// - Struct patterns        `Foo{{a,b}} : Foo`
+ 
+-- Identifiers            `a : Type `    
+-- Tuple patterns         `(a,b): (TypeA,TypeB)`
+-- Tuple struct patterns  `Foo(a,b) : Foo`
+-- Struct patterns        `Foo{{a,b}} : Foo`
++// ",quote!{#arg}.to_string() )
+ 
+-",quote!{#arg}.to_string() )
++// }
+ 
+-}
+ 
++pub fn origin( actor_type: &Type, sig: &Signature ) -> String {
++
++    let actor     = quote!(#actor_type).to_string();
++    let sig       = quote!(#sig).to_string();
++    format!("Actor `{}` method `{}`.",actor, sig)
++}
+ 
+ // v1.2.0
+ pub static OLD_ARG_ID: &'static str = "
+diff --git a/src/lib.rs b/src/lib.rs
+index 53af981..3f4378d 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -1273,7 +1273,6 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) ->
+ 
+     
+     let mut act_model = model::actor::actor_model( aaa,&item_impl,model::argument::Model::Actor,None);
+-
+     let (model_code,edit_code) = act_model.split_edit();
+ 
+     if let Some( edit_attr ) = &act_model.edit.attr {
+@@ -1281,6 +1280,9 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) ->
+         parse::edit_write( &edit_attr, &item_impl, edit_code);
+     }
+ 
++    // let msg = model_code.to_string();
++    // proc_macro_error::abort!(proc_macro::Span::call_site(), msg);
++
+     quote::quote!{
+         #item_impl
+         #model_code
+@@ -1321,9 +1323,6 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) ->
+ #[proc_macro_attribute]
+ pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
+ 
+-    // let msg = "The \"group\" macro is currently under development and is not yet implemented in the `interthread` crate.";
+-    // proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
+-
+     let mac  = model::argument::Model::Group;
+     let item_impl = syn::parse_macro_input!(item as syn::ItemImpl);
+ 
+diff --git a/src/model/actor.rs b/src/model/actor.rs
+index 403487d..d1c03fd 100644
+--- a/src/model/actor.rs
++++ b/src/model/actor.rs
+@@ -1,51 +1,23 @@
+ 
+ use crate::error;
+-use crate::model::{name,method,generics,attribute::ActorAttributeArguments,argument::{Lib,Model}};
++use crate::model::{self,get_ident_type_generics,MpscChannel,Cont,Vars,method,generics,attribute::ActorAttributeArguments,argument::{Lib,Model}};
+ 
+ use proc_macro_error::abort;
+-use syn::{Ident,Signature,ItemImpl,Visibility };
++use syn::{Ident,Type,Signature,ItemImpl,Visibility };
+ use quote::{quote,format_ident};
+ use proc_macro2::TokenStream;
+ 
+-// pub fn live_static_method( 
+-//     actor_name: &Ident,
+-//          ident: Ident, 
+-//            vis: Visibility,
+-//        mut sig: Signature,
+-//           args: TokenStream,
+-//      live_mets: &mut Vec<(Ident,TokenStream)> ) {
+-
+-//     method::change_signature_refer(&mut sig);
+-//     let await_call = sig.asyncness.as_ref().map(|_|quote!{.await});
+-//     let stat_met = quote! {
+-//         #vis #sig {
+-//             #actor_name::#ident #args #await_call
+-//         }
+-//     };
+-//     live_mets.push((ident,stat_met));
+-// }
+-
+ 
+ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Model, mut new_vis: Option<Visibility> ) 
+-->  crate::model::ActorModelSdpl{ 
+-    
+-    let script_def;
+-    let mut script_mets = vec![];
+-    let mut script_trts = vec![];
+-  
+-    let live_def;
+-    let mut live_mets = vec![];
+-    let mut live_trts = vec![];
+-
+-
+-    let mut script_fields   = vec![];
+-    let mut direct_arms     = vec![];
+-    let mut debug_arms      = vec![];
++    ->  crate::model::ActorModelSdpl{ 
++ 
+ 
++    //-------------(1)
++    let mut cont = model::Cont::new();
+ 
+     let (actor_name,
+         actor_type,
+-        generics) = name::get_ident_type_generics(item_impl);
++        generics) = get_ident_type_generics(item_impl);
+     
+ 
+ 
+@@ -54,9 +26,8 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
+          method::get_methods( &actor_type,item_impl.clone(),aaa.assoc ,&mac);
+ 
+ 
+-    
+     let mut model_generics = generics.clone();
+-    let actor_ty_generics  = generics.split_for_impl().1;
++    // let actor_ty_generics  = generics.split_for_impl().1;
+ 
+     let ( impl_generics,
+             ty_generics,
+@@ -71,85 +42,52 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
+ 
+             met_new = Some(mn);
+ 
+-        } else {
+-            generics::get_parts( &mut model_generics, sigs);
+-        }
++        } else { generics::get_parts( &mut model_generics, sigs); }
++        
+         model_generics.split_for_impl()
+ 
+     };
+     
+-
+-
+     // Giving a new name if specified 
+-    let cust_name   = if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { actor_name.clone() }; 
+-    
+-    // let script_name = &name::script(&cust_name);
+-    // let live_name   = &name::live(&cust_name);
+-    let ( script_name, live_name) = &name::get_actor_names(&cust_name,&mac);
+-    
+-
+-    let (live_field_sender,
+-        play_input_receiver, 
+-        new_live_send_recv , 
+-        live_meth_send_recv, 
+-        script_field_output, 
+-        live_send_input,
+-        live_recv_output ) = aaa.channel.get_all( &aaa.lib, &script_name,&live_name, &ty_generics);
+-
+ 
++    let vars = &Vars::new(&aaa,&actor_name,Model::Actor,&mac) ;
++    let Vars { script_name,live_name,.. } = vars;
++    let script_type: Type = syn::parse_quote!{ #script_name #ty_generics };
++    let live_type: Type   = syn::parse_quote!{ #live_name #ty_generics };
++    let (oneshot,mpsc) = &model::get_channels_one_mpsc(&aaa,vars,&script_type);
+     
+-    let direct_async_decl = 
+-    if actor_methods.iter().any(|x| x.is_async()) { 
+-        Some(quote!{async})
+-    } else { None };
+ 
+-    let play_async_decl   = 
++    let async_decl   = 
+ 
+         match &aaa.lib {
+             Lib::Std => {
+-                if direct_async_decl.is_some(){ 
+-                    let pos = actor_methods.iter().position(|x| x.is_async()).unwrap();
++                if let Some(pos) = actor_methods.iter().position(|x| x.is_async()){
+                     error::abort_async_no_lib(&actor_name,&actor_methods[pos]);
+-                } 
++                }
+                 None
+             },
+             _ => { Some(quote!{async}) },
+         };
+ 
++    let Vars{actor,play,direct,
++             debut, msg,debut_play,
++             sender,receiver,name,..} = vars;
+     
+-    let actor = &format_ident!("actor");
+-    method::to_raw_parts(
+-        &actor,
+-        &actor_name,
+-        &script_name,
+-        &aaa.lib,
+-        actor_methods,
+-    
+-        live_meth_send_recv, 
+-        live_send_input, 
+-        live_recv_output,
+-        script_field_output, 
+-        
+-        &mut live_mets,
+-        &mut debug_arms,
+-        &mut direct_arms,
+-        &mut script_fields,
+-
+-    );
+ 
++    method::to_raw_parts( vars,&mut cont,&aaa,actor_methods,oneshot,mpsc );
+ 
+ 
+     // This is file_path for legend 
+     let ( script_legend_file, live_legend_file ) = 
+     if aaa.debut.is_legend(){
+-        let (s,l) = crate::show::check_legend_path(&mac, &cust_name, &aaa.debut.path.as_ref().unwrap());
++        let (s,l) = crate::show::check_legend_path(&mac, &vars.cust_name, &aaa.debut.path.as_ref().unwrap());
+         (Some(s),Some(l))
+     } else {
+         (None, None)
+     };
+ 
+ 
+-
++    //-------------(2)
+     /*
+     
+ 
+@@ -397,7 +335,7 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
+     };
+      */
+ 
+-     if Model::Actor.eq(&mac) { 
++    if Model::Actor.eq(&mac) { 
+ 
+         if met_new.is_none() {
+ 
+@@ -418,12 +356,12 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
+ 
+         let (init_live, play_args) = {
+             if aaa.debut.active() {
+-                (quote!{ Self { sender,debut: std::sync::Arc::clone(&debut), name:format!("{:?}",*debut) }} ,
+-                 quote!{ receiver, #actor, debut_play})
++                (quote!{ Self { #sender,#debut: std::sync::Arc::clone(&#debut), #name : format!("{:?}",* #debut) }} ,
++                 quote!{ #receiver, #actor, #debut_play})
+             } else {
+ 
+-                (quote!{ Self{ sender } }, 
+-                 quote!{ receiver, #actor } )
++                (quote!{ Self{ #sender } }, 
++                 quote!{ #receiver, #actor } )
+             }
+         };
+ 
+@@ -432,17 +370,20 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
+ 
+         let vars_debut = 
+         if aaa.debut.active() {
+-            quote!{let debut =  #script_name #turbofish ::debut();
+-                   let debut_play = *std::sync::Arc::clone(&debut); }
++            quote!{let #debut =  #script_name #turbofish ::#debut();
++                   let #debut_play = *std::sync::Arc::clone(&#debut); }
+         } else {quote!{}};
+ 
+         let return_statement   = met_new.live_ret_statement(&init_live);
+         
++        let MpscChannel{declaration, ..} = mpsc;
++        let Cont{live_mets,..} = &mut cont;
++
+         let func_new_body = quote!{
+ 
+             #vis #new_sig {
+                 let #actor = #actor_name:: #func_new_name #args_ident #unwrapped;
+-                #new_live_send_recv
++                #declaration
+                 #vars_debut
+                 #spawn
+                 #return_statement
+@@ -453,38 +394,30 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
+     };
+ 
+      
+-
++    
+ 
+     // LIVE INTER METHODS AND TRAITS
+-    // model::debut()
+     if aaa.debut.active(){
+-        aaa.debut.impl_debut(
+-            &mut live_mets,
+-            &mut live_trts,
+-            &mut script_mets,
+-            &live_name,
+-            &new_vis,
+-            &ty_generics,
+-            &where_clause
+-        )
++        aaa.debut.impl_debut( &mut cont, vars, &new_vis, &ty_generics, &where_clause)
+     }
+-
++    
+     // SCRIPT DEFINITION
+-    script_def = {
+-
++    let script_def = {
++        let Cont{ script_fields,..} = &mut cont;
+         quote! {
+             #new_vis enum #script_name #ty_generics #where_clause {
+                 #(#script_fields),*
+             }
+         }
+-    };
++    };        
++
+ 
+     // DIRECT
+     {
+-
+-        script_mets.push((format_ident!("direct"),
++        let Cont{script_mets,direct_arms,..} = &mut cont;
++        script_mets.push((direct.clone(),
+         quote!{
+-            #new_vis #direct_async_decl fn direct (self, #actor: &mut #actor_type #actor_ty_generics ) {
++            #new_vis #async_decl fn #direct (self, #actor: &mut #actor_type /*#actor_ty_generics*/ ) {
+                 match self {
+                     #(#direct_arms)*
+                 }
+@@ -496,15 +429,14 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
+     // PLAY
+     if Model::Actor.eq(&mac) {
+ 
+-        let direct_await  = direct_async_decl.as_ref().map(|_| quote!{.await});
+-        let recv_await    =  play_async_decl.as_ref().map(|_| quote!{.await});
++        let await_call  = async_decl.as_ref().map(|_| quote!{.await});
++        // let recv_await    =  play_async_decl.as_ref().map(|_| quote!{.await});
+         let end_of_play = error::end_of_life( &actor_name, &aaa.debut.clone() ); // <- include 
+       
++        let debut_pat_type = if aaa.debut.active(){quote!{,#debut: std::time::SystemTime }} else { quote!{} };
+ 
+-
+-        let debut = if aaa.debut.active(){quote!{,debut: std::time::SystemTime }} else { quote!{} };
+-
+-
++        let MpscChannel{pat_type_receiver,..}      = mpsc;
++        let Cont{script_mets,..} = &mut cont;
+         let play_method = {
+         
+             let ok_or_some = match aaa.lib {
+@@ -512,20 +444,21 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
+                 _ => quote!{Ok}
+             };
+             quote! {
+-                #new_vis #play_async_decl fn play ( #play_input_receiver mut #actor: #actor_type #actor_ty_generics #debut ) {
+-                    while let #ok_or_some (msg) = receiver.recv() #recv_await {
+-                        msg.direct ( &mut #actor ) #direct_await;
++                #new_vis #async_decl fn #play ( #pat_type_receiver mut #actor: #actor_type /*#actor_ty_generics*/ #debut_pat_type ) {
++                    while let #ok_or_some (#msg) = #receiver.recv() #await_call {
++                        #msg.#direct ( &mut #actor ) #await_call;
+                     }
+                     #end_of_play
+                 }
+             }
+         };
+-        script_mets.push(( format_ident!("play"), play_method ));
++        script_mets.push(( play.clone(), play_method ));
++
+     }
+-    
++
+     // SCRIPT TRAIT (Debug)
+     {   
+-
++        let Cont{ script_trts,debug_arms,..} = &mut cont;
+         let str_script_name = script_name.to_string();
+         let body = 
+         if debug_arms.is_empty() { 
+@@ -546,38 +479,48 @@ pub fn actor_model( aaa: ActorAttributeArguments, item_impl: &ItemImpl, mac: Mod
+ 
+ 
+     // LIVE DEFINITION
+-    live_def =  if Model::Actor.eq(&mac) {
+-        let (debut_field, name_field) = if aaa.debut.active() {
+-            ( quote!{ pub debut: std::sync::Arc<std::time::SystemTime>,},
+-            quote!{ pub name: String,} )
+-        } else { (quote!{}, quote!{})};   
+-
+-        quote!{
+-            #[derive(Clone)]
+-            #new_vis struct #live_name #ty_generics #where_clause {
+-                #live_field_sender
+-                #debut_field
+-                #name_field
++    let live_def = {
++        let MpscChannel{pat_type_sender,..} = &mpsc;
++        if Model::Actor.eq(&mac) {
++            let (debut_field, name_field) = if aaa.debut.active() {
++                ( quote!{ pub #debut: std::sync::Arc<std::time::SystemTime>,},
++                quote!{ pub #name: String,} )
++            } else { (quote!{}, quote!{})};   
++            
++            quote!{
++                #[derive(Clone)]
++                #new_vis struct #live_name #ty_generics #where_clause {
++                    #pat_type_sender
++                    #debut_field
++                    #name_field
++                }
+             }
+-        }
+-    } else { 
++        } else { 
+ 
+-        quote!{
+-            #[derive(Clone)]
+-            #new_vis struct #live_name #ty_generics #where_clause {
+-                #live_field_sender
++            quote!{
++                #[derive(Clone)]
++                #new_vis struct #live_name #ty_generics #where_clause {
++                    #pat_type_sender
++                }
+             }
++
+         }
+ 
+     };
+-    
++
++    //-------------(3)
++
++    let Vars { cust_name,..} = vars;
++    let Cont { script_mets, script_trts,
++               live_mets, live_trts,..} = cont;
+ 
+     crate::model::ActorModelSdpl {
+-        name:          cust_name,
+-        asyncness: direct_async_decl,
+-        mac:         mac.clone(),
+-        edit:           aaa.edit,
+-        generics: model_generics,
++        name:      cust_name.clone(),
++        asyncness:        async_decl,
++        mac:             mac.clone(),
++        edit:               aaa.edit,
++        generics:     model_generics,
++
+         script: ( script_def, script_mets, script_trts ),
+         live:   (   live_def,   live_mets,   live_trts ),
+     }
+@@ -588,11 +531,12 @@ pub fn macro_actor_generate_code( aaa: ActorAttributeArguments, item_impl: ItemI
+ 
+ 
+     let mut act_model = actor_model( aaa,&item_impl,Model::Actor,None);
+-
++    
+     let (mut code,edit) = act_model.split_edit();
+     
+     // abort!(item_impl,code.to_string());
+-    
++  
++
+     code = quote!{
+ 
+         #item_impl
+@@ -601,6 +545,9 @@ pub fn macro_actor_generate_code( aaa: ActorAttributeArguments, item_impl: ItemI
+     (code,edit)
+     
+ }
++    // let msg = live_mets.last().unwrap().1.to_string();
++    // let msg = live_def.to_string();
++    // abort!(proc_macro::Span::call_site(),msg );
+ 
+ 
+ 
+diff --git a/src/model/argument/channel.rs b/src/model/argument/channel.rs
+index bcb5e22..f69265d 100644
+--- a/src/model/argument/channel.rs
++++ b/src/model/argument/channel.rs
+@@ -1,15 +1,184 @@
+-use crate::model::argument::Lib;
++use crate::model::{ Lib,Vars,ActorAttributeArguments};
+ use crate::error;
+ 
+ 
+-
+-use std::boxed::Box;
++// use std::boxed::Box;
+ use syn::{ Ident,Type };
+ use quote::quote;
+ use proc_macro2::TokenStream;
+ 
+ 
+ 
++pub struct OneshotChannel {
++
++    send: Ident,
++    recv: Ident,
++    lib:    Lib,
++}
++
++impl OneshotChannel {
++
++    pub fn new( send: &Ident, recv: &Ident, lib: &Lib ) -> Self {
++        Self{ send: send.clone(),
++              recv: recv.clone(),
++              lib: lib.clone()  }
++    }
++    
++    pub fn get_decl(lib: &Lib, ty: Option<&Type>) -> TokenStream {
++        let ty = ty.as_ref().map(|&x|  quote!{::<#x>});
++        match lib {
++            Lib::Tokio => quote!{ tokio::sync::oneshot::channel #ty ()},
++                     _ => quote!{ oneshot::channel #ty () },
++        }
++    }
++    pub fn get_send_type(lib: &Lib, ty: &Type) -> TokenStream {
++        match lib {
++            Lib::Tokio => quote!{ tokio::sync::oneshot::Sender<#ty> },
++                     _ => quote!{ oneshot::Sender<#ty> },
++        }
++    } 
++    pub fn get_recv_type(lib: &Lib, ty: &Type) -> TokenStream {
++        match lib {
++            Lib::Tokio => quote!{ tokio::sync::oneshot::Receiver<#ty> },
++                     _ => quote!{ oneshot::Receiver<#ty> },
++        }
++    } 
++    pub fn pat_type_send(&self, ty: &Type) -> TokenStream {
++        let  Self{send,lib,..} = self;
++        let ty = Self::get_send_type(lib,ty); 
++        quote!{ #send : #ty }
++    }
++    pub fn pat_type_recv(&self, ty: &Type) -> TokenStream {
++        let  Self{recv,lib,..} = self;
++        let ty = Self::get_recv_type(lib,ty);
++        quote!{ #recv : #ty } 
++    }
++    pub fn decl(&self, ty: Option<&Type>) -> TokenStream {
++        let  Self{send,recv,..} = self;
++        let decl = Self::get_decl(&self.lib,ty);
++        quote!{ let( #send, #recv ) = #decl ; }
++    }
++    pub fn recv_call(&self, obj: &Ident, met: &Ident) -> TokenStream {
++        let  Self{recv,lib,..} = self;
++        let error = format!("'{obj}::{met}' from {recv}. Channel is closed!");
++
++        match lib {
++            Lib::Std =>  quote!{ #recv .recv().unwrap_or_else(|_error| core::panic!( #error ))} ,
++                   _ =>  quote!{ #recv .await.unwrap_or_else(|_error| core::panic!( #error ))} ,
++        }
++    }
++    pub fn send_call(&self,load: TokenStream, obj: &Ident, met: &Ident) -> TokenStream {
++        let  Self{send,..} = self;
++        let error = format!("'{obj}::{met}' from {send}. Sending on a closed channel!");
++        quote!{ #send .send( #load ).unwrap_or_else(|_error| core::panic!( #error )) }
++    }
++}
++
++pub struct MpscChannel {
++
++    pub pat_type_sender:   TokenStream,    // live_field_sender:   
++    pub pat_type_receiver: TokenStream,    // play_input_receiver: 
++    pub declaration:       TokenStream,    // new_live_send_recv:  
++    pub sender_call:       TokenStream,    // mut live_send_input: 
++}
++
++impl MpscChannel {
++
++    pub fn new(
++            Vars{
++                sender,
++              receiver,
++             live_name,
++                   msg,..
++            } : &Vars,
++            ActorAttributeArguments{
++                channel,
++                lib,..
++            } : &ActorAttributeArguments,
++ 
++           script_type: &Type ) -> Self {
++
++        let error = format!("'{live_name}::method.send'. Channel is closed!");
++        let pat_type_sender:   TokenStream;    // live_field_sender:   
++        let pat_type_receiver: TokenStream;    // play_input_receiver: 
++        let declaration:       TokenStream;    // new_live_send_recv:  
++        let mut sender_call = quote!{ let _ = self.#sender.send(msg).await; };
++
++        match  channel {
++    
++            Channel::Unbounded    => {
++            
++               match  lib { 
++            
++                   Lib::Std      => {
++                       pat_type_sender   = quote!{ #sender: std::sync::mpsc::Sender<#script_type>, };   
++                       pat_type_receiver = quote!{ #receiver: std::sync::mpsc::Receiver<#script_type>, }; 
++                       declaration       = quote!{ let ( #sender, #receiver ) = std::sync::mpsc::channel(); };
++                       sender_call       = quote!{ let _ = self.#sender.send(#msg).expect(#error);};
++                   },
++            
++                   Lib::Tokio    => {
++                       pat_type_sender   = quote!{ #sender: tokio::sync::mpsc::UnboundedSender<#script_type>, };
++                       pat_type_receiver = quote!{ mut #receiver: tokio::sync::mpsc::UnboundedReceiver<#script_type>, }; 
++                       declaration       = quote!{ let ( #sender, #receiver ) = tokio::sync::mpsc::unbounded_channel(); };                
++                       sender_call       = quote!{ let _ = self.#sender.send(#msg).expect(#error);};
++                   },
++            
++                   Lib::AsyncStd  => {
++                       pat_type_sender   = quote!{ #sender: async_std::channel::Sender<#script_type>, };
++                       pat_type_receiver = quote!{ #receiver: async_std::channel::Receiver<#script_type>, };
++                       declaration       = quote!{ let ( #sender, #receiver ) = async_std::channel::unbounded(); };                    
++                   },
++            
++                   Lib::Smol      => {
++                       pat_type_sender   = quote!{ #sender: async_channel::Sender<#script_type>, };
++                       pat_type_receiver = quote!{ #receiver: async_channel::Receiver<#script_type>, };
++                       declaration       = quote!{ let ( #sender, #receiver ) =  async_channel::unbounded(); }; 
++                   },
++               }
++            },
++            Channel::Buffer(val)  => {
++            
++               match  lib { 
++            
++                   Lib::Std      => {
++                       pat_type_sender   = quote!{ #sender: std::sync::mpsc::SyncSender<#script_type>, };
++                       pat_type_receiver = quote!{ #receiver: std::sync::mpsc::Receiver<#script_type>, };
++                       declaration       = quote!{ let ( #sender, #receiver ) = std::sync::mpsc::sync_channel(#val); };
++                       sender_call       = quote!{ let _ = self.#sender.send(#msg).expect(#error);};
++                   },
++                   Lib::Tokio    => {
++                       pat_type_sender   = quote!{ #sender: tokio::sync::mpsc::Sender<#script_type>, };
++                       pat_type_receiver = quote!{ mut #receiver: tokio::sync::mpsc::Receiver<#script_type>, };
++                       declaration       = quote!{ let ( #sender, #receiver ) = tokio::sync::mpsc::channel(#val); };               
++                   },
++            
++                   Lib::AsyncStd  => {
++                       pat_type_sender   = quote!{ #sender: async_std::channel::Sender<#script_type>, };
++                       pat_type_receiver = quote!{ #receiver: async_std::channel::Receiver<#script_type>, };
++                       declaration       = quote!{ let ( #sender, #receiver ) = async_std::channel::bounded(#val); };
++                   },
++            
++                   Lib::Smol      => {
++                       pat_type_sender   = quote!{ #sender: async_channel::Sender<#script_type>, };
++                       pat_type_receiver = quote!{ #receiver: async_channel::Receiver<#script_type>, };
++                       declaration       = quote!{ let ( #sender, #receiver ) = async_channel::bounded(#val); };
++                   },
++               }
++            },
++        };
++
++        Self {
++            pat_type_sender,
++            pat_type_receiver,
++            declaration,  
++            sender_call, 
++        }
++    }
++
++}
++
++
+ //-----------------------  ACTOR CHANNEL 
+ 
+ #[derive(Debug, Eq, PartialEq, Clone)]
+@@ -35,31 +204,32 @@ impl Channel {
+            generics: &syn::TypeGenerics<'_> ) -> (
+                                TokenStream,
+                                TokenStream,
+-                               TokenStream,
+-                               TokenStream,
+-                               Box<dyn Fn(Box<Type>) -> TokenStream>,
++                            //    TokenStream,
++                            //    TokenStream,
++                            //    Box<dyn Fn(Box<Type>) -> TokenStream>,
+                                TokenStream,
+                                TokenStream ){
+     
+     let live_field_sender:   TokenStream;
+     let play_input_receiver: TokenStream;
+     let new_live_send_recv:  TokenStream;
++    let mut live_send_input: TokenStream =
++    quote!{let _ = self.sender.send(msg).await;};
+                        
+     // let type_ident = &name::script(cust_name);
+     let (error_live_send,error_live_recv) = error::live_send_recv(live_name);
+     
+-    let mut live_meth_send_recv = 
+-    quote!{ let ( inter_send, inter_recv ) = oneshot::channel(); };
++    // let mut live_meth_send_recv = 
++    // quote!{ let ( inter_send, inter_recv ) = oneshot::channel(); };
+     
+-    let mut script_field_output: Box<dyn Fn(Box<Type>) -> TokenStream> =
+-    Box::new(|out_type: Box<Type>|quote!{ output: oneshot::Sender<#out_type>, }); 
++    // let mut script_field_output: Box<dyn Fn(Box<Type>) -> TokenStream> =
++    // Box::new(|out_type: Box<Type>|quote!{ inter_send : oneshot::Sender<#out_type>, }); 
+     
+-    let mut live_send_input: TokenStream =
+-    quote!{let _ = self.sender.send(msg).await;};
++  
+     
+     
+-    let mut live_recv_output: TokenStream = 
+-    quote!{ inter_recv.await.expect(#error_live_recv)};
++    // let mut live_recv_output: TokenStream = 
++    // quote!{ inter_recv.await.expect(#error_live_recv)};
+     
+     match  &self {
+     
+@@ -72,15 +242,15 @@ impl Channel {
+                play_input_receiver = quote!{ receiver: std::sync::mpsc::Receiver<#script_name #generics>, }; 
+                new_live_send_recv  = quote!{ let ( sender, receiver ) = std::sync::mpsc::channel(); };
+                live_send_input     = quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
+-               live_recv_output    = quote!{ inter_recv.recv().expect(#error_live_recv)};
++            //    live_recv_output    = quote!{ inter_recv.recv().expect(#error_live_recv)};
+            },
+     
+            Lib::Tokio    => {
+                live_field_sender   = quote!{ sender: tokio::sync::mpsc::UnboundedSender<#script_name #generics>, };
+                play_input_receiver = quote!{ mut receiver: tokio::sync::mpsc::UnboundedReceiver<#script_name #generics>, }; 
+                new_live_send_recv  = quote!{ let ( sender, receiver ) = tokio::sync::mpsc::unbounded_channel(); }; 
+-               live_meth_send_recv = quote!{ let ( inter_send, inter_recv ) = tokio::sync::oneshot::channel(); };
+-               script_field_output = Box::new(|out_type: Box<Type>|quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
++            //    live_meth_send_recv = quote!{ let ( inter_send, inter_recv ) = tokio::sync::oneshot::channel(); };
++            //    script_field_output = Box::new(|out_type: Box<Type>|quote!{ tokio::sync::oneshot::Sender<#out_type>, });                
+                live_send_input     = quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
+            },
+     
+@@ -106,14 +276,14 @@ impl Channel {
+                play_input_receiver = quote!{ receiver: std::sync::mpsc::Receiver<#script_name #generics>, };
+                new_live_send_recv  = quote!{ let ( sender, receiver ) = std::sync::mpsc::sync_channel(#val); };
+                live_send_input     = quote!{ let _ = self.sender.send(msg).expect(#error_live_send);};
+-               live_recv_output    = quote!{ inter_recv.recv().expect(#error_live_recv)};
++            //    live_recv_output    = quote!{ inter_recv.recv().expect(#error_live_recv)};
+            },
+            Lib::Tokio    => {
+                live_field_sender   = quote!{ sender: tokio::sync::mpsc::Sender<#script_name #generics>, };
+                play_input_receiver = quote!{ mut receiver: tokio::sync::mpsc::Receiver<#script_name #generics>, };
+                new_live_send_recv  = quote!{ let ( sender, receiver ) = tokio::sync::mpsc::channel(#val); }; 
+-               live_meth_send_recv = quote!{ let ( inter_send, inter_recv ) = tokio::sync::oneshot::channel(); };
+-               script_field_output = Box::new(|out_type: Box<Type>|quote!{ output: tokio::sync::oneshot::Sender<#out_type>, });                
++            //    live_meth_send_recv = quote!{ let ( inter_send, inter_recv ) = tokio::sync::oneshot::channel(); };
++            //    script_field_output = Box::new(|out_type: Box<Type>|quote!{ tokio::sync::oneshot::Sender<#out_type>, });                
+            },
+     
+            Lib::AsyncStd  => {
+@@ -136,10 +306,10 @@ impl Channel {
+     live_field_sender,
+     play_input_receiver, 
+     new_live_send_recv , 
+-    live_meth_send_recv, 
+-    script_field_output, 
++    // live_meth_send_recv, 
++    // script_field_output, 
+     live_send_input,
+-    live_recv_output,
++    // live_recv_output,
+     )
+     }
+     
+diff --git a/src/model/argument/debut.rs b/src/model/argument/debut.rs
+index 05117c4..ad50de0 100644
+--- a/src/model/argument/debut.rs
++++ b/src/model/argument/debut.rs
+@@ -1,14 +1,15 @@
++use crate::model::{Cont,Vars};
+ use quote::{quote,format_ident};
+ use syn::{Visibility,Ident,TypeGenerics,WhereClause};
+ use proc_macro2::TokenStream;
+ use std::path::PathBuf;
+ 
+-pub static INTER_GET_DEBUT: &'static str = "inter_get_debut";
+-pub static INTER_GET_COUNT: &'static str = "inter_get_count";
+-pub static INTER_SET_NAME: &'static str  = "inter_set_name";
+-pub static INTER_GET_NAME: &'static str  = "inter_get_name";
+-pub static INTER_NAME: &'static str      = "InterName";
+-pub static DEBUT: &'static str           = "debut";
++// pub static INTER_GET_DEBUT: &'static str = "inter_get_debut";
++// pub static INTER_GET_COUNT: &'static str = "inter_get_count";
++// pub static INTER_SET_NAME: &'static str  = "inter_set_name";
++// pub static INTER_GET_NAME: &'static str  = "inter_get_name";
++// pub static INTER_NAME: &'static str      = "InterName";
++// pub static DEBUT: &'static str           = "debut";
+ 
+ 
+ //-----------------------  ACTOR DEBUT
+@@ -49,53 +50,85 @@ impl Default for Debut {
+ impl Debut {
+ 
+     pub fn impl_debut(&self,
+-        live_mets:   &mut Vec<(Ident,TokenStream)>,
+-        live_trts:   &mut Vec<(Ident,TokenStream)>,
+-        script_mets: &mut Vec<(Ident,TokenStream)>,
+-        live_name: &Ident,
+-        new_vis: &Option<Visibility>,
+-        ty_generics: &TypeGenerics,
++        Cont{
++
++            live_mets,
++            live_trts,
++            script_mets,..
++        }: &mut Cont,
++        Vars{
++            live_name,
++            inter_get_debut,
++            inter_get_name,
++            inter_set_name,
++            inter_get_count,
++            debut,
++            intername,..
++        }: &Vars,
++        // live_name: &Ident,
++        new_vis:        &Option<Visibility>,
++        ty_generics:          &TypeGenerics,
+         where_clause: &Option<&WhereClause>,
+         
+     ){  
+-        let inter_get_debut = format_ident!("{INTER_GET_DEBUT}");
+-        let ts  = quote!{
+-            #new_vis fn #inter_get_debut (&self) -> std::time::SystemTime {
+-                *self.debut
++        // let inter_get_debut = format_ident!("{INTER_GET_DEBUT}");
++        // let ts  = quote!{
++        //     #new_vis fn #inter_get_debut (&self) -> std::time::SystemTime {
++        //         *self.debut
++        //     }
++        // };
++        live_mets.push((inter_get_debut.clone(),
++            quote!{
++                #new_vis fn #inter_get_debut (&self) -> std::time::SystemTime {
++                    *self.debut
++                }
+             }
+-        };
+-        live_mets.push((inter_get_debut,ts));
++        ));
+         
+     
+-        let inter_get_count = format_ident!("{INTER_GET_COUNT}");
+-        let ts = quote!{
+-            #new_vis fn #inter_get_count (&self) -> usize {
+-                std::sync::Arc::strong_count(&self.debut)
++        // let inter_get_count = format_ident!("{INTER_GET_COUNT}");
++        // let ts = quote!{
++        //     #new_vis fn #inter_get_count (&self) -> usize {
++        //         std::sync::Arc::strong_count(&self.debut)
++        //     }
++        // };
++        live_mets.push((inter_get_count.clone(),
++            quote!{
++                #new_vis fn #inter_get_count (&self) -> usize {
++                    std::sync::Arc::strong_count(&self.debut)
++                }
+             }
+-        };
+-        live_mets.push((inter_get_count,ts));
++        ));
+     
+     
+-        let inter_set_name  = format_ident!("{INTER_SET_NAME}");
+-        let gen_type = format_ident!("{INTER_NAME}");
+-        let ts = quote!{
+-            #new_vis fn #inter_set_name < #gen_type: std::string::ToString>(&mut self, name:  #gen_type) {
+-                self.name = name.to_string();
++        // let inter_set_name  = format_ident!("{INTER_SET_NAME}");
++        // let gen_type = format_ident!("{INTER_NAME}");
++        // let ts = 
++        live_mets.push((inter_set_name.clone(),
++            quote!{
++                #new_vis fn #inter_set_name < #intername: std::string::ToString>(&mut self, name:  #intername) {
++                    self.name = name.to_string();
++                }
+             }
+-        };
+-        live_mets.push((inter_set_name,ts));
++        ));
+     
+     
+-        let inter_get_name = format_ident!("{INTER_GET_NAME}");
+-        let ts = quote!{    
+-            #new_vis fn #inter_get_name (&self) -> &str {
+-                &self.name
+-            } 
+-        };
+-        live_mets.push((inter_get_name,ts));
++        // let inter_get_name = format_ident!("{INTER_GET_NAME}");
++        // let ts = quote!{    
++        //     #new_vis fn #inter_get_name (&self) -> &str {
++        //         &self.name
++        //     } 
++        // };
++        live_mets.push((inter_get_name.clone(),
++            quote!{    
++                #new_vis fn #inter_get_name (&self) -> &str {
++                    &self.name
++                } 
++            }
++        ));
+     
+     
+-        let debut = format_ident!("{DEBUT}");
++        // let debut = format_ident!("{DEBUT}");
+         let ts = quote!{
+             // we need this function to return as much an id as it is possible
+             // the model will build some options on top of this "id"
+@@ -122,7 +155,7 @@ impl Debut {
+                 std::sync::Arc::new(next_time)
+             }
+         };
+-        script_mets.push((debut,ts));
++        script_mets.push((debut.clone(),ts));
+         
+     
+         live_trts.push((format_ident!("PartialEq"),
+diff --git a/src/model/argument/interact.rs b/src/model/argument/interact.rs
+new file mode 100644
+index 0000000..e2e050b
+--- /dev/null
++++ b/src/model/argument/interact.rs
+@@ -0,0 +1,297 @@
++use crate::error;
++
++
++use proc_macro2::TokenStream;
++use syn::{Type,Ident,Signature,FnArg,Token, punctuated::Punctuated};
++use quote::{quote,format_ident};
++
++use proc_macro_error::abort;
++use proc_macro::Span;
++
++
++pub static INTER_SEND: &'static str = "inter_send";
++pub static INTER_RECV: &'static str = "inter_recv";
++
++
++#[derive(Debug,Clone)]
++pub enum InterOneshot {
++
++    Recv(Type),
++    Send(Type),
++}
++
++impl InterOneshot {
++
++    pub fn get_name(&self) -> Ident {
++
++        match &self {
++            Self::Recv(_) => format_ident!("{INTER_RECV}"), 
++            Self::Send(_) => format_ident!("{INTER_SEND}"), 
++        }
++    }   
++}
++
++
++#[derive(Debug,Clone)]
++pub struct InterGetter { 
++    name:     Ident, 
++    ty:        Type,
++}
++
++
++impl InterGetter {
++
++    pub fn get_name(&self) -> Ident {
++        self.name.clone()
++    }
++}
++
++#[derive(Debug,Clone)]
++
++pub enum InterVariable {
++
++    Oneshot(InterOneshot),
++    Getter(InterGetter),
++}
++
++
++impl InterVariable {
++
++    pub fn get_name(&self) -> Ident {
++        match &self {
++            Self::Oneshot(var) => var.get_name(),
++            Self::Getter(var) => var.get_name(),
++        }
++    }
++
++
++
++}
++
++pub fn some_inter_var( ident: &Ident, ty: &Type, ret: bool ) -> Result<Option<InterVariable>,String> {
++
++    let msg_inter_var = format!("Expected `inter_variable`, found {}.",ident);
++
++    let ident_str = ident.to_string();
++    let ident_split_coll = ident_str.split('_').collect::<Vec<_>>();
++
++    if ident_split_coll.len() < 2 {
++        let first = ident_split_coll[0];
++        if first.eq("inter"){
++            let second = ident_split_coll[1..].join("_");
++            if second.eq("send"){
++                // check if is sender and extract the Type it sends 
++                match oneshot_get_type( ty, "Sender"){
++                    Ok(new_ty) => { Ok(Some(InterVariable::Oneshot(InterOneshot::Send(new_ty.clone())))) },
++                    Err(e) => {Err(e)},
++                }
++            }
++            
++            else if second.eq("recv"){
++
++                if ret { return Err("`inter_recv` not available inside methods returning a Type.".to_string()); }
++
++                match oneshot_get_type( ty, "Receiver"){
++                    Ok(new_ty) => { Ok(Some(InterVariable::Oneshot(InterOneshot::Recv(new_ty.clone())))) },
++                    Err(e) => {Err(e)},
++                }
++
++            } else {
++                Ok(Some(InterVariable::Getter(InterGetter{ name:ident.clone(), ty:ty.clone()})))
++             }
++
++        } else { Ok(None) }
++
++    } else { Ok(None) }
++
++}
++
++
++pub fn oneshot_get_type( ty: &Type, target: &str ) -> Result<Type,String> {
++
++    let msg_path = format!("Expected a path type, ::{}<Type> .",&target);
++    let msg_args = format!("Unexpected arguments for {}<?>.",target);
++
++    if let syn::Type::Path(type_path) = &ty {
++        if let Some(seg) = type_path.path.segments.last(){
++            if target.eq(target) {
++                
++                let gen_args = seg.arguments.clone();
++                if let syn::PathArguments::AngleBracketed(ang_brck_gen_arg) = &gen_args{
++                    if let Some( gen ) = ang_brck_gen_arg.args.first(){
++                        if let syn::GenericArgument::Type(new_ty) = gen {
++                            Ok(new_ty.clone())
++                        } else { Err(msg_args) }
++
++                    } else { Err(msg_args) }
++
++                } else { Err(msg_args) }
++                 
++            } else { Err(msg_path) }
++
++        }else { Err(msg_path) }
++
++    } else { Err(msg_path) }
++
++}
++
++
++
++
++// impl InterGetter {
++
++
++
++//     pub fn getter_decl(&self) -> TokenStream {
++        
++//         let Self{ name, ty };
++//         let inter_get_name = format_ident!("inter_get_{name}");
++
++//         quote!{ 
++//             let  #name = self . inter_get_name ();
++//         }
++//     }
++
++//     pub fn field_decl(&self) -> TokenStream {
++
++//         let Self{ name, ty };
++
++//         quote!{ name : ty }
++        
++//     }
++// }
++
++
++
++
++#[derive(Clone,Debug)]
++pub struct InteractVariables {
++
++    pub channel: Option<InterOneshot>,
++    pub getters:     Vec<InterGetter>, 
++    pub new_sig:            Signature,
++    pub new_args:          Vec<FnArg>,
++    pub ret:                     bool,
++}
++
++impl InteractVariables {
++
++    pub fn from( new_sig: Signature, new_args: Vec<FnArg>, ret: bool ) -> Self {
++
++        Self{
++            channel: None,
++            getters: Vec::new(),
++            new_sig,
++            new_args,
++            ret,
++        }
++    }
++
++    pub fn insert(&mut self,  vars: Vec<InterVariable>){
++
++        for var in vars {
++
++            match var{
++                InterVariable::Oneshot(v) => {
++                    if self.channel.is_none() {
++                        self.channel = Some(v);
++                    } else {
++                        abort!(Span::call_site(),"Multiple use of `oneshot` channel, not allowed.");
++                    }
++                }
++                InterVariable::Getter(v) => self.getters.push(v) ,
++            }
++        }
++    }
++}
++
++pub fn get_variables( actor_type: &Type, sig: &Signature, args: &Vec<FnArg> ,ret: bool) 
++    -> Option<InteractVariables> {
++    
++    let mut new_args = Vec::new() ;
++    let mut inter_vars = Vec::new() ;
++
++    for arg in args {
++        if let FnArg::Typed(pat_ty) = arg { 
++            // check if there is no conflictiong
++
++            if let syn::Pat::Ident(pat_ident) = &*pat_ty.pat{
++
++                match some_inter_var(&pat_ident.ident,&*pat_ty.ty,ret){
++
++                    Ok(inter_var) => {
++                        if let Some(inter_var) = inter_var {
++
++                            inter_vars.push(inter_var);
++
++                        } else { new_args.push(arg.clone())} 
++    
++                    },
++                    Err(e) => {
++                        let msg = format!("{}.{}", error::origin(actor_type, sig),e);
++                        abort!(Span::call_site(),msg);
++                    }
++                }
++
++            } 
++        }  
++    }
++    
++    let vars =
++    inter_vars.iter().map(|x| x.get_name()).collect::<Vec<_>>();
++
++    // check for colision
++    check_send_recv(actor_type, sig,&new_args,Some(vars));
++
++    // change the signature 
++    let mut new_sig = sig.clone();
++    let inputs = new_args.iter().cloned().collect::<Punctuated::<FnArg,Token![,]>>();
++    new_sig.inputs = inputs;
++
++    let mut vars = InteractVariables::from(new_sig,new_args,ret);
++    vars.insert(inter_vars);
++
++    Some(vars)
++}
++
++
++
++pub fn check_send_recv( actor_type: &Type, sig: &Signature, args: &Vec<FnArg>, vars: Option<Vec<Ident>> ){
++
++    let mut words = vec![INTER_SEND.to_string(),INTER_RECV.to_string()];
++    if let Some(vars) = vars {
++        words.extend(vars.iter().map(|x|x.to_string()));
++    } 
++
++    for arg in args  { 
++
++        if let FnArg::Typed(arg) = arg { 
++
++            let pat_str = pat_to_str(&*arg.pat);
++
++            for word in words.iter(){
++
++                if pat_str.contains(&format!(" {word} ")){
++                    // let actor     = quote!(#actor_type).to_string();
++                    // let sig       = quote!(#sig).to_string();
++                    let msg       = format!("{}. Conflicting name case `{}`!",error::origin(actor_type,sig),word);
++                    abort!(Span::call_site(),msg);
++                }
++            }
++        }
++    }
++}
++
++pub fn pat_to_str( pat: &syn::Pat ) -> String {
++
++    let mut s = quote!{ #pat }.to_string();
++    let char_set = vec![ '(', ')', '{', '}', '[', ']', ':', '<', '>', ',' ];
++    for c in char_set {
++        s = s.replace(c,&format!(" {c} "))
++    }
++    s
++}
++
++
++
++
+diff --git a/src/model/argument/mod.rs b/src/model/argument/mod.rs
+index 699fe3f..ba3f02f 100644
+--- a/src/model/argument/mod.rs
++++ b/src/model/argument/mod.rs
+@@ -1,11 +1,12 @@
+ pub mod channel;
+ pub mod debut;
+ pub mod edit;
++pub mod interact;
+ 
+-
+-pub use channel::Channel;
++pub use channel::*;
+ pub use debut::*;
+ pub use edit::*;
++pub use interact::*;
+ 
+ 
+ 
+@@ -73,6 +74,8 @@ impl Lib {
+                 abort!( s, msg; help=error::AVAIL_LIB );   
+             } 
+         }
++        
++
+     }
+     
+     pub fn method_new_spawn(&self, play_args: &TokenStream, script_name: &Ident) -> TokenStream {
+@@ -203,40 +206,48 @@ mod tests {
+     #[test]
+     fn test_functions(){
+ 
+-        let attr: syn::Attribute = syn::parse_quote!{#[actor( edit(file))] };
++        let sig: syn::Signature     = syn::parse_quote!{ fn foo ( send: oneshot::Sender<&'static str>) -> i8 };  
++        let mut my_type:  syn::Type = syn::parse_quote!{ oneshot::Receiver };
++        let argument  =  sig.inputs.last().unwrap();
++        
++        let target = quote::format_ident!("Sender");
++        
++        if let syn::FnArg::Typed(arg) = &argument{
++            // ty = arg.ty.clone();
+ 
++            if let syn::Type::Path(type_path) = &*arg.ty {
++                if let Some(seg) = type_path.path.segments.last(){
++                    if target.eq(&seg.ident) {
++                        
++                        let gen_args = seg.arguments.clone();
++                        if let syn::PathArguments::AngleBracketed(ang_brck_gen_arg) = &gen_args{
++                            if let Some( gen ) = ang_brck_gen_arg.args.first(){
++                                if let syn::GenericArgument::Type(ty) = gen {
++                                    let ty_str = quote!{#ty}.to_string();
++                                    println!("ty - {}",ty_str); 
++                                } else { println!("Not generic argument Type "); }
++                            } else { println!("Not first arg"); }
++                        } else { println!("Not angle bracketed"); }
++                         
++                        // let mut my_type:  syn::Type = syn::parse_quote!{ oneshot::Receiver #gen_args };
+ 
+-        println!("{}", quote::quote!{#attr}.to_string());
++                        // println!(" new Receiver -  {}", quote::quote!{#my_type}.to_string())
++                    } else { println!("Not equal to Sender!") }
++                }
++            };
++        };
++        
+ 
+-        let mut edit = EditActor::default();
+ 
+-        for meta in crate::model::attribute::attr_to_meta_list(&attr){
+ 
+-            if meta.path().is_ident("edit"){
+-                edit.parse(&meta);
+-            }
+-        }
+-        println!("Edit  - {:?}", edit);  
+-    }
+ 
+ 
+ 
+-    #[test]
+-    fn test_split_edit_group() {
++        println!("fn argument -  {}", quote::quote!{#argument}.to_string() );
+ 
+-        let attr: syn::Attribute = 
+-        syn::parse_quote!{#[actor( edit(script(imp), 
+-                                a::edit(live,script(def))))] };
++    }
+ 
+-        let mut edit = EditGroup::default();
+ 
+-        for meta in crate::model::attribute::attr_to_meta_list(&attr){
+ 
+-            if meta.path().is_ident("edit"){
+-                edit.parse(&meta);
+-            }
+-        }
+-        println!("Edit - {:?}", edit);  
+-    }
+     
+ }
+\ No newline at end of file
+diff --git a/src/model/attribute/actor.rs b/src/model/attribute/actor.rs
+index 6e3f564..b9a1d1f 100644
+--- a/src/model/attribute/actor.rs
++++ b/src/model/attribute/actor.rs
+@@ -22,6 +22,8 @@ pub struct ActorAttributeArguments {
+     pub debut   :  Debut,
+     // pub file    :  Option<AAFile>,
+     pub file    :  Option<PathBuf>,
++    pub interact:  bool,
++
+     /* ADD NEW OPTION */
+ }
+ 
+@@ -31,13 +33,14 @@ impl Default for ActorAttributeArguments {
+     fn default() -> ActorAttributeArguments {
+ 
+         Self { 
+-            name   : None,
+-            lib    : Lib::default(),
+-            assoc  : false,
+-            channel: Channel::default(),
+-            edit   : EditActor::default(),
+-            debut  : Debut::default(),
+-            file   : None,
++            name    : None,
++            lib     : Lib::default(),
++            assoc   : false,
++            channel : Channel::default(),
++            edit    : EditActor::default(),
++            debut   : Debut::default(),
++            file    : None,
++            interact: false,
+             /* ADD NEW ATTRIBUTE */
+         }  
+     }
+@@ -49,7 +52,6 @@ impl ActorAttributeArguments {
+ 
+         // check if unique options
+         super::check_path_set(&nested); 
+-        // super::check_ident_sets(&nested); 
+ 
+         for meta in nested.iter(){
+ 
+@@ -80,7 +82,7 @@ impl ActorAttributeArguments {
+ 
+                 match meta {
+                     syn::Meta::Path(_) => { self.assoc = true; },
+-                    _ => { abort!(meta.path(), error::OLD_ARG_ASSOC); },
++                    _ => { abort!(meta.path(),"Expected an identifier.";help=error::OLD_ARG_ASSOC); },
+                 }
+             }
+ 
+@@ -151,6 +153,17 @@ impl ActorAttributeArguments {
+ 
+             }
+ 
++            else if meta.path().is_ident("interact"){
++                match meta {
++                    syn::Meta::Path(_) => { self.interact = true; },
++                    _ => { abort!(meta, "Expected an identifier.";help=error::AVAIL_ACTOR) },
++                }
++            }
++
++            else if meta.path().is_ident("debug") {
++                abort!(meta,"Did you mean `debut`?"; help=error::AVAIL_ACTOR);
++            }
++
+             else if meta.path().is_ident("id"){ 
+                 abort!(ident, error::OLD_ARG_ID);
+             }
+diff --git a/src/model/attribute/group.rs b/src/model/attribute/group.rs
+index 17938d3..ddd2883 100644
+--- a/src/model/attribute/group.rs
++++ b/src/model/attribute/group.rs
+@@ -211,6 +211,10 @@ impl GroupAttributeArguments {
+                 } else { abort!(meta,error::EXPECT_LIST;help=error::ABOUT_ALLOW); }
+             }
+ 
++            else if meta.path().is_ident("debug") {
++                abort!(meta,"Did you mean `debut`?"; help=error::AVAIL_ACTOR);
++            }
++
+             // UNKNOWN ARGUMENT
+             else { error::unknown_attr_arg("group",meta.path() ) }
+         }
+diff --git a/src/model/group.rs b/src/model/group.rs
+index ca0c228..08ef4c4 100644
+--- a/src/model/group.rs
++++ b/src/model/group.rs
+@@ -1,8 +1,8 @@
+ 
+-use crate::model::{name,method,generics,live_static_method,Lib,Model,ActorAttributeArguments,GroupAttributeArguments};
++use crate::model::{self,name,get_ident_type_generics,MpscChannel,Vars,Cont,method,generics,live_static_method,Lib,Model,ActorAttributeArguments,GroupAttributeArguments};
+ use crate::error;
+ 
+-use syn::{ItemImpl,Ident,Visibility};
++use syn::{ItemImpl,Type,Ident,Visibility};
+ use proc_macro2::TokenStream;
+ use proc_macro_error::abort;
+ use quote::{quote,format_ident};
+@@ -92,26 +92,13 @@ pub fn group_model(
+         let aaa = gaa.get_aaa(None);
+ 
+ 
+-        //---------------
++        //---------------(1)
+ 
++        let mut cont = model::Cont::new();
+ 
+-        let script_def;
+-        let mut script_mets = vec![];
+-        let mut script_trts = vec![];
+-      
+-        let live_def;
+-        let mut live_mets = vec![];
+-        let mut live_trts = vec![];
+-    
+-    
+-        let mut script_fields   = vec![];
+-        let mut direct_arms     = vec![];
+-        let mut debug_arms      = vec![];
+-    
+-    
+         let (actor_name,
+             actor_type,
+-            generics) = name::get_ident_type_generics(item_impl);
++            generics) = get_ident_type_generics(item_impl);
+         
+     
+     
+@@ -120,9 +107,8 @@ pub fn group_model(
+              method::get_methods( &actor_type,item_impl.clone(),aaa.assoc ,&mac);
+     
+     
+-        
+         let mut model_generics = generics.clone();
+-        let actor_ty_generics  = generics.split_for_impl().1;
++        // let actor_ty_generics  = generics.split_for_impl().1;
+     
+         let ( impl_generics,
+                 ty_generics,
+@@ -137,260 +123,49 @@ pub fn group_model(
+     
+                 met_new = Some(mn);
+     
+-            } else {
+-                generics::get_parts( &mut model_generics, sigs);
+-            }
++            } else { generics::get_parts( &mut model_generics, sigs); }
++            
+             model_generics.split_for_impl()
+     
+         };
+         
+-    
+-    
+         // Giving a new name if specified 
+-        let cust_name   = if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { actor_name.clone() }; 
+-        
+-        let ( script_name, live_name) = &name::get_group_names(&cust_name);
+-    
+-        let (live_field_sender,
+-            play_input_receiver, 
+-            new_live_send_recv , 
+-            live_meth_send_recv, 
+-            script_field_output, 
+-            live_send_input,
+-            live_recv_output ) = aaa.channel.get_all( &aaa.lib, &script_name,&live_name, &ty_generics);
+-    
+-    
+-        
+-        let direct_async_decl = 
+-        if actor_methods.iter().any(|x| x.is_async()) { 
+-            Some(quote!{async})
+-        } else { None };
+     
+-        let play_async_decl   = 
+-    
+-            match &aaa.lib {
+-                Lib::Std => {
+-                    if direct_async_decl.is_some(){ 
+-                        let pos = actor_methods.iter().position(|x| x.is_async()).unwrap();
+-                        error::abort_async_no_lib(&actor_name,&actor_methods[pos]);
+-                    } 
+-                    None
+-                },
+-                _ => { Some(quote!{async}) },
+-            };
+-    
+-        /*
++        let vars = &Vars::new(&aaa,&actor_name,Model::Actor,&mac) ;
++        let Vars { script_name,live_name,.. } = vars;
++        let script_type: Type = syn::parse_quote!{ #script_name #ty_generics };
++        let live_type: Type   = syn::parse_quote!{ #live_name #ty_generics };
++        let (oneshot,mpsc) = &model::get_channels_one_mpsc(&aaa,vars,&script_type);
+         
+     
+-        for method in actor_methods.clone() {
+-            
+-            let (mut sig, script_field_name) = method.get_sig_and_field_name();
+-    
+-            let await_call = sig.asyncness.as_ref().map(|_|quote!{.await});
+-            method::to_async(&aaa.lib, &mut sig);
+-    
+-            let error_send = error::direct_send(&script_name,&script_field_name);
+-    
+-            // Debug arm
+-            let add_arm = | debug_arms: &mut Vec<TokenStream>,ident: &Ident | {
+-    
+-                let str_field_name = format!("{}::{}",script_name.to_string() ,ident.to_string());
+-    
+-                let debug_arm = quote! {
+-                    #script_name :: #script_field_name {..} => write!(f, #str_field_name),
+-                };
+-                debug_arms.push(debug_arm);
+-            };
+-    
+-            match method {
+-    
+-                method::ActorMethod::Io   { vis, ident, stat,  arguments, output,.. } => {
+-                    let (args_ident,args_type) = method::arguments_ident_type(&arguments);
+-                    
+-                    if stat {
+-                        live_static_method(&actor_name,ident, vis, sig, args_ident,&mut live_mets)
+-                    }
+-                    else {
+-                        // Debug Arm push
+-                        add_arm(&mut debug_arms, &script_field_name);
+-    
+-                        // Direct Arm
+-                        let arm_match        = quote! { 
+-                            #script_field_name { input: #args_ident,  output: send }
+-                        };
+-                        let direct_arm       = quote! {
+-                            #script_name :: #arm_match => {send.send( actor.#ident #args_ident #await_call ) #error_send ;}
+-                        };
+-                        direct_arms.push(direct_arm);
+-                        
+-                        // Live Method
+-                        let live_met      = quote! {
+-    
+-                            #vis #sig {
+-                                #live_meth_send_recv
+-                                let msg = #script_name :: #arm_match;
+-                                #live_send_input
+-                                #live_recv_output
+-                            }
+-                        };
+-    
+-                        live_mets.push((ident,live_met));
+-    
+-                        // Script Field Struct
+-                        let output_type      = (&*script_field_output)(output);
+-    
+-                        let script_field = quote! {
+-                            #script_field_name {
+-                                input: #args_type,
+-                                #output_type
+-                            }
+-                        };
+-    
+-                        script_fields.push(script_field);
+-                    }
+-                },
+-                method::ActorMethod::I    { vis, ident, arguments ,..} => {
+-                    
+-                    let (args_ident,args_type) = method::arguments_ident_type(&arguments);
+-                    
+-                    // Debug Arm push
+-                    add_arm(&mut debug_arms, &script_field_name);
+-    
+-                    // Direct Arm
+-                    let arm_match = quote!{ 
+-                        #script_field_name{ input: #args_ident }
+-                    };
+-        
+-                    let direct_arm = quote!{
+-                        #script_name::#arm_match => {actor.#ident #args_ident #await_call;},
+-                    };
+-                    direct_arms.push(direct_arm);
++        let async_decl   =  match &aaa.lib {
++            Lib::Std => {
++                if let Some(pos) = actor_methods.iter().position(|x| x.is_async()){
++                    error::abort_async_no_lib(&actor_name,&actor_methods[pos]);
++                }
++                None
++            },
++            _ => { Some(quote!{async}) },
++        };
+     
+-                    // Live Method
+-                    let live_met = quote!{
++        let Vars{actor,play,direct,
++                 debut, msg,debut_play,
++                 sender,receiver,name,..} = vars;
+         
+-                        #vis #sig {
+-                            let msg = #script_name::#arm_match ;
+-                            #live_send_input
+-                        }
+-                    };
+-                    live_mets.push((ident,live_met));
+-                
+-    
+-    
+-                    // Script Field Struct
+-                    let script_field = quote!{
+-                        #script_field_name {
+-                            input: #args_type,
+-                        }
+-                    };
+-                    script_fields.push(script_field);
+-    
+-                },
+-                method::ActorMethod::O    { vis, ident, stat, output ,..} => {
+-                    let (args_ident,_) = method::arguments_ident_type(&vec![]);
+-    
+-                    if stat {
+-                        live_static_method(&actor_name,ident, vis, sig, args_ident,&mut live_mets)
+-                    }
+-                    else {
+-                        
+-                        // Debug Arm push
+-                        add_arm(&mut debug_arms, &script_field_name);
+-    
+-                        // Direct Arm
+-                        let arm_match = quote!{ 
+-                            #script_field_name{  output: send }
+-                        };
+-            
+-                        let direct_arm = quote!{
+-                            #script_name::#arm_match => {send.send(actor.#ident #args_ident #await_call) #error_send ;}
+-                        };
+-                        direct_arms.push(direct_arm);
+     
++        method::to_raw_parts( vars,&mut cont,&aaa,actor_methods,oneshot,mpsc );
+     
+     
+-                        // Live Method
+-                        let live_met = quote!{
+-                        
+-                            #vis #sig {
+-                                #live_meth_send_recv
+-                                let msg = #script_name::#arm_match ;
+-                                #live_send_input
+-                                #live_recv_output
+-                            }
+-                        };
+-                        live_mets.push((ident, live_met));
+-                    
+-                        // Script Field Struct
+-                        let output_type  = (&*script_field_output)(output);
+-    
+-                        let script_field = quote!{
+-                            #script_field_name {
+-                                #output_type
+-                            }
+-                        };
+-                        script_fields.push(script_field);
+-                    }
+-                },
+-                method::ActorMethod::None { vis, ident ,..} => {
+-    
+-                    // Debug Arm push
+-                    add_arm(&mut debug_arms, &script_field_name);
+-    
+-                    // Direct Arm
+-                    let arm_match = quote!{ 
+-                        #script_field_name {} 
+-                    };
+-        
+-                    let direct_arm = quote!{
+-                        #script_name::#arm_match => {actor.#ident () #await_call;},
+-                    };
+-                    direct_arms.push(direct_arm);
+-    
+-                    // Live Method
+-                    let live_met = quote!{
+-                    
+-                        #vis #sig {
+-                            let msg = #script_name::#arm_match ;
+-                            #live_send_input
+-                        }
+-                    };
+-                    live_mets.push((ident,live_met));
+-                
+-                    // Script Field Struct
+-                    let script_field = quote!{
+-                        
+-                        #script_field_name {}
+-                    };
+-                    script_fields.push(script_field);
+-                },
+-            }
+-        } 
+-    
+-         */
+-        
+-        let actor = &format_ident!("group");
+-
+-        method::to_raw_parts(
+-            &actor,
+-            &actor_name,
+-            &script_name,
+-            &aaa.lib,
+-            actor_methods,
+-        
+-            live_meth_send_recv, 
+-            live_send_input, 
+-            live_recv_output,
+-            script_field_output, 
+-            
+-            &mut live_mets,
+-            &mut debug_arms,
+-            &mut direct_arms,
+-            &mut script_fields,
++        // This is file_path for legend 
++        let ( script_legend_file, live_legend_file ) = 
++        if aaa.debut.is_legend(){
++            let (s,l) = crate::show::check_legend_path(&mac, &vars.cust_name, &aaa.debut.path.as_ref().unwrap());
++            (Some(s),Some(l))
++        } else {
++            (None, None)
++        };
+     
+-        );
+-
++    //-----------(2)
+         /*
+         
+         raw parts to
+@@ -402,49 +177,6 @@ pub fn group_model(
+         Foo(MyTypeScriptGroup)
+         */
+ 
+-        
+-        // to_async(lib, &mut sig);
+-
+-        
+-
+-        for field in members.keys() {
+-
+-            let script_field_name = name::script_field(field);
+-            let member_script_name = name::group_script(&members[field].name);
+-            let error_send = error::direct_send(&script_name,&script_field_name);
+-            let await_call = members[field].asyncness.as_ref().map(|_|quote!{.await});
+-            
+-            
+-            // Direct Arm
+-            let arm_match = quote! { 
+-                #script_field_name ( msg )
+-            };
+-            let direct_arm = quote! {
+-                #script_name :: #arm_match => { group. #field .direct( msg ) #await_call  #error_send ;}
+-            };
+-            direct_arms.push(direct_arm);
+-
+-
+-            // Script Struct
+-            let script_field = quote! { 
+-                #script_field_name ( #member_script_name )
+-            };
+-            script_fields.push(script_field);
+-
+-            // Debug arm
+-            let str_field_name = format!("{}::{}",script_name.to_string() ,field.to_string());
+-
+-            let debug_arm = quote! {
+-                #script_name :: #script_field_name (_) => write!(f, #str_field_name),
+-            };
+-            debug_arms.push(debug_arm);
+-
+-
+-        }
+-
+-
+-    // METHOD NEW
+-        
+     if Model::Actor.eq(&mac) { 
+ 
+         if met_new.is_none() {
+@@ -461,69 +193,73 @@ pub fn group_model(
+         let new_sig             = &met_new.new_sig;
+         let func_new_name           = &new_sig.ident;
+         let (args_ident, _ )   = method::arguments_pat_type(&met_new.get_arguments());
+-        let live_var                 = format_ident!("{actor}_live");
+         let unwrapped          = met_new.unwrap_sign();
+-        // let return_statement   = met_new.live_ret_statement(&live_var);
+         let vis                = &met_new.vis.clone();
+ 
+-        let (init_actor, play_args) = {
+-            let id_debut_name = if aaa.debut.active() {quote!{ ,debut,name}} else {quote!{}};
+-            ( quote!{ Self{ sender #id_debut_name } }, quote!{ receiver, #actor } )
++        let (init_live, play_args) = {
++            if aaa.debut.active() {
++                (quote!{ Self { #sender,#debut: std::sync::Arc::clone(&#debut), #name : format!("{:?}",* #debut) }} ,
++                    quote!{ #receiver, #actor, #debut_play})
++            } else {
++
++                (quote!{ Self{ #sender } }, 
++                    quote!{ #receiver, #actor } )
++            }
+         };
+ 
+         let spawn = aaa.lib.method_new_spawn(&play_args,script_name);
+         let turbofish = ty_generics.as_turbofish();
+-        let (id_debut,id_name)  =  
++
++        let vars_debut = 
+         if aaa.debut.active() {
+-            (quote!{let debut =  #script_name #turbofish ::debut();},
+-                quote!{let name  = String::from("");})
+-        } else { (quote!{}, quote!{}) };
++            quote!{let #debut =  #script_name #turbofish ::#debut();
++                    let #debut_play = *std::sync::Arc::clone(&#debut); }
++        } else {quote!{}};
++
++        let return_statement   = met_new.live_ret_statement(&init_live);
+         
++        let MpscChannel{declaration, ..} = mpsc;
++        let Cont{live_mets,..} = &mut cont;
++
+         let func_new_body = quote!{
+ 
+             #vis #new_sig {
+                 let #actor = #actor_name:: #func_new_name #args_ident #unwrapped;
+-                #new_live_send_recv
+-                #id_debut
+-                #id_name
+-                let #live_var = #init_actor;
++                #declaration
++                #vars_debut
+                 #spawn
+-                // #return_statement
++                #return_statement
+             }
+         };
++
+         live_mets.insert(0,(new_sig.ident.clone(),func_new_body));
+     };
+ 
++        
++    
++
+     // LIVE INTER METHODS AND TRAITS
+-    // model::debut()
+     if aaa.debut.active(){
+-        aaa.debut.impl_debut(
+-            &mut live_mets,
+-            &mut live_trts,
+-            &mut script_mets,
+-            &live_name,
+-            &new_vis,
+-            &ty_generics,
+-            &where_clause
+-        )
++        aaa.debut.impl_debut( &mut cont, vars, &new_vis, &ty_generics, &where_clause)
+     }
+-
++    
+     // SCRIPT DEFINITION
+-    script_def = {
+-
++    let script_def = {
++        let Cont{ script_fields,..} = &mut cont;
+         quote! {
+             #new_vis enum #script_name #ty_generics #where_clause {
+                 #(#script_fields),*
+             }
+         }
+-    };
++    };        
++
+ 
+     // DIRECT
+     {
+-
+-        script_mets.push((format_ident!("direct"),
++        let Cont{script_mets,direct_arms,..} = &mut cont;
++        script_mets.push((direct.clone(),
+         quote!{
+-            #new_vis #direct_async_decl fn direct (self, #actor: &mut #actor_type #actor_ty_generics ) {
++            #new_vis #async_decl fn #direct (self, #actor: &mut #actor_type /*#actor_ty_generics*/ ) {
+                 match self {
+                     #(#direct_arms)*
+                 }
+@@ -533,13 +269,16 @@ pub fn group_model(
+ 
+ 
+     // PLAY
+-    {
+-        let direct_await  = direct_async_decl.as_ref().map(|_| quote!{.await});
+-        let recv_await    = play_async_decl.as_ref().map(|_| quote!{.await});
+-        // let end_of_play = error::end_of_life(&actor_name,&aaa.debut); 
+-        // let end_of_play = error::end_of_life(&actor_name,(true,true)); 
+-        let end_of_play = quote!{};
++    if Model::Actor.eq(&mac) {
++
++        let await_call  = async_decl.as_ref().map(|_| quote!{.await});
++        // let recv_await    =  play_async_decl.as_ref().map(|_| quote!{.await});
++        let end_of_play = error::end_of_life( &actor_name, &aaa.debut.clone() ); // <- include 
++        
++        let debut_pat_type = if aaa.debut.active(){quote!{,#debut: std::time::SystemTime }} else { quote!{} };
+ 
++        let MpscChannel{pat_type_receiver,..}      = mpsc;
++        let Cont{script_mets,..} = &mut cont;
+         let play_method = {
+         
+             let ok_or_some = match aaa.lib {
+@@ -547,20 +286,21 @@ pub fn group_model(
+                 _ => quote!{Ok}
+             };
+             quote! {
+-                #new_vis #play_async_decl fn play ( #play_input_receiver mut #actor: #actor_type #actor_ty_generics ) {
+-                    while let #ok_or_some (msg) = receiver.recv() #recv_await {
+-                        msg.direct ( &mut #actor ) #direct_await;
++                #new_vis #async_decl fn #play ( #pat_type_receiver mut #actor: #actor_type /*#actor_ty_generics*/ #debut_pat_type ) {
++                    while let #ok_or_some (#msg) = #receiver.recv() #await_call {
++                        #msg.#direct ( &mut #actor ) #await_call;
+                     }
+                     #end_of_play
+                 }
+             }
+         };
+-        script_mets.push(( format_ident!("play"), play_method ));
++        script_mets.push(( play.clone(), play_method ));
++
+     }
+-    
++
+     // SCRIPT TRAIT (Debug)
+     {   
+-
++        let Cont{ script_trts,debug_arms,..} = &mut cont;
+         let str_script_name = script_name.to_string();
+         let body = 
+         if debug_arms.is_empty() { 
+@@ -579,24 +319,43 @@ pub fn group_model(
+         }));
+     }
+ 
+-    
+-        // LIVE DEFINITION
+-        live_def = {
++
++    // LIVE DEFINITION
++    let live_def = {
++        let MpscChannel{pat_type_sender,..} = &mpsc;
++        if Model::Actor.eq(&mac) {
+             let (debut_field, name_field) = if aaa.debut.active() {
+-                ( quote!{ pub debut: std::sync::Arc<std::time::SystemTime>,},
+-                  quote!{ pub name: String,} )
++                ( quote!{ pub #debut: std::sync::Arc<std::time::SystemTime>,},
++                quote!{ pub #name: String,} )
+             } else { (quote!{}, quote!{})};   
+-    
++            
+             quote!{
+                 #[derive(Clone)]
+                 #new_vis struct #live_name #ty_generics #where_clause {
+-                    #live_field_sender
++                    #pat_type_sender
+                     #debut_field
+                     #name_field
+                 }
+             }
+-        };
+-        
++        } else { 
++
++            quote!{
++                #[derive(Clone)]
++                #new_vis struct #live_name #ty_generics #where_clause {
++                    #pat_type_sender
++                }
++            }
++
++        }
++
++    }; 
++    //----------(3)
++
++
++// -------------------------------------------------------------------
++
++
++
+         // if Model::Group.eq(&mac){
+         //     //we have to extract play from the model
+         //     // ???
+diff --git a/src/model/method.rs b/src/model/method.rs
+index 9b9efad..cce2591 100644
+--- a/src/model/method.rs
++++ b/src/model/method.rs
+@@ -1,5 +1,5 @@
+ use crate::error::{self,met_new_found};
+-use crate::model::{name,argument::{Lib,Model}};
++use crate::model::{name,Lib,Model,interact::{self,InteractVariables}};
+ 
+ use syn::{Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Receiver,Token};
+ use proc_macro_error::abort;
+@@ -9,7 +9,7 @@ use quote::{quote,format_ident};
+ #[derive(Debug,Clone)]
+ pub enum ActorMethod {
+     Io  { vis: Visibility, sig: Signature, ident: Ident, stat: bool,  arguments: Vec<FnArg>, output: Box<Type> },   
+-    I   { vis: Visibility, sig: Signature, ident: Ident,              arguments: Vec<FnArg>                    },    
++    I   { vis: Visibility, sig: Signature, ident: Ident,              arguments: Vec<FnArg>,                   },    
+     O   { vis: Visibility, sig: Signature, ident: Ident, stat: bool,                         output: Box<Type> },    
+     None{ vis: Visibility, sig: Signature, ident: Ident                                                        }, 
+ }
+@@ -277,7 +277,7 @@ fn get_sigs(item_impl: &syn::ItemImpl) -> Vec<(Visibility,Signature)>{
+ }
+ 
+ 
+-pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac: &Model ) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
++pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat: bool, mac: &Model) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
+ 
+     let mut loc              = vec![];
+     let mut method_new = None;
+@@ -291,7 +291,7 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac:
+     for (vis,sig) in sigs {
+ 
+         if is_self_refer(&sig){
+-            loc.push(sieve(vis,explicit(&sig,actor_type),Some(false)));
++            loc.push(sieve( vis,explicit(&sig,actor_type),Some(false)));
+         } else {
+             
+             if actor {
+@@ -299,7 +299,7 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac:
+                 if sig.ident.eq(&ident_new) || sig.ident.eq(&ident_try_new){
+                 
+                     let(new_sig,res_opt) = check_self_return(&mut sig.clone(),actor_type);
+-                    let method = sieve(vis,sig.clone(),Some(true));
++                    let method = sieve( vis,sig.clone(),Some(true));
+                     method_new = ActorMethodNew::try_new( method, new_sig, res_opt );
+                     actor = false;
+                     continue; 
+@@ -308,7 +308,7 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac:
+     
+             if stat {
+                 if is_return(&sig){
+-                    loc.push(sieve(vis,explicit(&sig,actor_type),Some(true)));
++                    loc.push(sieve( vis,explicit(&sig,actor_type),Some(true)));
+                 }
+             }
+ 
+@@ -317,15 +317,55 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat:bool, mac:
+     (loc, method_new)
+ }
+ 
+-pub fn sieve( vis: Visibility, sig: Signature, stat: Option<bool> ) -> ActorMethod {
++pub fn sieve( vis: Visibility, sig: Signature, stat: Option<bool>) -> ActorMethod {
+ 
+     let stat = if stat.is_some(){ stat.unwrap() } else { is_self_refer(&sig) };
+     let (ident,arguments,output) = ident_arguments_output(&sig);
+ 
+     let arg_bool = { arguments.iter()
+         .any( |a| match a { FnArg::Typed(_) => true, _ => false}) };
++    
+ 
+ 
++    match output.clone() {
++        ReturnType::Type(_,output) => { 
++
++            if arg_bool {
++                // let vars = 
++                    // if interact {
++                    //     // Get variables
++                    //     interact::get_variables(actor_type, &sig, &arguments,true)
++                    // } else {
++                    //     // here checking for inter_variables
++                    //     interact::check_send_recv(actor_type, &sig, &arguments,None);
++                    //     None
++                    // };
++                return ActorMethod::Io{ vis, sig, stat, ident, arguments, output };
++            } else {
++                return ActorMethod::O{ vis, sig, stat, ident, output };
++            }
++        },
++        ReturnType::Default => {
++
++            if arg_bool {
++                // let vars = 
++                    // if interact {
++                    //     // Get variables
++                    //     interact::get_variables(actor_type, &sig, &arguments,false)
++                    // } else {
++                    //     // here checking for inter_variables
++                    //     interact::check_send_recv(actor_type, &sig, &arguments,None);
++                    //     None
++                    // };
++                return ActorMethod::I{ vis, sig, ident, arguments };
++            } else {
++                return ActorMethod::None{ vis, sig, ident };
++            }
++        },
++    }
++
++    // old 
++    /*
+     match output.clone() {
+ 
+         ReturnType::Type(_,output) => { 
+@@ -345,6 +385,9 @@ pub fn sieve( vis: Visibility, sig: Signature, stat: Option<bool> ) -> ActorMeth
+             }
+         },
+     }
++     */
++
++
+ }
+ 
+ pub fn ident_arguments_output( sig: &Signature  ) -> (Ident,Vec<FnArg>,ReturnType) {
+@@ -374,6 +417,13 @@ pub fn args_to_pat_type(args: &Vec<FnArg>) -> (Vec<Box<syn::Pat>>, Vec<Box<Type>
+     for i in args  { 
+         match i { 
+             FnArg::Typed(arg) => { 
++                // check 
++                // let words = vec!["inter_send","inter_recv"];
++                // if let Some(pos) = 
++                // contains_inter_words(&arg.pat,&words).iter().position(|&x| x == true){
++                //     let msg = format!("Conflicting name case `{}`.",words[pos]);
++                //     abort!(Span::call_site(),msg);
++                // }
+                 pats.push(arg.pat.clone());
+                 types.push(arg.ty.clone());
+             },
+@@ -384,6 +434,129 @@ pub fn args_to_pat_type(args: &Vec<FnArg>) -> (Vec<Box<syn::Pat>>, Vec<Box<Type>
+ }
+ 
+ 
++// pub fn contains_inter_words( pat: &syn::Pat, names: &Vec<&str> ) -> Vec<bool> {
++
++//     let mut s = quote!{ #pat }.to_string();
++//     let char_set = vec![ '(', ')', '{', '}', '[', ']', ':', '<', '>', ',' ];
++//     for c in char_set {
++//         s = s.replace(c,&format!(" {c} "))
++//     }
++
++//     let mut loc = Vec::new();
++
++//     for &name in names {
++
++//         if s.contains(&format!(" {name} ")){ loc.push(true); } 
++        
++//         else { loc.push(false) }
++//     }
++//     return loc
++// }
++
++/*
++
++
++Interact Arguments Limitations ( per method ): 
++
++    1) One of `inter_send` or `inter_recv`.
++    2) Unlimeted user arguments.
++    3) Unlimeted `inter` getters.
++
++implementing `interact`
++
++if 
++   off) 
++    just check the `inter` words cases
++    need a better error messaging 
++    explaining the where this error occurs 
++
++
++   on ) 
++   a) check if the `pat` is an `Ident`
++            false) check the `inter` words cases
++
++            true) check if the ident is prefixed with ` inter_`
++                 false)  push and continue
++
++                 true) extract the second part of the ident
++                       `inter_ident`  `ident`
++
++                       check if the arg type is 
++                       a) Sender
++                               ident     type            return 
++                               send  =>  Sender<T>  
++                                                        true)  whaits inside the function returns the type 
++                                                        false) returns the channel receiver     
++
++                               any   =>  Sender<T>     
++                                                        true) whaits inside the function on
++                                                              a) Receiver<any> and mutates through inter_set_any
++                                                              b) Receiver<return type> and  returns the type 
++
++                                                        false) waits on  Receiver<any> and mutates through inter_set_any
++                                                               and returns ()  
++
++
++                       b) Receiver
++                                 ident     type            return 
++                                recv => Receiver<T>      
++                                                        true) Raise error unspecified behaviour 
++                                                        false) return the Sender<type>
++
++                                any => Receiver<T>  
++                                                        true) Raise error
++                                                        false) Raise error  use recv for this sort of actions    
++
++
++
++                       c) Type  
++                                ident     type            return 
++
++                                any       AnyType         create a variable any 
++                                                          let any = inter_get_any()
++
++
++
++
++The check will happen for inter_recv and inter_send in all 
++cases as they are the only 
++
++"Conflicting name case"
++
++
++
++
++
++I has to check for iter_recv and inter_send in all pats
++
++    false) check for othe inter_values
++
++    true) check for 
++
++
++// THE NOTE MESSAGE 
++"In situations where user-defined variables, types, or other \
++ elements could potentially overlap with model internals (such \
++ as method names, arguments, and generic types), the model \
++ employs a naming convention. It prefixes its variables and \
++ types with `inter` in any style, ensuring a clear distinction \
++ and preventing any inadvertent collisions."
++
++
++
++
++Interthread naming convention.
++
++
++ 1. For function arguments never use words that are prepended with `inter_` or `Inter`.
++    Specifically every method block will start with declaration of 'oneshot' channel with 
++    sequent `inter_send` and `inter_recv` variables. Also method `inter_set_name` hase 
++    a generic type `InterName` so the only way to make sure user variables and types do not 
++    collide with internal model types the rule of thumb is not using any type names that start with 
++    'inter' in any form 'inter_', 'INTER' or 'Inter'. 
++
++*/
++
+ //OLD
+ /*
+ pub fn args_to_ident_type(args: &Vec<FnArg>) -> (Vec<Ident>, Vec<Box<Type>>){
+@@ -467,27 +640,87 @@ pub fn live_static_method(
+ 
+ 
+ 
++// pub fn to_raw_parts (
++//     actor:                    &Ident,
++//     actor_name:               &Ident,
++//     script_name:              &Ident,
++//     lib:                       & Lib,
++//     actor_methods:  Vec<ActorMethod>,
++
++//     live_meth_send_recv: TokenStream, 
++//     live_send_input:     TokenStream, 
++//     live_recv_output:    TokenStream,
++//     script_field_output: Box<dyn Fn(Box<Type>) -> TokenStream>, 
++    
++//     live_mets: &mut Vec<(Ident,TokenStream)>,
++//     debug_arms:        &mut Vec<TokenStream>,
++//     direct_arms:       &mut Vec<TokenStream>,
++//     script_fields:     &mut Vec<TokenStream>,
++
++// ){
++use crate::model::{Cont,Vars};
++
++use super::{ActorAttributeArguments, OneshotChannel, MpscChannel};
+ pub fn to_raw_parts (
+-    actor:                    &Ident,
+-    actor_name:               &Ident,
+-    script_name:              &Ident,
+-    lib:                       & Lib,
++    
++    Vars {
++        actor,
++        cust_name,
++        actor_name,
++        script_name,..
++    }: &Vars,
++    Cont{
++        live_mets,
++        debug_arms,
++        direct_arms,
++        script_fields,..
++    }: &mut Cont,
++     ActorAttributeArguments{
++        lib,..
++    } : &ActorAttributeArguments,
+     actor_methods:  Vec<ActorMethod>,
+-
+-    live_meth_send_recv: TokenStream, 
+-    live_send_input:     TokenStream, 
+-    live_recv_output:    TokenStream,
+-    script_field_output: Box<dyn Fn(Box<Type>) -> TokenStream>, 
++    oneshot: &OneshotChannel,
++    MpscChannel{
++        sender_call,..
++    }: &MpscChannel,
++
++
++    // actor:                    &Ident,
++    // actor_name:               &Ident,
++    // script_name:              &Ident,
++    // lib:                        &Lib,
++    // actor_methods:  Vec<ActorMethod>,
++
++    // live_meth_send_recv: TokenStream, 
++    // live_send_input:     TokenStream, 
++    // live_recv_output:    TokenStream,
++    // script_field_output: Box<dyn Fn(Box<Type>) -> TokenStream>, 
+     
+-    live_mets: &mut Vec<(Ident,TokenStream)>,
+-    debug_arms:        &mut Vec<TokenStream>,
+-    direct_arms:       &mut Vec<TokenStream>,
+-    script_fields:     &mut Vec<TokenStream>,
++    // live_mets: &mut Vec<(Ident,TokenStream)>,
++    // debug_arms:        &mut Vec<TokenStream>,
++    // direct_arms:       &mut Vec<TokenStream>,
++    // script_fields:     &mut Vec<TokenStream>,
+ 
+ ){
+ 
+ 
+ 
++    // let Cont{
++    //     live_mets,
++    //     debug_arms,
++    //     direct_arms,
++    //     script_fields,..
++    //  } = cont;
++
++    // let Vars {
++    //     actor,
++    //     actor_name,
++    //     script_name,..
++    // }
++
++    let live_meth_send_recv = oneshot.decl(None);
++    
++
+     for method in actor_methods.clone() {
+         
+         let (mut sig, script_field_name) = method.get_sig_and_field_name();
+@@ -507,6 +740,9 @@ pub fn to_raw_parts (
+             debug_arms.push(debug_arm);
+         };
+ 
++
++
++
+         match method {
+ 
+             ActorMethod::Io   { vis, ident, stat,  arguments, output,.. } => {
+@@ -521,7 +757,7 @@ pub fn to_raw_parts (
+ 
+                     // Direct Arm
+                     let arm_match        = quote! { 
+-                        #script_field_name { input: #args_ident,  output: inter_send }
++                        #script_field_name { input: #args_ident,  inter_send }
+                     };
+                     let direct_arm       = quote! {
+                         #script_name :: #arm_match => {inter_send.send( #actor.#ident #args_ident #await_call ) #error_send ;}
+@@ -529,31 +765,35 @@ pub fn to_raw_parts (
+                     direct_arms.push(direct_arm);
+                     
+                     // Live Method
+-                    let live_met      = quote! {
++                    let recv_output = oneshot.recv_call(cust_name,&ident);
++                    let live_met    = quote! {
+ 
+                         #vis #sig {
+                             #live_meth_send_recv
++                            // declaring getters here
+                             let msg = #script_name :: #arm_match;
+-                            #live_send_input
+-                            #live_recv_output
++                            #sender_call
++                            #recv_output
+                         }
+                     };
+ 
+                     live_mets.push((ident,live_met));
+ 
+                     // Script Field Struct
+-                    let output_type      = (&*script_field_output)(output);
+-
++                    let send_pat_type = oneshot.pat_type_send(&*output);
+                     let script_field = quote! {
+                         #script_field_name {
+                             input: #args_type,
+-                            #output_type
++                            #send_pat_type,
+                         }
+                     };
+ 
+                     script_fields.push(script_field);
+                 }
+             },
++
++
++
+             ActorMethod::I    { vis, ident, arguments ,..} => {
+                 
+                 let (args_ident,args_type) = arguments_pat_type(&arguments);
+@@ -576,7 +816,8 @@ pub fn to_raw_parts (
+     
+                     #vis #sig {
+                         let msg = #script_name::#arm_match ;
+-                        #live_send_input
++                        #sender_call
++                        // here may be a return  statement other contr-part of the channel (change the output )
+                     }
+                 };
+                 live_mets.push((ident,live_met));
+@@ -587,6 +828,7 @@ pub fn to_raw_parts (
+                 let script_field = quote!{
+                     #script_field_name {
+                         input: #args_type,
++                        // here can be i_send or i_recv  ( remember to change the return Type of method )
+                     }
+                 };
+                 script_fields.push(script_field);
+@@ -605,7 +847,7 @@ pub fn to_raw_parts (
+ 
+                     // Direct Arm
+                     let arm_match = quote!{ 
+-                        #script_field_name{  output: inter_send }
++                        #script_field_name{ inter_send }
+                     };
+         
+                     let direct_arm = quote!{
+@@ -616,28 +858,35 @@ pub fn to_raw_parts (
+ 
+ 
+                     // Live Method
++                    let recv_output = oneshot.recv_call(cust_name,&ident);
+                     let live_met = quote!{
+                     
+                         #vis #sig {
+                             #live_meth_send_recv
+                             let msg = #script_name::#arm_match ;
+-                            #live_send_input
+-                            #live_recv_output
++                            #sender_call
++                            #recv_output
+                         }
+                     };
+                     live_mets.push((ident, live_met));
+                 
+                     // Script Field Struct
+-                    let output_type  = (&*script_field_output)(output);
++                    // let output_type  = (&*script_field_output)(output);
++                    let send_pat_type = oneshot.pat_type_send(&*output);
++
+ 
+                     let script_field = quote!{
+                         #script_field_name {
+-                            #output_type
++                            // inter_send: #output_type
++                            #send_pat_type,
+                         }
+                     };
+                     script_fields.push(script_field);
+                 }
+             },
++
++
++
+             ActorMethod::None { vis, ident ,..} => {
+ 
+                 // Debug Arm push
+@@ -658,7 +907,7 @@ pub fn to_raw_parts (
+                 
+                     #vis #sig {
+                         let msg = #script_name::#arm_match ;
+-                        #live_send_input
++                        #sender_call
+                     }
+                 };
+                 live_mets.push((ident,live_met));
+diff --git a/src/model/mod.rs b/src/model/mod.rs
+index dcd89f7..562096c 100644
+--- a/src/model/mod.rs
++++ b/src/model/mod.rs
+@@ -19,31 +19,149 @@ pub use group::*;
+ 
+ use proc_macro2::TokenStream;
+ use proc_macro_error::abort;
+-use syn::{Generics,Ident};
+-use quote::quote;
+-// use crate::attribute::{AAEdit,AGEdit};
++use syn::{Generics,Type,Ident};
++use quote::{format_ident,quote};
+ 
+ 
+ 
++// ----------------
+ 
+-// actor generate has to return this a vector of this types 
+-// pub enum Sdpl {
+-//     Script{ name: Ident, def: TokenStream, imp: Vec<(Ident,TokenStream)>, trt: Vec<(Ident,TokenStream)> },
+-//     Live  { name: Ident, def: TokenStream, imp: Vec<(Ident,TokenStream)>, trt: Vec<(Ident,TokenStream)> },
+-// }
++pub fn get_channels_one_mpsc( 
++            aaa: &ActorAttributeArguments, 
++           vars: &Vars, 
++    script_type: &Type) -> ( OneshotChannel, MpscChannel ){
+ 
++    let Vars{  
++            inter_send,
++            inter_recv,.. } = vars;
+ 
++    let ActorAttributeArguments{ channel, lib,..} = aaa;
+ 
++    (
++        OneshotChannel::new(inter_send,inter_recv,lib),
++        MpscChannel::new(vars,aaa,script_type)   
++    )
++}
++pub struct Cont {
++    script_mets  : Vec<(Ident,TokenStream)>,
++    script_trts  : Vec<(Ident,TokenStream)>,
++    live_mets    : Vec<(Ident,TokenStream)>,
++    live_trts    : Vec<(Ident,TokenStream)>,
++
++    script_fields: Vec<TokenStream>,
++    direct_arms  : Vec<TokenStream>,
++    debug_arms   : Vec<TokenStream>,
++}
++
++impl Cont {
++
++    pub fn new() -> Self{
++        Self{
++            script_mets  : vec![],
++            script_trts  : vec![],
++            live_mets    : vec![],
++            live_trts    : vec![],
++            script_fields: vec![],
++            direct_arms  : vec![],
++            debug_arms   : vec![],
++        }
++    }
++}
++
++
++// pub static INTER_GET_DEBUT: &'static str = "inter_get_debut";
++// pub static INTER_GET_COUNT: &'static str = "inter_get_count";
++// pub static INTER_SET_NAME: &'static str  = "inter_set_name";
++// pub static INTER_GET_NAME: &'static str  = "inter_get_name";
++// pub static INTER_NAME: &'static str      = "InterName";
++// pub static DEBUT: &'static str           = "debut";
++
++pub struct Vars {
++
++    actor:           Ident,
++    actor_name:      Ident,
++    name:            Ident,
++    debut:           Ident,
++    debut_play:      Ident,
++    sender:          Ident,
++    receiver:        Ident,
++    play:            Ident,
++    direct:          Ident,
++    inter_send:      Ident,
++    inter_recv:      Ident,
++    inter_name:      Ident,
++    inter_debut:     Ident,
++    inter_count:     Ident,
++    inter_get_debut: Ident,
++    inter_get_count: Ident,
++    inter_set_name:  Ident,
++    inter_get_name:  Ident,
++    intername:       Ident,
++    msg:             Ident,
++
++    cust_name:       Ident,
++    script_name:     Ident,
++    live_name:       Ident,
++}
+ 
+ 
+-// pub struct GroupModelSdpl {
+-//     pub name:                Ident,
+-//     pub edit:               AGEdit,
+-//     pub generics:         Generics,
+-//     pub parts: Vec<ActorModelSdpl>,
+-//     pub script: (  TokenStream,  Vec<(Ident,TokenStream)>,  Vec<(Ident,TokenStream)> ),
+-//     pub live:   (  TokenStream,  Vec<(Ident,TokenStream)>,  Vec<(Ident,TokenStream)> ),
+-// }
++impl Vars {
++
++    pub fn new( aaa: &ActorAttributeArguments, actor_name: &Ident, mac: Model,model: &Model )  -> Self {
++        let cust_name  = if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { actor_name.clone() }; 
++        let script_name;
++        let live_name  ;
++        let actor ;
++        match (mac,model){
++            (Model::Actor,Model::Actor) => {
++                actor = format_ident!("actor");
++                script_name = name::script(&cust_name);
++                live_name   = name::live(&cust_name);
++             },
++            (Model::Actor,Model::Group)|
++            (Model::Group,Model::Actor) => { 
++                actor = format_ident!("actor");
++                script_name = name::script_group(&cust_name);
++                live_name   = name::live_group(&cust_name);
++            },
++            (Model::Group,Model::Group) => { 
++                actor = format_ident!("group");
++                script_name = name::group_script(&cust_name);
++                live_name   = name::group_live(&cust_name);
++            },
++        }
++
++        Self{
++
++            actor,
++            actor_name:      actor_name.clone(),
++            name:            format_ident!("name"),
++            debut:           format_ident!("debut"),
++            debut_play:      format_ident!("debut_play"),
++            sender:          format_ident!("sender"),
++            receiver:        format_ident!("receiver"),
++            play:            format_ident!("play"),
++            direct:          format_ident!("direct"),
++            inter_send:      format_ident!("inter_send"),
++            inter_recv:      format_ident!("inter_recv"),
++            inter_name:      format_ident!("inter_name"),
++            inter_debut:     format_ident!("inter_debut"),
++            inter_count:     format_ident!("inter_count"),
++            inter_get_debut: format_ident!("inter_get_debut"),
++            inter_get_count: format_ident!("inter_get_count"),
++            inter_set_name:  format_ident!("inter_set_name"),
++            inter_get_name:  format_ident!("inter_get_name"),
++            intername:       format_ident!("InterName"),
++            msg:             format_ident!("msg"),
++
++            cust_name,
++            script_name,
++            live_name ,
++        }
++
++
++    }
++}
+ 
+ 
+ pub struct GroupModelSdpl {
+@@ -64,19 +182,6 @@ impl GroupModelSdpl {
+ }
+ 
+ 
+-/*
+-This means there should be:
+-    a)  struct  AGEdit {
+-            pub script:( bool, Option<Vec<syn::Ident>>, Option<Vec<syn::Ident>> ),
+-            pub live:  ( bool, Option<Vec<syn::Ident>>, Option<Vec<syn::Ident>> ),
+-
+-            pub group: Vec< ( Ident, AAEdit )>
+-
+-    }
+-
+-*/
+-
+-
+ // Sdpl Actor 
+ 
+ pub struct ActorModelSdpl {
+@@ -240,7 +345,9 @@ impl ActorModelSdpl {
+             #res_edit_live_mets
+             #res_edit_live_trts
+         };
+-    
++        // let msg = res_code.to_string();
++        
++        // abort!(proc_macro::Span::call_site(),msg );
+         (res_code, res_edit)
+     
+     }
+@@ -281,23 +388,46 @@ pub fn edit_select((edit_idents,scope): (Option<Vec<(Ident,bool)>>,bool),
+ 
+ 
+ 
++#[cfg(test)]
++mod tests {
++    use super::*;
+ 
+-#[test]
+-fn test_split_edit_group() {
++    #[test]
++    fn test_split_edit_group() {
+ 
+-    let attr: syn::Attribute = 
+-    syn::parse_quote!{#[actor( edit(script(imp), 
+-                            a::edit(live,script(def))))] };
++        let attr: syn::Attribute = 
++        syn::parse_quote!{#[actor( edit(script(imp), 
++                                a::edit(live,script(def))))] };
+ 
+-    let mut edit = EditGroup::default();
++        let mut edit = EditGroup::default();
+ 
+-    for meta in crate::model::attribute::attr_to_meta_list(&attr){
++        for meta in crate::model::attribute::attr_to_meta_list(&attr){
+ 
+-        if meta.path().is_ident("edit"){
+-            edit.parse(&meta);
++            if meta.path().is_ident("edit"){
++                edit.parse(&meta);
++            }
+         }
++        println!("Edit - {:?}", edit);  
++    }
++
++
++    #[test]
++    fn parse_types () {
++
++        let actor = quote::format_ident!{"Actor"};
++        let actor_ty: syn::Type = syn::parse_quote!(#actor);
++
++
++        match &actor_ty {
++
++            syn::Type::Path(_) => println!(" True type "),
++            _ => println!(" Not a type that I expect"),
++        }
++        let str_actor_ty = quote!(#actor_ty);
++
++        println!("{str_actor_ty}");
++
+     }
+-    println!("Edit - {:?}", edit);  
+ }
+ 
+ 
+diff --git a/src/model/name.rs b/src/model/name.rs
+index 867f736..7501577 100644
+--- a/src/model/name.rs
++++ b/src/model/name.rs
+@@ -1,6 +1,6 @@
+ 
+ use quote::format_ident;
+-use syn::Ident;
++use syn::{Type,Ident};
+ use proc_macro_error::abort;
+ 
+ // use crate::attribute::AAExpand;
+@@ -11,9 +11,9 @@ pub fn get_ident_type_generics(item_impl: &syn::ItemImpl) -> (syn::Ident,syn::Ty
+     match &*item_impl.self_ty {
+         syn::Type::Path(tp) => {
+             let ident = tp.path.segments.last().unwrap().ident.clone();
+-            let typ :syn::Type = syn::parse_quote!{ #ident };
++            // let typ :syn::Type = syn::parse_quote!{ #ident };
+             let generics = item_impl.generics.clone();
+-            (ident,typ,generics)
++            (ident,Type::Path(tp.clone()),generics)
+         },
+         _ => {
+             let msg ="Internal Error.'actor_gen::impl_get_name'. Could not get item Impl's name!";
+@@ -72,6 +72,17 @@ pub fn get_actor_names(name: &Ident, mac: &Model) -> ( Ident, Ident ){
+     }
+ }
+ 
++pub fn get_names(name: &Ident, mac: Model, model: &Model) -> ( Ident, Ident ){
++
++    match mac {
++        Model::Actor => ( script(name), live(name) ),
++        Model::Group => ( script_group(name), live_group(name) ),
++    }
++}
++
++
++
++
+ 
+ fn fn_to_struct(input: &str) -> String {
+ 

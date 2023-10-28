@@ -660,7 +660,7 @@ impl Default for EditGroup {
     fn default() -> Self {
 
         let attr = None;
-        let edits    = None;
+        let edits = None;
         let remove = false;
         Self { attr,remove, edits}
     } 

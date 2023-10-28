@@ -1,5 +1,5 @@
 use crate::error::{self,met_new_found};
-use crate::model::{name,Lib,Model,interact::{self,InteractVariables}};
+use crate::model::{name,Cont,Vars,Lib,ImplVars,Model,interact::{self,InteractVariables}};
 
 use syn::{Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Receiver,Token};
 use proc_macro_error::abort;
@@ -120,8 +120,9 @@ where
     type_str = type_str.replace( ")"," )");
     type_str = type_str.replace( "(","( ");
     type_str = format!(" {type_str} ");
-    let old = format!(" {} ", old.to_string());
-    let str_type = type_str.replace(&old, &new.to_string());
+    let old  = format!(" {} ", old.to_string());
+    let new  = format!(" {} ",new.to_string());
+    let str_type = type_str.replace(&old, &new);
 
     if let Ok(ty) = syn::parse_str::<T>(&str_type) {
         return ty;
@@ -277,13 +278,13 @@ fn get_sigs(item_impl: &syn::ItemImpl) -> Vec<(Visibility,Signature)>{
 }
 
 
-pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat: bool, mac: &Model) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
+pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat: bool, mut act: bool) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
 
     let mut loc              = vec![];
     let mut method_new = None;
     let ident_new                       = format_ident!("new");
     let ident_try_new                   = format_ident!("try_new");
-    let mut actor                        = Model::Actor.eq(mac);
+    // let mut actor                        = Model::Actor.eq(mac);
 
     // use item_vis for `group` 
     let sigs = get_sigs(&item_impl);
@@ -294,14 +295,14 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat: bool, mac
             loc.push(sieve( vis,explicit(&sig,actor_type),Some(false)));
         } else {
             
-            if actor {
+            if act {
                 // check if there is a function "new" or "try_new"
                 if sig.ident.eq(&ident_new) || sig.ident.eq(&ident_try_new){
                 
                     let(new_sig,res_opt) = check_self_return(&mut sig.clone(),actor_type);
                     let method = sieve( vis,sig.clone(),Some(true));
                     method_new = ActorMethodNew::try_new( method, new_sig, res_opt );
-                    actor = false;
+                    act = false;
                     continue; 
                 } 
             }
@@ -311,7 +312,6 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, stat: bool, mac
                     loc.push(sieve( vis,explicit(&sig,actor_type),Some(true)));
                 }
             }
-
         }
     }
     (loc, method_new)
@@ -639,27 +639,6 @@ pub fn live_static_method(
 
 
 
-
-// pub fn to_raw_parts (
-//     actor:                    &Ident,
-//     actor_name:               &Ident,
-//     script_name:              &Ident,
-//     lib:                       & Lib,
-//     actor_methods:  Vec<ActorMethod>,
-
-//     live_meth_send_recv: TokenStream, 
-//     live_send_input:     TokenStream, 
-//     live_recv_output:    TokenStream,
-//     script_field_output: Box<dyn Fn(Box<Type>) -> TokenStream>, 
-    
-//     live_mets: &mut Vec<(Ident,TokenStream)>,
-//     debug_arms:        &mut Vec<TokenStream>,
-//     direct_arms:       &mut Vec<TokenStream>,
-//     script_fields:     &mut Vec<TokenStream>,
-
-// ){
-use crate::model::{Cont,Vars};
-
 use super::{ActorAttributeArguments, OneshotChannel, MpscChannel};
 pub fn to_raw_parts (
     
@@ -667,7 +646,8 @@ pub fn to_raw_parts (
         actor,
         cust_name,
         actor_name,
-        script_name,..
+        script_name,
+        impl_vars,..
     }: &Vars,
     Cont{
         live_mets,
@@ -675,52 +655,32 @@ pub fn to_raw_parts (
         direct_arms,
         script_fields,..
     }: &mut Cont,
-     ActorAttributeArguments{
+    ActorAttributeArguments{
         lib,..
     } : &ActorAttributeArguments,
-    actor_methods:  Vec<ActorMethod>,
     oneshot: &OneshotChannel,
     MpscChannel{
         sender_call,..
     }: &MpscChannel,
+){  
+    let ImplVars{ actor_methods,.. } = &impl_vars;
 
+    // let variant = group_script_type.as_ref().map( |x| 
+    //     {   
+    //         let variant_name = crate::model::name::script_field(&field.clone().unwrap());
+    //         quote!{  #x :: #variant_name } 
+    //     }
+    // );
 
-    // actor:                    &Ident,
-    // actor_name:               &Ident,
-    // script_name:              &Ident,
-    // lib:                        &Lib,
-    // actor_methods:  Vec<ActorMethod>,
-
-    // live_meth_send_recv: TokenStream, 
-    // live_send_input:     TokenStream, 
-    // live_recv_output:    TokenStream,
-    // script_field_output: Box<dyn Fn(Box<Type>) -> TokenStream>, 
+    // let group_variant = | script_struct: TokenStream | -> TokenStream  {
+    //     if let Some(var) = variant.clone() {
+    //         quote!{ #var( #script_struct )}
+    //     } else { script_struct }
+    // };
     
-    // live_mets: &mut Vec<(Ident,TokenStream)>,
-    // debug_arms:        &mut Vec<TokenStream>,
-    // direct_arms:       &mut Vec<TokenStream>,
-    // script_fields:     &mut Vec<TokenStream>,
-
-){
-
-
-
-    // let Cont{
-    //     live_mets,
-    //     debug_arms,
-    //     direct_arms,
-    //     script_fields,..
-    //  } = cont;
-
-    // let Vars {
-    //     actor,
-    //     actor_name,
-    //     script_name,..
-    // }
-
+    let group_wrap_variant = impl_vars.get_group_script_wrapper();
     let live_meth_send_recv = oneshot.decl(None);
     
-
     for method in actor_methods.clone() {
         
         let (mut sig, script_field_name) = method.get_sig_and_field_name();
@@ -766,12 +726,15 @@ pub fn to_raw_parts (
                     
                     // Live Method
                     let recv_output = oneshot.recv_call(cust_name,&ident);
+                    // let script_var = quote!{ #script_name :: #arm_match };
+                    // let if_group_wrap_variant = group_variant(script_var);
+                    let msg_variant = (*group_wrap_variant)(quote!{ #script_name :: #arm_match });
                     let live_met    = quote! {
 
                         #vis #sig {
                             #live_meth_send_recv
                             // declaring getters here
-                            let msg = #script_name :: #arm_match;
+                            let msg = #msg_variant ;
                             #sender_call
                             #recv_output
                         }
@@ -812,10 +775,14 @@ pub fn to_raw_parts (
                 direct_arms.push(direct_arm);
 
                 // Live Method
+                // let script_var = quote!{ #script_name :: #arm_match };
+                // let if_group_wrap_variant = group_variant(script_var);
+                let msg_variant = (*group_wrap_variant)(quote!{ #script_name :: #arm_match });
+
                 let live_met = quote!{
     
                     #vis #sig {
-                        let msg = #script_name::#arm_match ;
+                        let msg = #msg_variant ;
                         #sender_call
                         // here may be a return  statement other contr-part of the channel (change the output )
                     }
@@ -858,12 +825,15 @@ pub fn to_raw_parts (
 
 
                     // Live Method
+                    // let script_var = quote!{ #script_name :: #arm_match };
+                    // let if_group_wrap_variant = group_variant(script_var);
                     let recv_output = oneshot.recv_call(cust_name,&ident);
+                    let msg_variant = (*group_wrap_variant)(quote!{ #script_name :: #arm_match });
                     let live_met = quote!{
                     
                         #vis #sig {
                             #live_meth_send_recv
-                            let msg = #script_name::#arm_match ;
+                            let msg = #msg_variant ;
                             #sender_call
                             #recv_output
                         }
@@ -903,10 +873,13 @@ pub fn to_raw_parts (
                 direct_arms.push(direct_arm);
 
                 // Live Method
+                // let script_var = quote!{ #script_name :: #arm_match };
+                // let if_group_wrap_variant = group_variant(script_var);
+                let msg_variant = (*group_wrap_variant)(quote!{ #script_name :: #arm_match });
                 let live_met = quote!{
                 
                     #vis #sig {
-                        let msg = #script_name::#arm_match ;
+                        let msg = #msg_variant ;
                         #sender_call
                     }
                 };

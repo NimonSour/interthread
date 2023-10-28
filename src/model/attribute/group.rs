@@ -1,12 +1,14 @@
 use crate::error;
-use crate::model::{Model,ActorModelSdpl, Channel,Lib,EditGroup,Debut,get_ident,get_ident_group,get_lit,get_lit_str,get_list,to_usize};
+use crate::model::{Model,ActorModelSdpl,Generics, Channel,Lib,
+    EditGroup,Debut,get_ident,get_ident_group,get_lit,get_lit_str,
+    script_field,get_list,to_usize, check_name_conflict};
 
 
 use std::path::PathBuf;
 use proc_macro2::Span;
 use proc_macro_error::abort;
 use quote::format_ident;
-use syn::{Ident,ItemStruct,ItemImpl,Visibility,Type,punctuated::Punctuated,Meta};
+use syn::{Ident,ItemStruct,ItemImpl,Visibility,Type,punctuated::Punctuated,PathSegment,Meta};
 use std::collections::BTreeMap;
 
 use super::ActorAttributeArguments;
@@ -90,7 +92,8 @@ pub struct GroupAttributeArguments {
     pub path    :  BTreeMap<Ident,PathBuf>,
     pub allow   :  BTreeMap<Ident,Meta>,
     
-    pub members :  BTreeMap<Ident,(ItemImpl,Visibility)>,
+    pub members :  BTreeMap<Ident,(ItemImpl,Visibility,Type,Generics)>,
+    pub def_generics: Generics,
 }
 
 
@@ -112,7 +115,7 @@ impl GroupAttributeArguments {
                             self.channel = Channel::Buffer(val.clone());
                         }
                     },
-                    v => abort!(v, error::error_name_type( &meta.path(), "Int (usize)"),; help=error::AVAIL_ACTOR ),
+                    v => abort!(v, error::error_name_type( &meta.path(), "Int (usize)"),; help=error::AVAIL_GROUP ),
                 }
             }
 
@@ -250,10 +253,29 @@ impl GroupAttributeArguments {
                 
             } else { abort!(Span::call_site(),error::TUPLE_STRUCT_NOT_ALLOWED); }
         }
+        // fields like `foo` and `foo_` will have the same 
+        // name as types `Foo`
+        // checking now to make sure they are different 
+
+        let idents = loc.iter().map(|&(_,i,_)| i).collect::<Vec<_>>();
+        check_name_conflict(idents);
         loc
+        
     }
 
-    // pub fn 
+    pub fn impl_eq( mut this: ItemImpl, other: &ItemImpl ){
+        this.attrs.clear();
+        let mut other = other.clone();
+        other.attrs.clear();
+        if !this.eq(&other){
+            abort!(Span::call_site(),error::MISMATCHED_IMPL_BLOCK)
+        }
+    }
+
+    /*
+        1)  Add a check for ItemImpl equality 
+        2)  Add a check for uniqueness of field values
+    */
     pub fn cross_check(&mut self,item_impl: &ItemImpl){
 
         // if there if file
@@ -272,22 +294,27 @@ impl GroupAttributeArguments {
 
             // -------
 
-            let (group_ident,_,_)  = crate::model::get_ident_type_generics(item_impl);
-            let (i_strct,_) = crate::file::find_group_items(file,&group_ident);
-            // may be check for equality  impl 
+            let (group_ident,_,_) = crate::model::get_ident_type_generics(item_impl);
+            let (i_strct,i_impl)  = crate::file::find_group_items(file,&group_ident);
+            
+            // check for equality  impl 
+            Self::impl_eq(i_impl,item_impl);
+
+            // definition generics
+            self.def_generics = i_strct.generics.clone();
 
             let fields = self.get_vis_ident_ty(&i_strct);
             for (vis,ident_field, ty) in fields {
                 
                 // type identifier
-                let ident_ty = match ty {
+                let path_seg = match ty {
                     syn::Type::Path(ty_path) => {
-                        ty_path.path.segments.last().unwrap().ident.clone()
+                        ty_path.path.segments.last().unwrap().clone()
                     },
                     _ => {
                         let p = quote::quote!{#ty}.to_string();
                         let msg = format!("Expected identifier found : {}.",p);
-                        abort!(Span::call_site(),msg;note=error::GROUP_FIELD_TYPE);
+                        abort!(Span::call_site(),msg;note=error::GROUP_FIELD_TYPE;help=error::ABOUT_ALLOW);
                     },
                 };
 
@@ -296,8 +323,9 @@ impl GroupAttributeArguments {
                     new_path
                 } else { file };
                 // get impl block 
-                let (_,i_impl) = crate::file::find_group_items(mem_path,&ident_ty);
-                self.members.insert(ident_field.clone(),(i_impl,vis.clone()));
+                let (i_strct,i_impl) = crate::file::find_group_items(mem_path,&path_seg.ident);
+                let def_gen = i_strct.generics.clone();
+                self.members.insert(ident_field.clone(),(i_impl,vis.clone(),ty.clone(),def_gen));
             }
 
         } else { abort!(Span::call_site(),error::REQ_FILE;help=error::AVAIL_ACTOR); }
@@ -349,6 +377,7 @@ impl GroupAttributeArguments {
             }
         }
         aaa
+
     }
 
     // pub fn get_all_actors(&self) -> Vec<crate::model::ActorModelSdpl> {
@@ -375,6 +404,7 @@ impl Default for GroupAttributeArguments {
             path    :  BTreeMap::new(),
             allow   :  BTreeMap::new(),
             members :  BTreeMap::new(),
+            def_generics: Generics::default(),
         }
     }
 }

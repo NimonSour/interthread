@@ -294,7 +294,22 @@ pub fn expand_macro( mut file: syn::File, mac: &Model  ) -> (syn::File, Lib) {
 
                             item_impl.attrs = use_macro.exclude(&item_impl.attrs.clone());
                             let meta_list = attr_to_meta_list(attr);
-                            let aa = AttributeArguments::from(meta_list,mac);
+                            let mut aa = AttributeArguments::from(meta_list,mac);
+                            aa.cross_check(item_impl);
+                            //error
+                            // match &aa  {
+                            //     AttributeArguments::Actor(_) => {},
+                            //     AttributeArguments::Group(gaa) => {
+                            //         // gaa.members.len()
+                            //         let msg = format!("Len - {:?}",gaa.members.len());
+                            //         proc_macro_error::abort!(item_impl, msg);
+                            //     },
+                            // }
+                            // let msg = format!("Code - {}",code.to_string());
+                            // let msg = format!("Len - {:?}",mac);
+                            // proc_macro_error::abort!(item_impl,msg);
+                            //end of error 
+
                             lib = aa.get_lib();
                             // generate code
                             let (code,_) = aa.generate_code(&item_impl);

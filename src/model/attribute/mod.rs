@@ -7,10 +7,12 @@ pub use group::*;
 pub use example::*; 
 
 use crate::error;
-use proc_macro2::TokenStream;
-use crate::model::argument::Model;
+use crate::model::{generate_model, Lib, Model};
+
 use syn::{ punctuated::Punctuated,ItemImpl,Meta,Token,Attribute };
+use proc_macro2::TokenStream;
 use proc_macro_error::abort;
+use quote::quote;
 
 
 //-----------------------  ACTOR CHANNEL 
@@ -67,7 +69,7 @@ impl AttributeArguments {
         }
     }
 
-    pub fn get_lib(&self) -> crate::model::argument::Lib {
+    pub fn get_lib(&self) -> Lib {
 
         match self {
             Self::Actor(aaa) => aaa.lib.clone(),
@@ -75,18 +77,36 @@ impl AttributeArguments {
         }
     }
 
-    pub fn generate_code(&self,item_impl: &ItemImpl)  -> (TokenStream,TokenStream){
-
-        match self {
-            Self::Actor(aaa) => {
-                super::actor::macro_actor_generate_code(aaa.clone(),item_impl.clone())
-            },
-            Self::Group(gaa) =>{
-                super::group::macro_group_generate_code(gaa.clone(),item_impl.clone())
-            } ,
+    pub fn get_mac(&self) -> Model {
+        match &self {
+            Self::Actor(_) => Model::Actor,
+            Self::Group(_) => Model::Group,
         }
     }
 
+    pub fn cross_check(&mut self, item_impl: &ItemImpl){
+
+        match self {
+            Self::Actor(aaa) => { aaa.cross_check(); },
+            Self::Group(gaa) => { gaa.cross_check(item_impl); },
+        }
+    }
+
+    pub fn generate_code( self, item_impl: &ItemImpl )  -> (TokenStream,TokenStream){
+
+        // let model_sdpl = generate_model(*(self.clone()), item_impl, None );
+        // let aa = *self.clone();
+        let model_sdpl = generate_model(self, item_impl, None );
+
+        let (mut code,edit) = model_sdpl.get_code_edit();
+
+        code = quote!{
+    
+            #item_impl
+            #code
+        };
+        (code,edit)
+    }
 }
 
 

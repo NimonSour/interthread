@@ -296,13 +296,6 @@ impl Cc {
     }
 }
 
-pub struct AaBbCc {
-    pub a: Aa,
-    pub b: Bb, 
-    pub c: Cc,
-    any: AnyOtherType,
-}
-
 
 /*
 
@@ -331,7 +324,14 @@ AaBbCcGroupScript {
 direct ( )
 */
 
-// #[interthread::group( file= "examples/intro_group.rs" )]
+pub struct AaBbCc {
+    pub a: Aa,
+    pub b: Bb,
+    pub c: Cc,
+    any: AnyOtherType,
+}
+
+#[interthread::group( file= "examples/intro_group.rs" )]
 impl AaBbCc {
 
     pub fn new( ) -> Self {
@@ -345,13 +345,19 @@ impl AaBbCc {
     pub fn add_to_a(&mut self, v:u8){
         self.a.0 += v;
     }
+    pub fn get_value_of_a(&mut self)-> u8 {
+        self.a.0
+    }
 }
 
 
 
-// #[interthread::example(path = "examples/intro_group.rs")]
+// #[interthread::example(main(path = "examples/intro_group.rs"))]
 
 pub fn main(){
+
+    let group = AaBbCcGroupLive::new();
+
 
 
 }

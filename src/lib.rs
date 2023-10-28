@@ -1271,21 +1271,29 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 
     check::channels_import( &aaa.lib );
 
+    let edit_attr = aaa.edit.attr.clone();
+
+    let aa = crate::model::AttributeArguments::Actor(aaa);
+
+    let model_sdpl = crate::model::generate_model( aa,&item_impl,None);
     
-    let mut act_model = model::actor::actor_model( aaa,&item_impl,model::argument::Model::Actor,None);
-    let (model_code,edit_code) = act_model.split_edit();
+    let (_,edit_sdpl) = model_sdpl.split();
 
-    if let Some( edit_attr ) = &act_model.edit.attr {
+    if let Some( edit_attr ) = edit_attr {
 
-        parse::edit_write( &edit_attr, &item_impl, edit_code);
+        parse::edit_write( &edit_attr, &item_impl, edit_sdpl);
     }
 
-    // let msg = model_code.to_string();
-    // proc_macro_error::abort!(proc_macro::Span::call_site(), msg);
+    let (code,_) = model_sdpl.get_code_edit();
+    // error here 
+    // let edifile =  syn::parse2::<syn::File>(code).unwrap();
+    // let edifix  = &prettyplease::unparse(&edifile);
+
+    // proc_macro_error::abort!(proc_macro::Span::call_site(),edifix);
 
     quote::quote!{
         #item_impl
-        #model_code
+        #code
     }.into()
 
 
@@ -1330,17 +1338,47 @@ pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     let nested  = syn::parse_macro_input!(attr with syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated); 
     gaa.parse_nested(nested);
     gaa.cross_check(&item_impl);
-
+    
     check::channels_import( &gaa.lib );
 
-    let mut group_model = 
-    model::group::group_model( &gaa,&item_impl,model::argument::Model::Group,None);
+     let edit_attr = gaa.edit.attr.clone();
+
+    let aa = crate::model::AttributeArguments::Group(gaa);
+
+    let model_sdpl = crate::model::generate_model( aa,&item_impl,None);
+
+
+    let (exam_code,edit_sdpl) = model_sdpl.split();
+
+    // error start
+
+    // let crate::model::ModelSdpl{ fields} = &edit_sdpl;
     
     
-    let msg = format!("{:?}",gaa.edit);
-    // proc_macro_error::abort!( proc_macro::Span::call_site(), msg );
-    // let msg = "Nothing yet ";
-    proc_macro_error::abort!( proc_macro2::Span::call_site(),msg );
+    // let mut string = String::new();
+    // for (key,edit) in exam_code{
+
+    //     string += &format!("key-  {key}   -   {} ",edit.to_string());
+        
+    // }
+    // let msg = exam_code.to_string();
+    // proc_macro_error::abort!(item_impl,msg);
+    // errror end 
+
+
+    if let Some( edit_attr ) = edit_attr {
+        parse::edit_write( &edit_attr, &item_impl, edit_sdpl);
+    }
+
+    let (code,_) = model_sdpl.get_code_edit();
+    //error
+    // let msg = code.to_string();
+    // proc_macro_error::abort!(item_impl,msg);
+    //end of error
+    quote::quote!{
+        #item_impl
+        #code
+    }.into()
 
 }
 

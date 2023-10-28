@@ -366,7 +366,7 @@ AA     debut(
  `self` - When specifying arguments for `(AA)`, remember \
  to prefix them with the corresponding field name to indicate \
  which member of the `group` they refer to. If the argument 
- pertains to the `group` itself, use the conventional `self` notation.
+ pertains to the `group` struct itself, use the conventional `self` notation.
 
 
 For instance, given a struct 'Group':
@@ -459,6 +459,41 @@ pub static GROUP_FIELD_TYPE: &'static str =
 
 pub static REQ_FILE: &'static str  =
 r#"Expected a 'file' argument `file = "path/to/current/file.rs"`."#;
+
+// Mismatched impl block
+pub static MISMATCHED_IMPL_BLOCK: &'static str = "
+Mismatched impl block detected!
+
+Possible causes:
+
+    1) The 'file' parameter points to a different file with \
+a similar or identical struct name.
+    2) The macro may not be applied to the first impl block \
+of the associated struct.
+";
+
+pub static HELP_TYPE_NAMING_CONFLICT: &'static str ="
+    The model relies on a specific naming convention critical \
+for generating accurate type names. However, it encounters \
+issues in some cases:
+
+    `foo_bar`   -> FooBar
+    `_foo_bar`  -> FooBar
+    `foo_bar_`  -> FooBar
+    `_foo_bar_` -> FooBar
+
+    Please ensure that the provided names adhere to the \
+Rust camel case convention and differ by at least one character \
+to avoid naming conflicts. This will allow the model to function \
+correctly and generate accurate type names.
+";
+
+pub fn type_nameing_conflict(a: &Ident, b: &Ident )-> String {
+    let ty_name = crate::model::name::script_field(a);
+    format!("Naming conflict detected. Conflicting \
+type names from the provided field names. Both`{a}` and `{b}` result \
+in {ty_name} .")
+}
 
 pub fn double_decl(s: &str) -> String {
     format!("Double declaration of `{s}` option.")

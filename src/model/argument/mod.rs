@@ -21,12 +21,31 @@ use std::path::PathBuf;
 
 
 
+//-----------------------  EXAMPLE EXPAND
+#[derive(Debug, Copy,Eq, PartialEq, Clone)]
+
+pub enum SubModel{
+    Actor,
+    GroupActor,
+    Group,
+}
+
 
 //-----------------------  EXAMPLE EXPAND
-#[derive(Debug, Eq, PartialEq, Clone)]
+#[derive(Debug,Copy, Eq, PartialEq, Clone)]
 pub enum Model {
     Actor,
+    // GroupActor,
     Group,
+}
+impl Model {
+
+    pub fn get_invers(&self) -> Self {
+        match self {
+            Self::Actor => Self::Group,
+            Self::Group => Self::Actor,
+        }
+    }
 }
 
 // impl Model {
@@ -44,6 +63,7 @@ impl std::fmt::Display for Model {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Actor => write!(f,"{}",crate::ACTOR),
+            // Self::GroupActor => write!(f,"{}_{}",crate::GROUP,crate::ACTOR),
             Self::Group => write!(f,"{}",crate::GROUP),
         }
     }
@@ -139,8 +159,9 @@ impl Edit {
     pub fn new(model:&Model) -> Self {
 
         match model {
-            Model::Actor => Self::Actor(EditActor::default()),
-            Model::Group => Self::Group(EditGroup::default()),
+            Model::Actor      => Self::Actor(EditActor::default()),
+            // Model::GroupActor => Self::Actor(EditActor::default()),
+            Model::Group      => Self::Group(EditGroup::default()),
         }
     }
 

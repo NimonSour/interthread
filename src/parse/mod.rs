@@ -11,9 +11,9 @@ use crate::show::get_text;
 use crate::LINE_ENDING;
 
 use proc_macro_error::abort;
-use proc_macro2::Span;
-use syn::{Attribute,Item,ItemImpl};
-
+use proc_macro2::{TokenStream,Span};
+use syn::{Attribute,Ident,Item,ItemImpl};
+use std::collections::BTreeMap;
 
 
 fn set_attrs( attrs: &Vec<Attribute>, item_impl: &ItemImpl ) -> ItemImpl {
@@ -121,16 +121,14 @@ pub fn split_file(
 } 
 
 
+
 pub fn edit_write(  
                    edit_attr: &EditAttribute, 
                    item_impl: &ItemImpl, 
-                   edit_code: proc_macro2::TokenStream ) {
+                   edit_sdpl: BTreeMap<Ident,TokenStream> ) {
 
     let (name, _, _)     =  get_ident_type_generics(&item_impl);
-    let edifile    =  syn::parse2::<syn::File>(edit_code).unwrap();
-    let edifix   =  prettyplease::unparse(&edifile);
-
-
+    let edifix = create_edifix( edit_sdpl);
 
     let (mut prefix, suffix) = split_file( &edit_attr, item_impl );
     let attr_str = edit_attr.get_attr_str();
@@ -161,6 +159,32 @@ pub fn edit_write(
 
 }  
 
+
+fn create_edifix(edit_sdpl: BTreeMap<Ident,TokenStream>) -> String {
+
+    // let slf = quote::format_ident!("self");
+    let mut edifix = String::new();
+
+    let pin = | ident: &Ident | {
+        format!("//------------({ident})")
+    };
+
+    for (field, edit_code ) in edit_sdpl{
+        if let Ok(edifile) =  syn::parse2::<syn::File>(edit_code){
+
+            edifix += LINE_ENDING;
+            edifix += &pin(&field);
+            edifix += LINE_ENDING;
+            edifix += &prettyplease::unparse(&edifile);
+            edifix += LINE_ENDING;
+
+        } else {
+            let msg = "Internal Error 'parse::mod::create_edifix'. Failed to parse TokenStream to syn::File.";
+            abort!(Span::call_site(),msg)
+        }
+    }
+    edifix 
+}
 
 #[cfg(test)]
 mod tests {
