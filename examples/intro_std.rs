@@ -19,9 +19,6 @@ impl MyActor {
     pub fn get_value(&self) -> i8 {
         self.value
     }
-    pub fn send_value(&self,(s,m):(i8,u8)) -> i8 {
-        self.value
-    }
 }
 
 

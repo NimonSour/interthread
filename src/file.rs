@@ -1,4 +1,4 @@
-use crate::model::{Lib,Model,Edit,EditAttribute,AttributeArguments,get_list,attr_to_meta_list, get_actor_names};
+use crate::model::{Lib,Model,Edit,EditAttribute,AttributeArguments,attr_to_meta_list};
 
 use crate::use_macro::UseMacro;
 
@@ -39,75 +39,6 @@ pub fn get_file( path: &std::path::PathBuf ) -> syn::File {
     let msg = format!("Internal Error.'file::get_file'. File {:?} does not exist!", path.file_name().unwrap().to_string_lossy());
     abort!( Span::call_site(),msg );
 }
-
-
-
-
-
-// pub fn to_nested(attr: &Attribute) -> Punctuated::<Meta,Token![,]>{
-//     match attr.parse_args_with(Punctuated::<Meta,Token![,]>::parse_terminated){
-//         Ok(punct) => punct.clone(),
-//         Err(e) =>{
-//             let msg = format!("Internal Error.'file::to_nested'. Could not parse the attr. Error: {}",e.to_string());
-//             abort!(attr,msg );
-//         } 
-//     }
-// }
-
-// these two moved to crate::attribute
-// pub fn get_ident( meta: &syn::Meta ) -> Option<syn::Ident>{
-//     meta.path().get_ident().map(|x| x.clone())
-// }
-
-// pub fn get_idents( nested: &Punctuated::<Meta,Token![,]> ) -> Vec<syn::Ident> {
-//     nested.into_iter().filter_map(|m|{
-//         get_ident(m)
-//     }).collect::<Vec<_>>()
-// }
-// end these two 
-
-// pub fn clean_active_file_from( meta: &mut Meta ){
-
-//     if let Some(mut meta_list) = get_list(&meta,None){
-//         if let Some(new_list)  = filter_file(&meta_list){ 
-//             if new_list.is_empty() {
-
-//                 let path = meta.path();
-//                 *meta = syn::parse_quote!(#path);
-//                 return;
-//             } else {
-//                 meta_list = new_list;
-//             }
-//         }
-//         for m in meta_list.iter_mut() {
-//             clean_active_file_from(m);
-//         }
-
-//         let path = meta.path();
-//         let meta_list: syn::MetaList = syn::parse_quote!{#path(#meta_list)};
-
-//         *meta = syn::Meta::List(meta_list);
-//     }
-// }
-
-
-
-// pub fn attr_file_clean( attr: &syn::Attribute ) -> syn::Attribute  {
-
-//     let mut attr = attr.clone();
-//     if let Some(mut list) = get_list(&attr.meta,None){
-//         for meta in list.iter_mut() {
-//             if meta.path().is_ident("edit"){
-//                 clean_active_file_from(meta);
-
-//             } 
-//         }
-//         let path = attr.path();
-//         let meta_list: syn::MetaList = syn::parse_quote!{#path(#list)};
-//         let _ = std::mem::replace(&mut attr.meta,syn::Meta::List(meta_list));
-//     } 
-//     attr
-// }
 
 pub fn get_some_edit_attribute( attr: &Attribute,
                            item_impl: &syn::ItemImpl,
@@ -245,16 +176,13 @@ pub fn find_group_items( path: &std::path::PathBuf, ident: &Ident ) -> (ItemStru
 
         (Some(strct),Some(imp)) => {return (strct,imp);},
         (Some(_),None) => {
-            // let msg = format!("Type {ident} implement block not foud in {}.",path.to_string_lossy());
-            abort!(proc_macro::Span::call_site(),error_msg("implement block"));
+            abort!(Span::call_site(),error_msg("implement block"));
         },
         (None,Some(_)) => {
-            // let msg = format!("Type {ident} definition block not foud in {}.",path.to_string_lossy());
-            abort!(proc_macro::Span::call_site(),error_msg("definition block"));
+            abort!(Span::call_site(),error_msg("definition block"));
         },
         (None,None) => {
-            // let msg = format!("Type {ident} not foud in {}.",path.to_string_lossy());
-            abort!(proc_macro::Span::call_site(),error_msg(""));
+            abort!(Span::call_site(),error_msg(""));
         },
     }
 
@@ -296,20 +224,6 @@ pub fn expand_macro( mut file: syn::File, mac: &Model  ) -> (syn::File, Lib) {
                             let meta_list = attr_to_meta_list(attr);
                             let mut aa = AttributeArguments::from(meta_list,mac);
                             aa.cross_check(item_impl);
-                            //error
-                            // match &aa  {
-                            //     AttributeArguments::Actor(_) => {},
-                            //     AttributeArguments::Group(gaa) => {
-                            //         // gaa.members.len()
-                            //         let msg = format!("Len - {:?}",gaa.members.len());
-                            //         proc_macro_error::abort!(item_impl, msg);
-                            //     },
-                            // }
-                            // let msg = format!("Code - {}",code.to_string());
-                            // let msg = format!("Len - {:?}",mac);
-                            // proc_macro_error::abort!(item_impl,msg);
-                            //end of error 
-
                             lib = aa.get_lib();
                             // generate code
                             let (code,_) = aa.generate_code(&item_impl);

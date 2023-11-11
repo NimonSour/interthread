@@ -10,7 +10,7 @@ impl MyActor {
 
     pub fn new() -> Self {Self(Arc::new(Mutex::new(0)))}
 
-    pub async fn init_actor_increment(&self,val:usize, sender: Sender<MyActorLive>){
+    pub async fn init_actor_increment(&self,_val:usize, sender: Sender<MyActorLive>){
         
         // clone the value of Actor 
         let value = Arc::clone(&self.0);

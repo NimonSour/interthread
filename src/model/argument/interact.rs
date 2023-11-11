@@ -1,16 +1,13 @@
-use crate::error;
-
+use crate::error::{self, OriginVars};
 
 use proc_macro2::TokenStream;
+use crate::model::{OneshotChannel,to_string_wide};
 use syn::{Type,Ident,Signature,FnArg,Token, punctuated::Punctuated};
 use quote::{quote,format_ident};
 
 use proc_macro_error::abort;
-use proc_macro::Span;
+use proc_macro2::Span;
 
-
-pub static INTER_SEND: &'static str = "inter_send";
-pub static INTER_RECV: &'static str = "inter_recv";
 
 
 #[derive(Debug,Clone)]
@@ -21,96 +18,102 @@ pub enum InterOneshot {
 }
 
 impl InterOneshot {
-
-    pub fn get_name(&self) -> Ident {
-
+    pub fn get_type(&self) -> &Type {
         match &self {
-            Self::Recv(_) => format_ident!("{INTER_RECV}"), 
-            Self::Send(_) => format_ident!("{INTER_SEND}"), 
+            Self::Recv(ty) => ty, 
+            Self::Send(ty) => ty, 
         }
+    }
+
+    pub fn get_invers_name(&self) -> Ident{
+        match &self {
+            Self::Recv(_) => format_ident!("{}",crate::INTER_SEND),
+            Self::Send(_) => format_ident!("{}",crate::INTER_RECV),  
+        }
+    }
+
+    pub fn get_return_type(&self, one: &OneshotChannel) -> syn::ReturnType {
+
+        let token_type = match &self {
+            Self::Recv(_) => one.send_type(self.get_type()),
+            Self::Send(_) => one.recv_type(self.get_type()),  
+        };
+        syn::parse_quote!{ -> #token_type}
     }   
 }
 
 
 #[derive(Debug,Clone)]
 pub struct InterGetter { 
-    name:     Ident, 
-    ty:        Type,
+    name:        Ident, 
+    method_name: Ident,
+    ty:           Type,
 }
 
-
-impl InterGetter {
-
-    pub fn get_name(&self) -> Ident {
-        self.name.clone()
-    }
-}
 
 #[derive(Debug,Clone)]
 
-pub enum InterVariable {
+pub enum InterVar {
 
     Oneshot(InterOneshot),
     Getter(InterGetter),
 }
 
 
-impl InterVariable {
-
-    pub fn get_name(&self) -> Ident {
-        match &self {
-            Self::Oneshot(var) => var.get_name(),
-            Self::Getter(var) => var.get_name(),
-        }
-    }
 
 
+pub fn some_inter_var( org_err: &error::OriginVars, ident_ty:Vec<(&Ident, &Type)>, ret: bool ) -> Option<Vec<InterVar>> {
 
-}
+    let mut inter_vars = Vec::new();
+    for (ident,ty) in ident_ty {
 
-pub fn some_inter_var( ident: &Ident, ty: &Type, ret: bool ) -> Result<Option<InterVariable>,String> {
-
-    let msg_inter_var = format!("Expected `inter_variable`, found {}.",ident);
-
-    let ident_str = ident.to_string();
-    let ident_split_coll = ident_str.split('_').collect::<Vec<_>>();
-
-    if ident_split_coll.len() < 2 {
-        let first = ident_split_coll[0];
-        if first.eq("inter"){
-            let second = ident_split_coll[1..].join("_");
+        let ident_str = ident.to_string();
+    
+        if let Some(second) = ident_str.strip_prefix("inter_"){
+    
             if second.eq("send"){
+                if ret { 
+                    let msg =org_err.origin(error::NOT_ACCESSIBLE_CHANNEL_END);
+                    abort!(Span::call_site(),msg;help=error::INTERACT_VARS_HELP);
+                }
                 // check if is sender and extract the Type it sends 
                 match oneshot_get_type( ty, "Sender"){
-                    Ok(new_ty) => { Ok(Some(InterVariable::Oneshot(InterOneshot::Send(new_ty.clone())))) },
-                    Err(e) => {Err(e)},
+                    Ok(new_ty) => { inter_vars.push(InterVar::Oneshot(InterOneshot::Send(new_ty.clone()))) },
+                    Err(e)   => { abort!(Span::call_site(),org_err.origin(e);help=error::INTERACT_VARS_HELP); },
                 }
             }
-            
+    
             else if second.eq("recv"){
-
-                if ret { return Err("`inter_recv` not available inside methods returning a Type.".to_string()); }
-
-                match oneshot_get_type( ty, "Receiver"){
-                    Ok(new_ty) => { Ok(Some(InterVariable::Oneshot(InterOneshot::Recv(new_ty.clone())))) },
-                    Err(e) => {Err(e)},
+    
+                if ret { 
+                    let msg =org_err.origin(error::NOT_ACCESSIBLE_CHANNEL_END);
+                    abort!(Span::call_site(),msg;help=error::INTERACT_VARS_HELP);
                 }
+    
+                match oneshot_get_type( ty, "Receiver"){
+                    Ok(new_ty) => { inter_vars.push(InterVar::Oneshot(InterOneshot::Recv(new_ty.clone()))) },
+                    Err(e)   => { abort!(Span::call_site(),org_err.origin(e);help=error::INTERACT_VARS_HELP); },
+                }
+            } 
+            else { 
+                let method_name = format_ident!("inter_get_{second}");
+                inter_vars.push(InterVar::Getter(InterGetter{ name:ident.clone(), ty:ty.clone(), method_name })) 
+            }
+        } else { 
+            let msg = org_err.origin("Unexpected usage of `inter variables` mixed identifiers.");
+            abort!(Span::call_site(), msg; note=error::INTER_VARIABLE_PATTERN_NOTE);
+        }
+    }
+    Some(inter_vars)
 
-            } else {
-                Ok(Some(InterVariable::Getter(InterGetter{ name:ident.clone(), ty:ty.clone()})))
-             }
-
-        } else { Ok(None) }
-
-    } else { Ok(None) }
-
+    
 }
 
 
 pub fn oneshot_get_type( ty: &Type, target: &str ) -> Result<Type,String> {
 
-    let msg_path = format!("Expected a path type, ::{}<Type> .",&target);
-    let msg_args = format!("Unexpected arguments for {}<?>.",target);
+    let msg_path = format!("Expected a path type, .. ::{}<Type> .", target);
+    let msg_args = format!("Unexpected type argument for {}<?>.",target);
 
     if let syn::Type::Path(type_path) = &ty {
         if let Some(seg) = type_path.path.segments.last(){
@@ -137,159 +140,203 @@ pub fn oneshot_get_type( ty: &Type, target: &str ) -> Result<Type,String> {
 
 
 
+#[derive(Clone)]
+pub struct InterVars{
 
-// impl InterGetter {
-
-
-
-//     pub fn getter_decl(&self) -> TokenStream {
-        
-//         let Self{ name, ty };
-//         let inter_get_name = format_ident!("inter_get_{name}");
-
-//         quote!{ 
-//             let  #name = self . inter_get_name ();
-//         }
-//     }
-
-//     pub fn field_decl(&self) -> TokenStream {
-
-//         let Self{ name, ty };
-
-//         quote!{ name : ty }
-        
-//     }
-// }
-
-
-
-
-#[derive(Clone,Debug)]
-pub struct InteractVariables {
-
-    pub channel: Option<InterOneshot>,
-    pub getters:     Vec<InterGetter>, 
-    pub new_sig:            Signature,
-    pub new_args:          Vec<FnArg>,
-    pub ret:                     bool,
+    pub channel:  Option<InterOneshot>,
+    pub getters:      Vec<InterGetter>, 
+    pub new_sig:             Signature,
+    pub new_args:           Vec<FnArg>,
+    pub one:    Option<OneshotChannel>,
+    pub org_err:     error::OriginVars,
 }
 
-impl InteractVariables {
-
-    pub fn from( new_sig: Signature, new_args: Vec<FnArg>, ret: bool ) -> Self {
+impl InterVars {
+    pub fn some_ret_name(&self) -> Option<Ident> {
+        self.channel.as_ref().map(|x| x.get_invers_name())
+    }
+    pub fn from( org_err: error::OriginVars, new_sig: Signature, 
+                new_args: Vec<FnArg>, one: Option<OneshotChannel> ) -> Self {
 
         Self{
             channel: None,
             getters: Vec::new(),
             new_sig,
             new_args,
-            ret,
+            one,
+            org_err,
         }
     }
 
-    pub fn insert(&mut self,  vars: Vec<InterVariable>){
-
+    pub fn insert(&mut self,  vars: Vec<InterVar>){
         for var in vars {
+            match var {
+                InterVar::Oneshot(ch) => {
+                    if self.channel.is_none() { self.channel = Some(ch); }
 
-            match var{
-                InterVariable::Oneshot(v) => {
-                    if self.channel.is_none() {
-                        self.channel = Some(v);
-                    } else {
-                        abort!(Span::call_site(),"Multiple use of `oneshot` channel, not allowed.");
+                    else {
+                        let msg = self.org_err.origin(error::CONCURRENT_INTER_SEND_RECV);
+                        abort!(Span::call_site(),msg;help=error::INTERACT_VARS_HELP);
                     }
-                }
-                InterVariable::Getter(v) => self.getters.push(v) ,
+                },
+                InterVar::Getter(gt) => { self.getters.push(gt); },
             }
         }
     }
+
+    pub fn check (&self) {
+
+        if let Some(var) = check_send_recv( &self.new_args, None){
+        let msg = self.org_err.origin(format!("Unexpected pattern for `inter variable` - {}.",var));
+            abort!(Span::call_site(),msg;note=error::INTER_VARIABLE_PATTERN_NOTE);
+        }
+    }
+
+
+    pub fn get_getters_decl(&mut self) -> TokenStream {
+
+        let mut loc = Vec::new();
+        for get in &self.getters {
+
+            let InterGetter{ name, method_name,..} = get;
+            loc.push(quote!{
+                let #name = self. #method_name ();
+            });
+        }
+        
+        if let Some(ch_one) = &self.one {
+            if let Some(channel) = &self.channel {
+                let declare = ch_one.decl(Some(&channel.get_type()));
+                loc.push( quote!{ #declare });
+                self.new_sig.output =  channel.get_return_type(ch_one);
+            }
+        }
+        quote!{#(#loc)*}
+    }
 }
 
-pub fn get_variables( actor_type: &Type, sig: &Signature, args: &Vec<FnArg> ,ret: bool) 
-    -> Option<InteractVariables> {
-    
+pub fn get_pat_idents( org_err:&OriginVars, pat_tuple: &syn::PatTuple ) -> Option<Vec<syn::Ident>> {
+
+    if to_string_wide(pat_tuple).contains("inter_"){
+        let length = pat_tuple.elems.len();
+        let pat_idents = pat_tuple.elems.iter().filter_map(|p|  
+            
+            if let syn::Pat::Ident(pat_ident) = p {
+                Some(pat_ident.ident.clone())
+            } else {None} ).collect::<Vec<_>>();
+
+        if length == pat_idents.len(){
+            return Some(pat_idents);
+        } else {
+            let msg = org_err.origin("Unexpected usage of `inter variables` nested patterns.");
+            abort!(Span::call_site(), msg; note=error::INTER_VARIABLE_PATTERN_NOTE);
+        }
+    }
+    None
+}
+
+
+pub fn get_variables( org_err: &error::OriginVars, sig: & Signature, 
+                         args: & Vec<FnArg>, one: Option<&OneshotChannel> ) 
+    -> Option<InterVars> {
+    let ret = one.is_none();
     let mut new_args = Vec::new() ;
     let mut inter_vars = Vec::new() ;
 
     for arg in args {
         if let FnArg::Typed(pat_ty) = arg { 
-            // check if there is no conflictiong
 
-            if let syn::Pat::Ident(pat_ident) = &*pat_ty.pat{
+            if let syn::Pat::Ident(pat_ident) = &*pat_ty.pat {
+                let ident = &pat_ident.ident;
+                if ident.to_string().contains("inter_") {
+                    let ty = &*pat_ty.ty;
+                    if let Some(inter_var) = 
+                        some_inter_var( &org_err,vec![(ident,ty)],ret){
+                        inter_vars.extend(inter_var.into_iter());
+                        continue;
+                    } 
+                }
+            } 
 
-                match some_inter_var(&pat_ident.ident,&*pat_ty.ty,ret){
+            if let syn::Pat::Tuple(pat_tuple) = &*pat_ty.pat { 
 
-                    Ok(inter_var) => {
-                        if let Some(inter_var) = inter_var {
+                if let Some(idents) = get_pat_idents( org_err, &pat_tuple){
 
-                            inter_vars.push(inter_var);
+                    if let syn::Type::Tuple(ty_tuple) = &*pat_ty.ty {
+                        let tys = ty_tuple.elems.iter();
 
-                        } else { new_args.push(arg.clone())} 
-    
-                    },
-                    Err(e) => {
-                        let msg = format!("{}.{}", error::origin(actor_type, sig),e);
-                        abort!(Span::call_site(),msg);
+                        if idents.len() == tys.len() {
+                            let ident_ty = idents.iter().zip(tys).collect::<Vec<_>>();
+                        
+                            if let Some(inter_var) = some_inter_var( &org_err,ident_ty,ret){
+                                inter_vars.extend(inter_var.into_iter());
+                                continue;
+                            }
+                        }
                     }
                 }
-
-            } 
-        }  
+            }
+        } 
+        new_args.push(arg.clone()); 
     }
-    
-    let vars =
-    inter_vars.iter().map(|x| x.get_name()).collect::<Vec<_>>();
 
-    // check for colision
-    check_send_recv(actor_type, sig,&new_args,Some(vars));
-
-    // change the signature 
+    if inter_vars.is_empty(){
+        return None;
+    }
+    // change signature input
     let mut new_sig = sig.clone();
-    let inputs = new_args.iter().cloned().collect::<Punctuated::<FnArg,Token![,]>>();
-    new_sig.inputs = inputs;
+    new_sig.inputs = new_args.iter().cloned().collect::<Punctuated::<FnArg,Token![,]>>();
 
-    let mut vars = InteractVariables::from(new_sig,new_args,ret);
+    let mut vars = InterVars::from(org_err.clone(),new_sig,new_args,one.cloned());
     vars.insert(inter_vars);
+    vars.check();
 
     Some(vars)
 }
 
 
+pub fn check_send_recv( args: &Vec<FnArg>, vars: Option<Vec<Ident>> ) -> Option<String> {
 
-pub fn check_send_recv( actor_type: &Type, sig: &Signature, args: &Vec<FnArg>, vars: Option<Vec<Ident>> ){
-
-    let mut words = vec![INTER_SEND.to_string(),INTER_RECV.to_string()];
-    if let Some(vars) = vars {
-        words.extend(vars.iter().map(|x|x.to_string()));
+    let mut words = vec![crate::INTER_SEND.to_string(), crate::INTER_RECV.to_string()];
+    
+    if let Some(vars) = &vars {
+        words = vars.iter().map(|x| x.to_string()).collect::<Vec<_>>();
     } 
 
     for arg in args  { 
-
         if let FnArg::Typed(arg) = arg { 
 
-            let pat_str = pat_to_str(&*arg.pat);
-
+            let pat_str = to_string_wide(&*arg);
             for word in words.iter(){
 
                 if pat_str.contains(&format!(" {word} ")){
-                    // let actor     = quote!(#actor_type).to_string();
-                    // let sig       = quote!(#sig).to_string();
-                    let msg       = format!("{}. Conflicting name case `{}`!",error::origin(actor_type,sig),word);
-                    abort!(Span::call_site(),msg);
+                    return Some(word.to_string());
+                    /*
+                    // the error can be more precises based on 
+                    if let Some(v) = &vars {
+                        if v.is_empty(){
+                            // msg for Some([]) pattern declaration not allowed
+                            let msg = "Some([])";
+                            abort!(Span::call_site(),msg;note= error::INTER_SEND_RECV_RESTRICT_NOTE; help=error::INTERACT_VARS_HELP);
+                        
+                        } else {
+                            // msg for Some([one]) only one end of the channel can be used and pattern delcaration not allowed
+                            let msg = "Some([one])";
+                            abort!(Span::call_site(),msg;note= error::INTER_SEND_RECV_RESTRICT_NOTE; help=error::INTERACT_VARS_HELP);
+                        
+                        }
+
+                    } else {
+                        // msg for None check there are not inter send recv
+                        let msg = org_err.origin(format!("Conflicting name case. Please use a different name for the argument `{word}`."));
+                        abort!(Span::call_site(),msg;note= error::INTER_SEND_RECV_RESTRICT_NOTE; help=error::INTERACT_VARS_HELP);
+                    }
+                     */
                 }
             }
         }
     }
-}
-
-pub fn pat_to_str( pat: &syn::Pat ) -> String {
-
-    let mut s = quote!{ #pat }.to_string();
-    let char_set = vec![ '(', ')', '{', '}', '[', ']', ':', '<', '>', ',' ];
-    for c in char_set {
-        s = s.replace(c,&format!(" {c} "))
-    }
-    s
+    None
 }
 
 

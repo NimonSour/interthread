@@ -15,36 +15,6 @@ use proc_macro_error::abort;
 use quote::quote;
 
 
-//-----------------------  ACTOR CHANNEL 
-
-// #[derive(Debug, Eq, PartialEq, Clone)]
-// pub enum AAChannel {
-
-//     Unbounded,
-//     Buffer(syn::LitInt),
-// }
-
-// impl Default for AAChannel {
-//     fn default() -> Self {
-//         AAChannel::Unbounded
-//     }
-// }
-
-// //-----------------------  ACTOR EDIT 
-
-
-
-
-/*
-needs a check for methods 
-if it finds any methods with a name 
-`file` return an error saying that  
-active 'file' trigger argument
-should be renamed to 'inter_file'.
-*/
-
-
-
 pub enum AttributeArguments {
     Actor(ActorAttributeArguments),
     Group(GroupAttributeArguments),
@@ -93,11 +63,7 @@ impl AttributeArguments {
     }
 
     pub fn generate_code( self, item_impl: &ItemImpl )  -> (TokenStream,TokenStream){
-
-        // let model_sdpl = generate_model(*(self.clone()), item_impl, None );
-        // let aa = *self.clone();
         let model_sdpl = generate_model(self, item_impl, None );
-
         let (mut code,edit) = model_sdpl.get_code_edit();
 
         code = quote!{
@@ -108,9 +74,6 @@ impl AttributeArguments {
         (code,edit)
     }
 }
-
-
-//  aux functions for attributes 
 
 pub fn to_usize(value: &syn::LitInt) -> usize {
         
@@ -123,9 +86,13 @@ pub fn get_list(meta: &syn::Meta, help: Option<&str>) -> Option<Punctuated::<syn
     match meta {
         syn::Meta::Path(_) => { None },
         syn::Meta::List(meta_list) => { 
-            let list = 
-            meta_list.parse_args_with(Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated).unwrap();
-            Some(list) 
+            if let Ok(list) = 
+            meta_list.parse_args_with(Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated){
+                Some(list) 
+            } else { 
+                let msg = "Internal Error.'attribute::mod::get_list'. Could not parse punctuated!";
+                abort!(meta,msg);
+            }
         },
         syn::Meta::NameValue(_) => { 
             if let Some(help) = help {
@@ -134,16 +101,6 @@ pub fn get_list(meta: &syn::Meta, help: Option<&str>) -> Option<Punctuated::<syn
         },
     }
 }
-
-// pub fn get_lit_usize( meta:&Meta) -> usize {
-//     let ident = get_ident(&meta);
-//     match get_lit(meta) {
-//         syn::Lit::Int(val) => { 
-//             to_usize(&val)
-//         },
-//         v => abort!(v, error::error_name_type( &ident, "int (usize)"),; help=error::AVAIL_ACTOR ),
-//     }
-// }
 
 pub fn get_lit_str( meta: &syn::Meta ,arg: &str ) -> String {
     match get_lit(meta) {
@@ -175,7 +132,6 @@ pub fn get_lit( meta: &syn::Meta ) -> syn::Lit {
         m => abort!(m, msg),
     }
 }
-// Attribute to meta list
 
 pub fn attr_to_meta_list( attr: &Attribute) -> Punctuated::<Meta,Token![,]> {
 
@@ -188,7 +144,6 @@ pub fn attr_to_meta_list( attr: &Attribute) -> Punctuated::<Meta,Token![,]> {
             }
         }
     } 
-    // default empty
     else { Punctuated::new() }
 }
 
@@ -203,25 +158,6 @@ pub fn get_idents( nested: &Punctuated::<Meta,Token![,]> ) -> Vec<syn::Ident> {
         get_ident(m)
     }).collect::<Vec<_>>()
 }
-
-// pub fn check_ident_sets( nested: &Punctuated::<Meta,Token![,]> ){
-
-//     if nested.len() > 1 { 
-
-//         let mut meta_list = nested.iter().cloned().collect::<Vec<_>>();
-        
-//         for _ in 0..(meta_list.len() -1) {
-
-//             if let Some(meta) = meta_list.pop(){
-//                 let ident = get_ident(&meta);
-
-//                 if meta_list.iter().any(|x| ident.eq(&get_ident(x))){
-//                     abort!(meta, error::double_decl( &ident.to_string()));
-//                 }
-//             }
-//         }
-//     }
-// }
 
 pub fn check_path_set( nested: &Punctuated::<Meta,Token![,]> ){
 
@@ -242,9 +178,7 @@ pub fn check_path_set( nested: &Punctuated::<Meta,Token![,]> ){
     }
 }
 
-
 pub fn get_ident_group( meta: &Meta,arg: &str) -> syn::Ident {
-    // expected path `field_name::edit`
     let edit_ident = quote::format_ident!("{arg}");
     let self_ident = quote::format_ident!("Self");
     let path = meta.path();
@@ -257,56 +191,10 @@ pub fn get_ident_group( meta: &Meta,arg: &str) -> syn::Ident {
                         let msg = format!("Expected `self::{arg}`.");
                         abort!(meta.path(),msg);
                     } else { return ident;}
-
                 }
             }
         }
     } 
-    
     abort!(path, error::UNEXPECTED_EDIT_GROUP_PATH; note=error::AVAIL_EDIT_GROUP );
 }
-
-
-// pub fn group_edit_split( meta: &syn::Meta ) -> Vec<(syn::Ident,syn::Meta)> {
-
-//     let mut coll = Vec::new();
-//     if let Some(list) = get_list(meta,None){
-
-//         let mut new_list = list.iter().cloned().collect::<Vec<_>>();
-
-//         for m in list.iter() {
-
-//             let path = m.path();
-//             if path.segments.len() == 1 { 
-//                 // 1) check if is file 
-//                 //         true) check if file(Self::GroupMember)
-//                 continue; 
-//             }
-
-//             else if  path.segments.len() == 2 { 
-//                 if let Some(ident) = get_some_ident_of_group_edit_path(path){
-//                     // is this one 
-//                     if let Some(pos) = new_list.iter().position(|x| x.eq(m)){
-//                         coll.push((ident,new_list.remove(pos)));
-//                     } 
-//                 }// here same error 
-//             }
-//             else {
-//                 let msg = "Group `edit` argument can take 'script' 'live' or Self::ActorFieldName";
-//                 abort!(m,msg)
-//             } 
-//         }
-//         if !new_list.is_empty(){
-
-//             let slf  =  quote::format_ident!("self");
-//             let list = new_list.into_iter().collect::<Punctuated<syn::Meta,syn::Token![,]>>();
-//             let meta_list: syn::MetaList = syn::parse_quote!{#slf(#list)};
-//             coll.push((slf,syn::Meta::List(meta_list)));
-//         }
-//     } 
-//     coll
-// }
-
-
-
 

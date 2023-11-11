@@ -6,7 +6,7 @@ pub use icb::ItemCodeBlock;
 pub use atp::ActiveTextParser;
 
 use crate::model::name::get_ident_type_generics;
-use crate::model::argument::{Model,EditAttribute};
+use crate::model::argument::EditAttribute;
 use crate::show::get_text;
 use crate::LINE_ENDING;
 
@@ -162,25 +162,23 @@ pub fn edit_write(
 
 fn create_edifix(edit_sdpl: BTreeMap<Ident,TokenStream>) -> String {
 
-    // let slf = quote::format_ident!("self");
     let mut edifix = String::new();
-
+    let len = edit_sdpl.len();
     let pin = | ident: &Ident | {
-        format!("//------------({ident})")
+        if len == 1 { "".to_string() } 
+        else { format!("{LINE_ENDING}//---({ident})") }
     };
 
     for (field, edit_code ) in edit_sdpl{
-        if let Ok(edifile) =  syn::parse2::<syn::File>(edit_code){
-
-            edifix += LINE_ENDING;
-            edifix += &pin(&field);
-            edifix += LINE_ENDING;
-            edifix += &prettyplease::unparse(&edifile);
-            edifix += LINE_ENDING;
-
-        } else {
-            let msg = "Internal Error 'parse::mod::create_edifix'. Failed to parse TokenStream to syn::File.";
-            abort!(Span::call_site(),msg)
+        if !edit_code.is_empty(){
+            if let Ok(edifile) =  syn::parse2::<syn::File>(edit_code){
+                edifix += &pin(&field);
+                edifix += LINE_ENDING;
+                edifix += &prettyplease::unparse(&edifile);
+            } else {
+                let msg = "Internal Error 'parse::mod::create_edifix'. Failed to parse TokenStream to syn::File.";
+                abort!(Span::call_site(),msg)
+            }
         }
     }
     edifix 

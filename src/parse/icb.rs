@@ -54,45 +54,10 @@ impl ItemCodeBlock {
         self.code_block = String::new();
 
         if let Some(_) = item_impl {
-
-            // match itm {
-
-            //     Item::Impl(_) => {
-                    self.token = "impl";
-                    self.open  = '{';
-                    self.close = '}';
-            //     },
-
-            //     Item::Fn(v) => {
-            //         self.open  = '{';
-            //         self.close = '}';
-            //         match v.vis {
-            //             Visibility::Inherited => {
-            //                 if let Some(_) = v.sig.asyncness {
-            //                     self.token = "async";
-            //                 }
-            //                 self.token = "fn";
-            //             },
-            //             _ => { self.token = "pub"; },
-            //         }
-            //     },
-
-            //     Item::Trait(v) => {
-            //         match v.vis {
-            //             Visibility::Inherited => {
-            //                 self.token = "trait";
-            //             },
-            //             _ => { self.token = "pub"; },
-            //         }
-            //     },
-            //     _ => {
-            //         let msg = "Internal Error. `ItemCodeBlock::reset`. Expected Fn, Imbl block or Trait".to_string();
-            //         return Err(msg);
-            //     },
-            // }
-
+            self.token = "impl";
+            self.open  = '{';
+            self.close = '}';
         } else {
-
             self.token = "#";
             self.open  = '[';
             self.close = ']';
@@ -116,15 +81,10 @@ impl ItemCodeBlock {
     
     fn check_name(&self, item_impl: &ItemImpl) -> bool {
         let (name,_,_) = get_ident_type_generics(item_impl);
-        // match item {
-        //     Item::Fn(_)      => { get_name_and_type(&Model::Group, item)},
-        //                   _  => { get_name_and_type(&Model::Actor, item)},
-        // };
         self.code_block.contains(&name.to_string()) 
     }
 
     fn first_index(&self, done_attrs: &mut Vec<(usize,Attribute,String)>) -> usize {
-        
         if done_attrs.len() > 1 {
             done_attrs.sort_by_key(|item| item.0);
         }

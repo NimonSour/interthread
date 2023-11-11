@@ -1,34 +1,15 @@
 
-use std::collections::{BTreeMap,HashMap};
+use std::collections::BTreeMap;
 
-use syn::{Generics,WherePredicate,GenericParam,Type,TypePath,PathArguments,PathSegment,Ident,Signature,Token,TypeParamBound,punctuated::Punctuated};
+use syn::{
+    Generics,WherePredicate,GenericParam,
+    Type,ItemImpl,TypePath,Ident,Signature,
+    Token,TypeParamBound,punctuated::Punctuated };
 use proc_macro::Span;
 use proc_macro_error::abort;
 use quote::quote;
 
-
-/*
-
-Find the generics of field types 
-
-the model generics contains:
-1) Impl generics
-2) Impl method sig generics
-3) Struct def generics.
-
-we need to find the difference 
-between original generics and the 
-additional bounds.
-
-
-
-*/
-
-
-pub fn add_constraints( this: &mut Generics, other: &Generics ){
-
-}
-
+use crate::model::{method,gen_temp_inter,gen_add_field,AttributeArguments,ImplVars};
 
 pub fn get_type_idents( g: &Generics ) -> Vec<Ident> {
     g.params.iter().filter_map(|x| {
@@ -39,70 +20,19 @@ pub fn get_type_idents( g: &Generics ) -> Vec<Ident> {
             _ => None,
         }
     }).collect::<Vec<_>>()
-} 
-
-// pub fn get_diff_idents( old: &Generics, new: &Generics ) -> Vec<Ident> { 
-//     let new_idents = get_type_idents(&new);
-//     let old_idents = get_type_idents(&old);
-// }
-
+}
 
 pub fn contains<V>(a: V, b: V, contains: bool) -> Vec<V::Item>
 where
     V: IntoIterator + Clone,
     V::Item: Eq + Clone,
 {
-    let b_clone = b.clone().into_iter().collect::<Vec<_>>();
+    let a_clone = a.clone().into_iter().collect::<Vec<_>>();
    
-    a.clone()
+    b.clone()
     .into_iter()
-    .filter(|aa| contains && b_clone.contains(aa))
+    .filter(|bb| if contains { a_clone.contains(bb)} else { !a_clone.contains(bb) })
     .collect()
-}
-
-
-pub fn exam_rename( old: &Generics, new: &Generics ){
-    let new_idents = get_type_idents(&new);
-    let old_idents = get_type_idents(&old);
-
-    let idents = contains(&old_idents, &new_idents,true);
-    let mut my_gen = new.clone();
-
-    // create an impl block 
-    let mut item_impl = {
-        if let Ok(ty) = syn::parse_str::<syn::ItemImpl>("impl InterFoo {}") {
-            ty
-        } else {
-            
-            let msg = format!("Internal Error. 'method::replace'. Could not parse &str to ItemImpl!");
-            abort!(Span::call_site(), msg);
-        }
-    };
-
-    item_impl.generics = new.clone();
-    
-    for i in &idents{
-
-        let new_i = quote::format_ident!("{}my",i.to_string());
-
-        if let Some(new_wc) = new.where_clause.clone(){
-            let wc = crate::model::method::replace(&new_wc,&i,&new_i);
-            my_gen.where_clause = Some(wc);
-        }
-
-        item_impl = crate::model::method::replace(&item_impl,i,&new_i);
-
-    }
-
-
-    let my_where = item_impl.generics.where_clause.clone();
-    let init_where = new.where_clause.clone();
-    let my = quote!{ #my_where}.to_string();
-    let nw = quote!{ #init_where}.to_string();
-    let msg = format!("Initial - {} where {} , renamed - {} where {} ", quote!{#new}.to_string(),nw, quote!{#my_gen}.to_string(),my);
-   
-   
-    proc_macro_error::abort!( proc_macro::Span::call_site(),msg);
 }
 
 
@@ -110,17 +40,7 @@ pub fn exam_rename( old: &Generics, new: &Generics ){
 fn get_where_pred_bounds( pred: WherePredicate ) -> Option<(Type, Punctuated<TypeParamBound,Token![+]>)>{
     match pred {
         syn::WherePredicate::Type(pred_type) => {
-
             return Some( (pred_type.bounded_ty.clone(), pred_type.bounds.clone()));
-            // match &pred_type.bounded_ty {
-            //     syn::Type::Path(type_path) => {
-            //         if let Some(ident) = type_path.path.get_ident(){
-            //             return Some((ident.clone(),pred_type.bounds.clone()));
-            //         }
-            //         return None;  
-            //     },
-            //     _ => return None,   
-            // };
         },
         _ => return None,
     }
@@ -159,151 +79,105 @@ fn to_type( ident: Ident) -> Type {
     Type::Path(TypePath { qself: None, path: ident.into() })
 }
 
-
-/*
-    pub struct Generics {
-        pub lt_token: Option<Token![<]>,
-        pub params: Punctuated<GenericParam, Token![,]>,
-        pub gt_token: Option<Token![>]>,
-        pub where_clause: Option<WhereClause>,
-        }
-
-    pub enum GenericParam {
-        /// A lifetime parameter: `'a: 'b + 'c + 'd`.
-        Lifetime(LifetimeParam),
-
-        /// A generic type parameter: `T: Into<String>`.
-        Type(TypeParam),
-
-        /// A const generic parameter: `const LENGTH: usize`.
-        Const(ConstParam),
-        }
-
-    pub struct TypeParam {
-        pub attrs: Vec<Attribute>,
-        pub ident: Ident,
-        pub colon_token: Option<Token![:]>,
-        pub bounds: Punctuated<TypeParamBound, Token![+]>,
-        pub eq_token: Option<Token![=]>,
-        pub default: Option<Type>,
-        }
-
-
-*/
-fn take_gen_param_ident_bounds( gen: &mut Generics ) -> Option<Vec<(Type,Punctuated<TypeParamBound, Token![+]>)>>{//-> Option<Vec<(Ident,Punctuated<TypeParamBound, Token![+]>)>>{
+fn take_gen_param_ident_bounds( gen: &mut Generics ) -> Option<Vec<(Type,Punctuated<TypeParamBound, Token![+]>)>>{
     
     let mut coll = Vec::new();
-
-    if gen.params.is_empty(){ 
+    
+    if gen.params.is_empty() && gen.where_clause.is_none(){ 
         return None; 
     } else {
 
-        // let gen_params = gen.params.clone();
-        // gen.params.clear();
+        let gen_params = gen.params.clone();
+        gen.params.clear();
 
-        for gen_param in gen.params.iter_mut() {
+        for gen_param in gen_params {
 
             match &gen_param {
                 syn::GenericParam::Type(type_param) => {
-                    let bounds= type_param.bounds.clone();
-                    type_param.bounds.clear();
+                    coll.push((to_type(type_param.ident.clone()),type_param.bounds.clone()));
 
-                    // coll.push(to_type((type_param.ident.clone()),type_param.bounds.clone()));
-                    coll.push((to_type(type_param.ident.clone()),bounds));
                 },
-                _ => (),//{ gen.params.push(gen_param) },
+                _ => { gen.params.push(gen_param) },
             }
         }
 
-        if coll.is_empty() {
+        if  let Some(predicates) = gen.where_clause.as_ref().map(|w| w.predicates.clone()){
+            gen.where_clause.as_mut().map(|w| w.predicates.clear());
 
-            return None;
+            for pred in predicates { 
+                if let Some((ident, bounds)) = get_where_pred_bounds(pred.clone()){
 
-        } else { 
-
-            if  let Some(predicates) = gen.where_clause.as_ref().map(|w| w.predicates.clone()){
-                gen.where_clause.as_mut().map(|w| w.predicates.clear());
-
-                for pred in predicates { 
-                    if let Some((ty_path, bounds)) = &get_where_pred_bounds(pred.clone()){
-
-                        if let Some(pos) = coll.iter().position(|x| x.0.eq(ty_path)){
-                            include_set( &mut coll[pos].1, bounds);
-                            continue;
-                        }
-                        // if let Some(t) = coll.get_mut(&ty_path){
-                        //     include_set( t, &bounds);
-                        //     continue;
-                        // }
-                    } 
-                    gen.where_clause.as_mut().map(|w| w.predicates.push(pred));
-                }
+                    if let Some(pos) = coll.iter().position(|x| x.0.eq(&ident)){
+                        include_set( &mut coll[pos].1, &bounds);
+                        continue;
+                    } else {
+                        coll.push((ident,bounds));
+                    }
+                    // the types which are declared at a block level
+                    // are pusheed back to WhereClause
+                    // ? are there other cases ?
+                } 
             }
-            return Some(coll);
         }
+        return Some(coll);
     }
 }
 
+pub fn take_generics_from_sig( sigs: Vec<&mut Signature>) -> Vec<(Type,Punctuated<TypeParamBound, Token![+]>)> {
 
-pub fn take_generics_from_sig( sigs: Vec<&mut Signature>) -> HashMap<Type,Punctuated<TypeParamBound, Token![+]>>{//Vec<(Ident,Punctuated<TypeParamBound, Token![+]>)> {
-
-    let mut coll : Vec<(Type,Punctuated<_,_>)> = HashMap::new();
-
+    let mut coll : Vec<(Type,Punctuated<_,_>)> = Vec::new();
     for sig in sigs {
-
-        if let Some( params) = 
-            take_gen_param_ident_bounds(&mut sig.generics){           
+        if let Some( params) = take_gen_param_ident_bounds(&mut sig.generics){           
             push_include( &mut coll,params );
         }
     }
     return coll
 }
 
+fn push_include( this: &mut Vec<(Type,Punctuated<TypeParamBound, Token![+]>)> , 
+                other: Vec<(Type,Punctuated<TypeParamBound, Token![+]>)> ) {
 
-fn push_include( this: &mut HashMap<Type,Punctuated<TypeParamBound, Token![+]>>,// &mut Vec<(Ident,Punctuated<TypeParamBound, Token![+]>)> , 
-                other: HashMap<Type,Punctuated<TypeParamBound, Token![+]>>){//Vec<(Ident,Punctuated<TypeParamBound, Token![+]>)> ) {
-
-    for (ident,bounds) in other {
-
-        if let Some(mut t) = this.get_mut(&ident){
-            include_set( &mut t, &bounds);
+    for (ty,bounds) in other {
+        if let Some(pos) = this.iter().position(|x| x.0.eq(&ty)){
+            include_set( &mut this[pos].1, &bounds);
         } else {
-            this.insert(ident,bounds);
+            this.push((ty,bounds))
         }
     }
 }
 
-
-// pub fn get_parts(gen: &mut Generics, methods: Vec<&mut Signature>) {//-> (Option<ImplGenerics<'a>>,Option<TypeGenerics<'a>>,Option<WhereClause>) {
 pub fn include_bounds(gen: &mut Generics, 
-             mut other_bounds: HashMap<Type,Punctuated<TypeParamBound, Token![+]>>) {//-> (Option<ImplGenerics<'a>>,Option<TypeGenerics<'a>>,Option<WhereClause>) {
-     
-    // let mut other_bounds = take_generics_from_sig(methods);
-    if let Some(actor_bounds) = take_gen_param_ident_bounds(gen){
-        push_include( &mut other_bounds, actor_bounds);
-    } 
+             other_bounds: Vec<(Type,Punctuated<TypeParamBound, Token![+]>)>) {
+    let this_bounds =  
+    if let Some(mut bounds) = take_gen_param_ident_bounds(gen){
+        push_include( &mut bounds, other_bounds);
+        bounds
+    } else {  other_bounds };
 
-    // push_include( &mut other_bounds, actor_bounds);
-    if !other_bounds.is_empty(){
-        let mut where_clause = match &gen.where_clause {
-            Some(w) => w.clone(),
-            None => {
-                syn::WhereClause {
-                    where_token: <syn::Token![where]>::default(),
-                    predicates: syn::punctuated::Punctuated::new(),
-                }
+
+    let mut where_clause = match &gen.where_clause {
+        Some(w) => w.clone(),
+        None => {
+            syn::WhereClause {
+                where_token: <syn::Token![where]>::default(),
+                predicates: syn::punctuated::Punctuated::new(),
             }
-        };
-        let model_bounds = model_bounds();
-        for (ident, mut bounds) in other_bounds {
-            include_set(&mut bounds,&model_bounds);
-            where_clause.predicates.push(syn::parse_quote! {
-                #ident: #bounds
-            });
+        }
+    };
+
+    let model_bounds = model_bounds();
+    for (ty, mut bounds) in this_bounds {
+        include_set(&mut bounds,&model_bounds);
+        where_clause.predicates.push(syn::parse_quote! {
+            #ty: #bounds
+        });
+        // if is ident push into parameters
+        if let Some(ident) = type_path_some_ident(&ty){
             gen.params.push(syn::parse_quote! {#ident} );
         }
-        gen.where_clause = Some(where_clause);
-    } 
+    }
+    gen.where_clause = Some(where_clause);
+
 }
 
 
@@ -312,6 +186,7 @@ pub fn take_generic_parts( gen: &mut Generics,
                        methods: Vec<&mut Signature>, 
                      def_gen: Option<Generics> )
 {
+
     let methods_bounds = take_generics_from_sig(methods);
     include_bounds(gen, methods_bounds);
 
@@ -322,4 +197,195 @@ pub fn take_generic_parts( gen: &mut Generics,
     }
 }
 
+pub fn type_path_some_ident( ty: &Type) -> Option<Ident>{
+    match ty {
+        Type::Path(ty_path) => {
+            if let Some(p) = ty_path.path.get_ident(){
+                Some(p.clone())
+            } else {None}
+        },
+        _ => None,
+    }
+}
+
+pub fn idents_from_ty(ty: &Type)-> Option<Vec<Ident>>{
+
+    match ty {
+        syn::Type::Path(type_path) => {
+            if let Some(path_seg) = type_path.path.segments.last(){
+
+                match &path_seg.arguments {
+                    syn::PathArguments::AngleBracketed(ang_brack) => {
+                        let coll = ang_brack.args.iter().filter_map(|x|
+                            match x {
+                                syn::GenericArgument::Type(ty) => {
+                                    type_path_some_ident(ty)
+                                },
+                                _ => None,
+                            }
+                        ).collect::<Vec<_>>();
+                        if coll.is_empty() { None } else { Some(coll)}
+                    },
+                    _ => None,
+                }
+            } else { None }
+        },
+        _ => None,
+    }
+}
+
+pub fn gen_rename( gen: &Generics, ident_old: &Ident, ident_new: &Ident) -> Generics {
+    let mut item_impl = {
+        if let Ok(ty) = syn::parse_str::<syn::ItemImpl>("impl Inter {}") {
+            ty
+        } else {
+            let msg = format!("Internal Error. 'generic::gen_rename'. Could not parse &str to ItemImpl!");
+            abort!(Span::call_site(), msg);
+        }
+    };
+    item_impl.generics = gen.clone();
+    let new_item_impl = crate::model::method::replace(&item_impl,ident_old,ident_new);
+    new_item_impl.generics.clone()
+}
+
+pub fn sig_rename( sig: &Signature, gen_old_new: &BTreeMap<String,BTreeMap<Ident,Ident>> ) -> Signature {
+
+
+    let mut new_sig = sig.clone();
+    if let Some(add) =  gen_old_new.get("add"){
+
+        for (ident_old, ident_new) in add {
+            new_sig = method::replace(&new_sig,ident_old,ident_new);
+        }
+    }
+
+    if let Some(org) =  gen_old_new.get("org"){
+        for (ident_old, _ ) in org {
+            let ident_temp = &gen_temp_inter(ident_old);
+            new_sig = method::replace(&new_sig,ident_old,ident_temp);
+        }
+        for (ident_old, ident_new ) in org { 
+            let ident_temp = &gen_temp_inter(ident_old);
+            new_sig = method::replace(&new_sig,ident_temp,ident_new);
+        }
+    }
+    new_sig
+}
+
+pub fn field_gen_rename( impl_vars: &mut ImplVars ) {
+    
+    let old = &impl_vars.generics; 
+    let new = &impl_vars.model_generics; 
+
+    let org_gen_idents = get_type_idents(&old);
+    let add_gen_idents = get_type_idents(&new);
+
+    let intersect  = contains(&org_gen_idents,&add_gen_idents,true);
+    let difference = contains(&org_gen_idents,&add_gen_idents,false);
+
+    // keep track of ol new names 
+    let mut gen_old_new = 
+    BTreeMap::from([(String::from("org"),BTreeMap::new()),(String::from("add"),BTreeMap::new())]);
+    let mut new_model_gen = new.clone();
+    
+
+    if let Some(field)  = impl_vars.field.clone(){
+        let add = gen_old_new.get_mut("add").unwrap();
+
+        for ident in difference{
+            let ident_new = &gen_add_field(&field,ident);
+            new_model_gen = gen_rename(&new_model_gen,ident,&ident_new);
+            add.insert( ident.clone(),ident_new.clone());
+        }
+
+    } else {
+        let msg = format!("Internal Error. 'generic::gen_rename'. Expected a some `field` in ImplVars!");
+        abort!(Span::call_site(), msg);
+    }
+
+    let org = gen_old_new.get_mut("org").unwrap();
+
+    for ident in intersect {
+
+        let ident_temp = &gen_temp_inter(ident);
+        new_model_gen = gen_rename(&new_model_gen,ident,ident_temp);
+        org.insert(ident.clone(),ident_temp.clone());
+    }
+
+    // from type get new model type names
+    if let Some(group_idents) = idents_from_ty(&impl_vars.actor_type){
+
+        for (index,ident_new) in group_idents.iter().enumerate(){
+            
+            if let Some(ident_temp) = org.get_mut(&org_gen_idents[index]){
+
+                new_model_gen = gen_rename(&new_model_gen,ident_temp,&ident_new);
+                *ident_temp = ident_new.clone();
+
+            }
+        }
+    }
+
+    // new_model_generics
+    impl_vars.model_generics = new_model_gen.clone();
+
+    // rename sigs
+    for sig in impl_vars.get_mut_sigs(){
+        *sig = sig_rename(sig,&gen_old_new);
+    }
+
+}
+
+
+pub fn group_generics( 
+     slf: &mut ImplVars,
+    mems: &mut BTreeMap<&Ident,(AttributeArguments,ItemImpl,ImplVars)> )
+{   
+
+
+    let mut slf_gen_model = slf.model_generics.clone();
+    let mut total_generics = Vec::new();
+
+    for (_, (_,_,impl_vars) ) in  mems.iter_mut(){
+        
+        // change actor type to the one found in group definition
+        if let Some( mem_ty ) = impl_vars.ty.clone(){
+            impl_vars.actor_type = mem_ty;
+        }
+        // rename generics to names used by user and convetional for 'add's
+        // rename method sigs
+        field_gen_rename(impl_vars);
+        total_generics.push(impl_vars.model_generics.clone())
+
+    }
+
+    for gen in total_generics.iter_mut() {
+
+        if let Some(mem_gen_bounds) =  
+            take_gen_param_ident_bounds(gen){
+            include_bounds(&mut slf_gen_model, mem_gen_bounds);  
+        }
+    }
+
+    slf.group_model_generics = None; 
+    slf.model_generics = slf_gen_model.clone();
+   
+    for (_, (_,_,impl_vars) ) in  mems.iter_mut(){
+
+        // give group_model_ generics value for group members
+        impl_vars.group_model_generics = Some(slf_gen_model.clone());
+    }
+
+
+}
+
+pub fn is_generic(generics: &Generics) -> bool {
+    if generics.params.is_empty(){
+        if let Some(where_clause) = &generics.where_clause{
+            if where_clause.predicates.is_empty(){
+                false
+            } else { true }
+        } else { false }
+    } else { true }
+}
 

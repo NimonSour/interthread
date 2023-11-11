@@ -21,6 +21,7 @@ impl MyActor {
     pub fn get_value(&self) -> i8 {
         self.value
     }
+
 }
 
 //  #[interthread::example(main(path="examples/intro_tokio.rs"))]  

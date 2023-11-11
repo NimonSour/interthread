@@ -1,14 +1,13 @@
 use crate::error;
-// use crate::model::EditActor;
-// use crate::file::get_ident;
-use crate::model::{Model, Channel,Lib,EditActor,Debut,get_ident,get_lit,get_lit_str,get_list,to_usize};
+use crate::model::{Channel,Lib,EditActor,Debut,get_ident,get_lit,get_lit_str,get_list,to_usize};
 
 
 use std::path::PathBuf;
 use proc_macro2::Span;
 use proc_macro_error::abort;
 use quote::format_ident;
-use syn::punctuated::Punctuated;
+use syn::{Ident,punctuated::Punctuated};
+
 //-----------------------  ACTOR  
 
 #[derive(Debug,Clone, Eq, PartialEq)]
@@ -20,8 +19,8 @@ pub struct ActorAttributeArguments {
     pub channel :  Channel,
     pub edit    :  EditActor,
     pub debut   :  Debut,
-    // pub file    :  Option<AAFile>,
     pub file    :  Option<PathBuf>,
+    pub path    :  Option<PathBuf>,
     pub interact:  bool,
 
     /* ADD NEW OPTION */
@@ -40,6 +39,7 @@ impl Default for ActorAttributeArguments {
             edit    : EditActor::default(),
             debut   : Debut::default(),
             file    : None,
+            path    : None,
             interact: false,
             /* ADD NEW ATTRIBUTE */
         }  
@@ -108,32 +108,16 @@ impl ActorAttributeArguments {
             }
 
             // DEBUT
-            // pub fn check_legend_path( model: &Model, name: &syn::Ident, path: &PathBuf ) -> (PathBuf, PathBuf) {
             else if meta.path().is_ident("debut"){
 
                 if let Some(meta_list) = get_list( meta,Some(error::AVAIL_DEBUT) ) {
 
                     for m in meta_list {
                         if m.path().is_ident("legend"){
-                            if let Some(meta_list) = get_list( meta,Some(error::AVAIL_DEBUT) ) {
-                                super::check_path_set(&nested);
-                                for m in meta_list{
-
-                                    if m.path().is_ident("path"){
-
-                                        let path_str = get_lit_str(&meta,"path");
-                                        let path = std::path::PathBuf::from(&path_str);
-
-                                        if path.exists() { 
-                                            self.debut.path = Some(path);
-                                        }
-
-                                    } else {
-                                        let msg = "Unknown option for argument 'debut'.";
-                                        abort!(m,msg;help=error::AVAIL_DEBUT);
-                                    }
-                                }
-                            } else { self.debut.legend = Some(true); }  
+                            match m {
+                                syn::Meta::Path(_) => { self.debut.legend = Some(true); },
+                                _ => { abort!(meta.path(),"Expected an identifier.";help=error::AVAIL_DEBUT); },
+                            } 
                         } else {
                             let msg = "Unknown option for argument 'debut'.";
                             abort!(m,msg;help=error::AVAIL_DEBUT);
@@ -152,11 +136,11 @@ impl ActorAttributeArguments {
                 else { abort!(meta, format!("Path - {file_str:?} does not exist.")); } 
 
             }
-
+            // INTERACT
             else if meta.path().is_ident("interact"){
                 match meta {
                     syn::Meta::Path(_) => { self.interact = true; },
-                    _ => { abort!(meta, "Expected an identifier.";help=error::AVAIL_ACTOR) },
+                    _ => { abort!(meta, error::EXPECT_IDENT ;help=error::AVAIL_ACTOR) },
                 }
             }
 
@@ -186,10 +170,17 @@ impl ActorAttributeArguments {
                 }
             } else { abort!(Span::call_site(),error::REQ_FILE;help=error::AVAIL_ACTOR); }
         }
-
-        // debut paths check 
-        // get debut script live in generating function
     }
+
+    pub fn get_inter_field_names(&self) -> Vec<Ident> {
+        let mut loc = vec![format_ident!("sender")];
+        if self.debut.active() {
+            loc.push(format_ident!("debut"));
+            loc.push(format_ident!("name"));
+        }
+        loc
+    }   
+
 } 
 
 

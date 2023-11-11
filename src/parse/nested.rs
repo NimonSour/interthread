@@ -40,10 +40,10 @@ impl NestedArgument {
         self.equal.is_some()
     }
 
-    pub fn is_path(&self)      -> bool {
-        self.equal.is_none() &&
-        self.open.is_none()  
-    }
+    // pub fn is_path(&self)      -> bool {
+    //     self.equal.is_none() &&
+    //     self.open.is_none()  
+    // }
 
     fn get_name(&self, str_arg: &str) -> String {
         let end;

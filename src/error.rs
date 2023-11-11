@@ -262,13 +262,10 @@ pub static AVAIL_DEBUT: &'static str = "
     debut
         (
          legend
-              (
-               path='..'  
-              )
         )
     
-    When employing the `legend` option without providing a tuple list \
-    with a path in it like `debut(legend)` the model will be saved on the heap.
+    When using the `legend` option, the model is stored on the heap and \
+    saved upon the last instance being dropped.
 ";
 
 pub static AVAIL_ACTOR: &'static str = "
@@ -294,27 +291,14 @@ pub static AVAIL_ACTOR: &'static str = "
        assoc 
         
        debut(
-             legend(..)
-            )   
+             legend
+            ) 
+    interact
 )]
 
 *  -  default 
 ";
 
-/*
-    There are two types of arguments 
-    
-    channel
-    lib
-    file
-    debut
-
-    name(..)
-    assoc(..)
-    edit(..)
-    path(..)
-
-*/
 
 pub static AVAIL_GROUP: &'static str = "
 
@@ -331,7 +315,7 @@ AA      lib = \"std\" *
 AA     file = \"path/to/current/file.rs\"
 
 AA     debut(
-             legend(..)
+             legend
             )   
 
 (AA)   assoc(
@@ -429,6 +413,7 @@ special case `edit(file)`.
 
 pub static EXPECT_LIST: &'static str = "Expected a list!";
 pub static EXPECT_IDENT: &'static str = "Expected an identifier. Please pass only a single identifier without any namespace or path.";
+
 pub static NESTED_FILE: &'static str  = "Nested `file` option!"; 
 pub static NOTE_SPECIAL_FILE_EDIT: &'static str  = 
 "`edit(file)` is the only scenario where the file argument \
@@ -488,7 +473,19 @@ to avoid naming conflicts. This will allow the model to function \
 correctly and generate accurate type names.
 ";
 
-pub fn type_nameing_conflict(a: &Ident, b: &Ident )-> String {
+pub static INCOMPLETE_PATTERN_NOT_ALLOWED: &'static str ="
+Incomplete patterns in method parameters are not allowed.
+Patterns like `(a, b, ..)`, `MyStruct { a, b, .. }`, or `MyTupleStruct(a, b, ..)` are not permitted as method parameters. Please provide complete patterns or specify individual variables.
+";
+
+pub static INTER_VARIABLE_PATTERN_NOTE: &'static str ="
+`inter variables` patterns must consist of either individual identifiers or a non-nested tuple of `inter variables` only (should not be mixed with non-`inter variables`).
+";
+
+pub fn expected_path_ident(s: &str ) -> String {
+   format!("Expected a path, `field`::{s} .")
+}
+pub fn type_naming_conflict(a: &Ident, b: &Ident )-> String {
     let ty_name = crate::model::name::script_field(a);
     format!("Naming conflict detected. Conflicting \
 type names from the provided field names. Both`{a}` and `{b}` result \
@@ -499,21 +496,6 @@ pub fn double_decl(s: &str) -> String {
     format!("Double declaration of `{s}` option.")
 }
 
-// pub fn assigned_already(s:&str) -> String {
-//     format!("Option {s} has already been assigned.")
-// }
-// pub fn declared_already(s:&str) -> String {
-//     format!("Option {s} has already been `file` declared.")
-// }
-
-
-pub fn live_send_recv(live_name:&syn::Ident ) -> (TokenStream, TokenStream){
-
-    // let live_name  = &name::live(cust_name);
-    let send_msg = format!("'{live_name}::method.send'. Channel is closed!");
-    let recv_msg = format!("'{live_name}::method.recv'. Channel is closed!");
-    (quote!{#send_msg},quote!{#recv_msg})
-}
 
 pub fn end_of_life( name: &syn::Ident, debut: &Debut ) -> TokenStream {
     if debut.active(){
@@ -533,91 +515,62 @@ pub fn direct_send(script_name: &syn::Ident, variant: &syn::Ident) -> TokenStrea
 
 }
 
-// pub fn trait_new_sig<T: quote::ToTokens>(ty:&T, exists: bool) -> (String,String){
-//     let actor_ty = quote!{#ty}.to_string();
-//     let note = format!("
-//     Using the `actor` macro with a `trait` block is not as flexible \
-//     as when it is applied to an `impl` block. \n
-//     The `trait` must include a specific signature for the `new` \
-//     initiation function: \n \t
-//     fn new(s: Self) -> Self
-//     This signature, is the only available initiation signature \
-//     that the macro will consider for its functionality.
-//     \n"); 
-//     let msg = 
-//     if exists {
-//         format!("Expected signature `fn new (s:Self) -> Self` for {} ! \n",actor_ty)
-//     } else {
-//         format!("Expected signature `fn new (s:Self) -> Self` for {} not found !\n",actor_ty)
-//     };
-//     (msg,note)
-// }
-
-
-// pub fn item_vis() -> (String,String){
-//     //"The macros 'actor' and 'group' require the object itself and its \
-//     // - `fn` block: `fn`'s visibility itself
-//     let note = format!("The macro 'actor' require the object itself and its \
-//     methods to have explicit visibility (public or restricted) if they are intended \
-//     to be considered.
-    
-//     The macros adhere to Rust's principles, where private functions are regarded as internal \
-//     helper functions, not intended for external use beyond the object body.
-    
-//     The visibility level of the newly generated Actor Model types will \
-//     be preserved and applied from : \n 
-//     - `impl`  block: function `new` \n 
-//     - `trait` block: `trait`'s visibility itself ( which is the same as `new` function ) 
-     
-//     Please ensure that the required visibility specifications are followed to use the 'actor' \
-//     macro effectively.\n") ;
-
-//     let help = format!("If a private Actor Model is desired, it is recommended to begin with \
-//     public visibility and then manually adjust visibility using the 'edit' option or \
-//     the macro 'example' to modify the types created by the macro.");
-
-
-//     (note,help)
-// }
-
-// temp error new args 
-
-// pub static OLD_DIRECT_ARG: &'static str = "
-//     Since v1.0.0 `direct` argument is not aplicable. Use `edit(script(imp(direct)))` instead!
-// ";
-
-// pub static OLD_PLAY_ARG: &'static str = "
-//     Since v1.0.0 `play` argument is not aplicable. Use `edit(script(imp(play)))` instead!
-// ";
-
-// pub fn old_file_arg( path: String ) -> String {
-//     format!( "Since v1.0.0 `file` argument is not aplicable. Use `path= \"{}\"` instead!", &path )
-// }
-
-// pub fn invalid_fn_arg_pattern(arg: &syn::FnArg) -> String {
-    
-// format!( 
-// "Invalid function argument pattern -`{}`!
-
-
-// Valid patterns include:
-
-// - Identifiers            `a : Type `    
-// - Tuple patterns         `(a,b): (TypeA,TypeB)`
-// - Tuple struct patterns  `Foo(a,b) : Foo`
-// - Struct patterns        `Foo{{a,b}} : Foo`
-
-// ",quote!{#arg}.to_string() )
-
-// }
-
-
-pub fn origin( actor_type: &Type, sig: &Signature ) -> String {
-
-    let actor     = quote!(#actor_type).to_string();
-    let sig       = quote!(#sig).to_string();
-    format!("Actor `{}` method `{}`.",actor, sig)
+use std::path::PathBuf;
+#[derive(Clone,Debug)]
+pub struct OriginVars{
+    pub path: Option<PathBuf>,
+    pub actor_type: Type, 
+    pub sig: Signature,
 }
+
+impl OriginVars {
+    pub fn origin<T: ToString>(&self,e: T ) -> String {
+        let e = e.to_string();
+        let Self{ path,actor_type,sig} = self;
+        let actor_name = quote!{#actor_type}.to_string();
+        let path =  
+        if let Some(p) = path{
+            format!("Path : `{}` \n", p.to_string_lossy())
+        } else { "".to_string() };
+        let sig       = quote!(#sig).to_string();
+        format!("{path}Object : `{actor_name}`\nMethod : `{sig}`\n\n{e} ") 
+    }
+}
+pub static LEGEND_LIMIT_GENERIC: &str = 
+"   The 'legend' option is not supported for generic objects.";
+
+pub static INTERACT_VARS_HELP: &str = "
+    The `interact` option is designed to provide the model with \
+comprehensive non-blocking functionality, along with convenient \
+internal getter calls to access the state of the `live` instance.\
+Please consult the documentation for correct usage.
+";
+
+
+pub static INTER_SEND_RECV_RESTRICT_NOTE : &'static str =
+"   Using method arguments named `inter_send` or `inter_recv` will \
+interfere with the model's internal variables. To proceed with \
+these names, explicitly opt in by providing the argument `interact` \
+to the macro (see option `interact` in documentation). Otherwise, \
+consider renaming the arguments.";
+
+
+pub static CONCURRENT_INTER_SEND_RECV : &'static str =
+"   Concurrent use of `inter_send` and `inter_recv`.\
+Please make sure to access only one end of the channel, not both simultaneously.";
+
+pub static NOT_ACCESSIBLE_CHANNEL_END: &'static str =
+"   `inter_send` and `inter_recv` variables cannot be accessed in methods that return a type.";
+
+
+pub fn var_name_conflict<V,P>( var: V, part: P ) -> String 
+where 
+    V: ToString,
+    P: ToString,
+{
+    format!("   Naming conflict: `{}`. Please choose a different \
+    {} name.", var.to_string(),part.to_string())
+} 
 
 // v1.2.0
 pub static OLD_ARG_ID: &'static str = "

@@ -5,15 +5,6 @@ use crate::model::argument::Model;
 use proc_macro2::Span;
 use proc_macro_error::abort;
 
-
-// #[derive(Debug, Eq, PartialEq, Clone, Copy)]
-// pub enum Either<L, R> {
-//     L(L),
-//     R(R),
-// }
-
-
-
 //-----------------------  EXAMPLE 
 #[derive(Debug, Eq, PartialEq)]
 pub struct ExampleAttributeArguments {
@@ -91,7 +82,6 @@ impl ExampleAttributeArguments {
             }
  
             else {
-                let ident  = meta.path.get_ident().unwrap();
                 error::unknown_attr_arg("example", &meta.path.clone());
                 Ok(())
             }

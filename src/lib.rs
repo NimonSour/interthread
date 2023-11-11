@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.1.7"
+//!interthread = "1.2.0"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
@@ -351,12 +351,12 @@
 //! 
 //! # Panics
 //! 
-//! If the types used for input or output for actor methods 
-//! do not implement the `Send`,`Sync` `'static`  traits.
-//! 
-//! Additionally, the actor object itself should implement 
-//! the `Send` trait, allowing it to be safely moved 
-//! to another thread for execution. 
+//! The model will panic if an attempt is made to send or 
+//! receive on the channel after it has been dropped. 
+//! Generally, such issues are unlikely to occur, but 
+//! if the `interact` option is used, it introduces a 
+//! potential scenario for encountering this situation.
+//!  
 //! 
 //! # Macro Implicit Dependencies
 //!
@@ -410,19 +410,12 @@
 //! Checkout `interthread` on [![GitHub](https://img.shields.io/badge/GitHub-%2312100E.svg?&style=plastic&logo=GitHub&logoColor=white)](https://github.com/NimonSour/interthread)
 //! 
 
-// mod attribute;
 mod use_macro;
 mod show;
 mod file;
-// mod gen_actor;
-// mod generate;
-// mod gen_group;
-// mod name;
-// mod method;
 mod check;
 mod error;
 mod parse;
-// mod generics;
 mod model;
 
 static INTERTHREAD: &'static str            = "interthread";
@@ -434,8 +427,11 @@ static EXAMPLE: &'static str                = "example";
 static EXAMPLES: &'static str               = "examples";
 
 
-// Some of Attributes Arguments
+// vars
+static INTER_SEND: &'static str = "inter_send";
+static INTER_RECV: &'static str = "inter_recv";
 
+// Some of Attributes Arguments
 static EDIT: &'static str               = "edit";
 static FILE: &'static str               = "file";
 
@@ -690,31 +686,35 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// ## Configuration Options
 ///```text 
 /// 
-/// #[interthread::actor( 
-///   
-///     channel = 0          ✔ 
-///               n (usize) 
-/// 
-///     lib     = "std"      ✔
-///               "smol"
-///               "tokio"
-///               "async_std"
-///     
-///     edit    (            ✘
-///               script(..)
-///               live(..)
-///             )            
-///      
-///     name    = ""         ✘
-/// 
-///     assoc   = false      ✔
-/// 
-///        id   = false      ✔
-///  
-/// )]
-/// 
-/// default:    ✔
-/// no default: ✘
+///#[interthread::actor( 
+///    
+///    channel = 0 * 
+///              n (usize)
+///
+///        lib = \"std\" *
+///              \"smol\"
+///              \"tokio\"
+///              \"async_std\"
+///
+///        edit( 
+///             script(..)
+///             live(..)
+///            ) 
+///
+///        file = \"path/to/current/file.rs\"
+///        
+///        name = \"\" 
+///
+///       assoc 
+///        
+///       debut(
+///             legend
+///            ) 
+///    interact
+///)]
+///
+///*  -  default 
+///
 ///
 ///```
 ///  
@@ -727,7 +727,8 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - [`file`](#file)
 /// - [`name`](#name)
 /// - [`assoc`](#assoc)
-/// - [`id`](#id)
+/// - [`debut`](#debut)
+/// - [`interact`](#interact)
 ///
 /// 
 /// 
@@ -803,8 +804,10 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// The SDPL Model encompasses two main structs, namely `ActorScript` and `ActorLive`.
 /// Within the `edit` statement, these are referenced as `script` 
 /// and `live` respectively.
-/// Each struct comprises three distinct sections: definition, 
-/// implementation block, and implemented traits (`def`, `imp`, and `trt`).
+/// Each struct comprises three distinct sections: 
+/// - `def` - definition
+/// - `imp` - implementation block
+/// - `trt` - implemented traits
 ///
 /// To modify the `foo` method within `ActorLive` methods:
 /// ```rust
@@ -815,205 +818,86 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// For multiple methods, simply extend the list: `edit(live(imp(foo, bar)))`.
 /// To edit code from both structs : `edit(script(imp(play)), live(imp(foo, bar)))`.
 ///
-/// To add a field to `ActorLive` instance, access the definition and initiating method `new`:
-/// ```rust
-/// #[actor(channel = 2,
-///    edit(live(def, imp(new))))
-/// ]
-/// ```
-///
-/// Note: This approach is different from pre-v1.0.0 versions of the `interthread` crate,
-/// providing users with precise control over generated code. 
 /// 
-/// Below are the previous options and their new equivalents:  
+/// Also see the `file` argument which works in conjuction with `edit` for an explicit example. 
 /// 
-/// - [`script`](index.html#script)  - `script(def)`
-/// - [`direct`](index.html#direct)  - `script(imp(direct))`
-/// - [`play`](index.html#play)      - `script(imp(play))`
-/// - [`live`](index.html#live)      - `live`
-/// - `live::new`                    - `live(imp(new))`
-///
-/// 
-/// See the `file` argument which works in conjuction with `edit` for an expicit example. 
 /// 
 /// # file
-/// This argument works in conjuction with `edit` and writes to the 
-/// curent module the code omited by the `edit` argument ready for user to
-/// modify it.
-/// 
-/// > **Note:** While it is possible to have multiple actor macros
-/// within the same module, only one of the macro can have file 
-/// argument active.
+/// This argument is designed to address proc macro file blindness. It requires 
+/// a string path to the current file as its value. Additionally, within the `edit` argument,
+/// you can use the keyword `file` to specify which portion of the excluded code should be written
+/// to the current module, providing the user with a starting point for customization.
+///  
 ///  
 /// ## Examples
 /// 
 /// Filename: main.rs
 /// 
 ///```rust
-///pub struct MyActor {
-///    value: i8,
-///}
-/// 
-/// #[actor(channel=2,file="src/main.rs",edit(script(imp(play))))]
+///pub struct MyActor(u8);
+///
+///#[interthread::actor(
+///    channel=2,
+///    file="src/main.rs",
+///    edit(live(imp( file(increment) )))
+///)]  
+///
 ///impl MyActor {
 ///
-///    pub fn new( value: i8 ) -> Self {
-///        Self{value}
+///    pub fn new() -> Self {Self(0)}
+///
+///    pub fn increment(&mut self){
+///        self.0 += 1;
 ///    }
-///    pub fn increment(&mut self) -> i8{
-///        self.value += 1;
-///        self.value
-///    }
-///} 
-/// 
+///}
 ///```
-/// This is the output of the above file after compilation :
+/// This is the output after saving:
 /// 
 /// ```rust
-///  
-///pub struct MyActor {
-///    value: i8,
-///}
 ///
-/// #[actor(channel=2, edit(script(imp(play))))]
+///pub struct MyActor(u8);
+///
+///#[interthread::actor(
+///    channel=2,
+///    file="src/main.rs",
+///    edit(live(imp(increment)))
+///)]  
+///
 ///impl MyActor {
 ///
-///    pub fn new( value: i8 ) -> Self {
-///        Self{value}
-///    }
-///    pub fn increment(&mut self) -> i8{
-///        self.value += 1;
-///        self.value
+///    pub fn new() -> Self {Self(0)}
+///
+///    pub fn increment(&mut self){
+///        self.0 += 1;
 ///    }
 ///}
+///
 /// //++++++++++++++++++[ Interthread  Write to File ]+++++++++++++++++//
 /// // Object Name   : MyActor  
-/// // Initiated By  : #[actor(channel=2,file="src/main.rs",edit(script(imp(play))))]  
+/// // Initiated By  : #[interthread::actor(channel=2,file="src/main.rs",edit(live(imp(file(increment)))))]  
 /// 
-/// /*
-/// impl MyActorScript {
-///     pub fn play(receiver: std::sync::mpsc::Receiver<MyActorScript>, mut actor: MyActor) {
-///         while let Ok(msg) = receiver.recv() {
-///             msg.direct(&mut actor);
-///         }
-///         eprintln!("MyActor end of life ...");
+/// 
+/// impl MyActorLive {
+///     pub fn increment(&mut self) {
+///         let msg = MyActorScript::Increment {};
+///         let _ = self
+///             .sender
+///             .send(msg)
+///             .expect("'MyActorLive::method.send'. Channel is closed!");
 ///     }
 /// }
 /// 
 /// // *///.............[ Interthread  End of Write  ].................//
-/// 
+///
 /// ```
+/// To specify the part of your model that should be written to 
+/// the file, simply enclose it within `file(..)` inside the `edit` 
+/// argument.
 /// 
-/// Now, let's explore a scenario where we want to manipulate or 
-/// even return a type from the [`play`](index.html#play) 
-/// component by invoking a method on the [`live`](index.html#live) 
-/// component. We can easily modify the generated code to 
-/// enable this functionality.
+///  > **Note:** While it is possible to have multiple actor macros
+/// within the same module, only one of the macro can have file 
+/// argument active.
 /// 
-/// ## Examples
-/// 
-/// Filename: main.rs
-/// 
-///```rust
-/// use std::sync::mpsc;
-/// use interthread::actor;
-///  
-/// pub struct MyActor {
-///     value: i8,
-/// }
-/// 
-/// // this is initial macro 
-/// // #[actor(channel=2,file="src/main.rs",edit(script(imp(play))))]
-/// // will change to 
-/// #[actor(channel=2, edit(script(imp(play))))]
-/// 
-/// impl MyActor {
-/// 
-///     pub fn new( value: i8 ) -> Self {
-///         Self{value}
-///     }
-///     pub fn increment(&mut self) -> i8{
-///         self.value += 1;
-///         self.value
-///     }
-///     // it's safe to hack the macro in this way
-///     // having `&self` as receiver along  with
-///     // other things creates a `Script` variant  
-///     // We'll catch it in `play` function
-///     pub fn play_get_counter(&self)-> Option<u32>{
-///         None
-///     }
-/// 
-/// }
-/// 
-/// // we have the code of `play` component
-/// // using `edit` in conjuction with `file`
-/// // Initiated By  : #[actor(channel=2,file="src/main.rs",edit(script(imp(play))))]  
-/// impl MyActorScript {
-/// 
-///     pub fn play( 
-///          receiver: mpsc::Receiver<MyActorScript>,
-///         mut actor: MyActor) {
-///         // set a custom variable 
-///         let mut call_counter = 0;
-///     
-///         while let Ok(msg) = receiver.recv() {
-///     
-///             // match incoming msgs
-///             // for `play_get_counter` variant
-///             match msg {
-///                 // you don't have to remember the 
-///                 // the name of the `Script` variant 
-///                 // your text editor does it for you
-///                 // so just choose the variant
-///                 MyActorScript::PlayGetCounter { output  } =>
-///                 { let _ = output.send(Some(call_counter));},
-///                 
-///                 // else as usual 
-///                 _ => { msg.direct(&mut actor); }
-///             }
-///             call_counter += 1;
-///         }
-///         eprintln!("the end");
-///     }
-/// }
-/// 
-/// 
-/// fn main() {
-/// 
-///     let my_act = MyActorLive::new(0);
-///     let mut act_a = my_act.clone();
-///     let mut act_b = my_act.clone();
-/// 
-///     let handle_a = std::thread::spawn(move || {
-///         act_a.increment();
-///     });
-///     let handle_b = std::thread::spawn(move || {
-///         act_b.increment();
-///     });
-///     
-///     let _ = handle_a.join();
-///     let _ = handle_b.join();
-/// 
-/// 
-///     let handle_c = std::thread::spawn(move || {
-/// 
-///         // as usual we invoke a method on `live` instance
-///         // which has the same name as on the Actor object
-///         // but 
-///         if let Some(counter) = my_act.play_get_counter(){
-/// 
-///             println!("This call never riched the `Actor`, 
-///             it returns the value of total calls from the 
-///             `play` function ,call_counter = {:?}",counter);
-/// 
-///             assert_eq!(counter, 2);
-///         }
-///     });
-///     let _ = handle_c.join();
-/// 
-/// }
-///```
 /// 
 /// # name
 /// 
@@ -1050,8 +934,6 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// in generated code as instance methods, allowing them to be invoked on 
 /// the generated struct itself. 
 ///
-/// - true  
-/// - false (default)
 /// 
 ///  ## Examples
 ///```rust
@@ -1081,13 +963,13 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///}
 ///
 ///```
-/// # id
+/// # debut
 /// 
 /// The generated code is designed to 
 /// compile successfully on Rust versions as early as 1.63.0.
 /// 
-/// If this argument is set to `true`, the following 
-/// additions and implementations are generated :
+/// When declared `debut`, the following additions and implementations 
+/// are generated:
 /// 
 /// 
 /// Within the [`live`](index.html#live) struct definition, the following
@@ -1117,8 +999,6 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// used to set the `debut` field when initializing 
 /// instances of the [`live`](index.html#live) struct.
 /// 
-/// - true  
-/// - false (default)
 /// 
 /// Use macro [`example`](./attr.example.html) to see the generated code.
 /// 
@@ -1129,7 +1009,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///use std::thread::spawn;
 ///pub struct MyActor ;
 ///
-///#[interthread::actor(channel=2, id)] 
+///#[interthread::actor(channel=2, debut)] 
 ///impl MyActor {
 ///    pub fn new() -> Self { Self{} } 
 ///}
@@ -1226,8 +1106,8 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// 
 /// 
-/// Using `id` will generate fore additional
-///methods on `live` struct:
+/// Using `debut` will generate fore additional
+///methods in `live` implement block:
 /// 
 /// 1. `inter_set_name(s: ToString)`: Sets the value of the 
 /// name field.
@@ -1238,7 +1118,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 4. `inter_get_count() -> usize`: Provides the strong 
 /// reference count for the debut field.
 ///  
-/// > **Note:** Additional generated methods prefixed with `inte`
+/// > **Note:** Additional generated methods prefixed with `inter`
 ///  will have the same visibility as the initiating
 ///  method `new` or `try_new`. 
 /// 
@@ -1249,19 +1129,223 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///- it mitigates the risk of potential naming conflicts in case if there
 ///is or will be a custom method `get_name`
 ///-  helps the macro  identify methods that are intended 
-///to be used within its context
+///to be used within its context (see [`interact`](#interact))
 ///
-///This section is currently under development and will
-///be continued in the next version....
+/// 
+/// While `debut` can be declared as a standalone option, 
+/// it can also be enhanced by adding the `legend` sub-option. 
+/// This sub-option introduces extra `inter` methods, 
+/// enabling the model to be saved on the heap upon the 
+/// last instance being dropped.
+///
+/// > **Note:** Unfortunately, while we've established a 
+/// consistent `inter` prefix method convention, the 
+/// `legend` functionality introduces an exception. 
+/// To maintain a coherent and orderly pattern `try_new` -> `try_old` 
+/// 
+/// 
+///# Examples
+///
+///```rust
+/// pub struct MyActor(u8);
+///
+///
+///#[interthread::actor(channel=2, debut(legend))] 
+///impl MyActor {
+///
+///    pub fn new() -> Self { Self(0) }
+///
+///    pub fn set(&mut self, v: u8){
+///        self.0 = v;
+///    } 
+///
+///    pub fn get_value(&self) -> u8 {
+///        self.0
+///    }
+///}
+///
+///
+///fn main() {
+///
+///    let h = std::thread::spawn( || {
+///        let mut act = MyActorLive::new();
+///        act.inter_set_name("Zombie"); 
+///        act.set(121);
+///    });
+///    
+///    let _ = h.join();
+///
+///    let old_act = MyActorLive::try_old("Zombie").unwrap();
+///
+///    assert_eq!("Zombie".to_string(), old_act.inter_get_name());
+///    assert_eq!(121u8, old_act.get_value());
+///}
+///
+///```
+/// When the thread scope ends, objects are dropped. Simply using 
+/// `drop(..)` won't suffice. To conclude the thread scope correctly, 
+/// use `join()`. Then, you can call `try_old` on the live struct 
+/// to reinitialize the old model.
+/// 
+/// # interact
+/// 
+/// The `interact` option is designed to provide the model with 
+/// comprehensive non-blocking functionality, along with convenient 
+/// internal getter calls to access the state of the `live` instance via
+/// so called `inter variables` in actor methods.
+/// 
+/// ### Rules and Definitions
+/// 
+/// 1. The interact variables should be prefixed with `inter_`.
+/// 2. Special interact variables are `inter_send` and `inter_recv`.
+/// 3. Declaring an `inter_variable_name : Type`, within actor method
+/// arguments implies that the `live` instance has a method 
+/// `fn inter_get_variable_name(&self) -> Type` which takes no arguments 
+/// and returns the `Type`. Exceptions to this rule apply for special 
+/// interact variables.
+/// 4. If the actor method returns a type, accessing special interact variables
+/// is not allowed. 
+/// 5. Only one end of special interact variables can be accessed at a time.
+///  
+/// 
+/// 
+/// The primary purpose of `interact` is to leverage its oneshot `inter_send` 
+/// and `inter_recv` ends. This allows for
+/// a form of non-blocking behavior: one end of the channel will be directly 
+/// sent into the respective method, while the other end will be returned 
+/// from the live instance method. 
+/// 
+/// 
+/// ## Examples
+/// ```rust
+/// 
+///pub struct MyActor;
+///
+///// opt `interact`
+///#[interthread::actor(channel=2,interact)] 
+///impl MyActor {
+///
+///    pub fn new() -> Self { Self{} } 
+///
+///    // oneshot channel can be accessed 
+///    // in methods that do not return 
+///    pub fn heavy_work(&self, inter_send: oneshot::Sender<u8>){
+///
+///        std::thread::spawn(move||{
+///            // do some havy computation
+///            let _ = inter_send.send(5);
+///        });
+///    }
+///}
+///
+///fn main () {
+///
+///    let actor = MyActorLive::new();
+/// 
+///    // the signature is different
+///    let recv: oneshot::Receiver<u8> = actor.heavy_work(); 
+///    let int = recv.recv().unwrap();
+///
+///    assert_eq!(5u8, int);
+///}
+/// 
+/// ``` 
+///  
+/// While a method that does not return a type (see original `heavy_work`) 
+/// typically does not require a oneshot channel, the 
+/// model will accommodate the user's request by instantiating 
+/// a channel pair. 
+/// 
+///```rust
+/// 
+///pub fn heavy_work(&self) -> oneshot::Receiver<u8> {
+///    let (inter_send, inter_recv) = oneshot::channel::<u8>();
+///    let msg = MyActorScript::HeavyWork {
+///        input: (inter_send),
+///    };
+///    let _ = self
+///        .sender
+///        .send(msg)
+///        .expect("'MyActorLive::method.send'. Channel is closed!");
+///    inter_recv
+///}
+///``` 
+/// 
+/// 
+/// Also `interact` will detect interact variables in actor methods 
+/// and subsequently call required getters within respective 
+/// method of the `live` instance.
+/// 
+/// ## Examples
+/// ```rust
+/// pub struct MyActor(String);
+///
+/// #[interthread::actor(channel=2, debut, interact)] 
+/// impl MyActor {
+///
+///     pub fn new() -> Self { Self("".to_string()) } 
+///
+///     // We know there is a getter `inter_get_name`
+///     // Using argument `inter_name` we imply
+///     // we want the return type of that getter
+///     pub fn set_value(&mut self, inter_name: String){
+///         self.0 = inter_name;
+///     }
+///     pub fn get_value(&self) -> String {
+///         self.0.clone()
+///     }
+/// }
+///
+/// #[interthread::example(main(path="examples/intro_interact.rs"))] 
+/// fn main () {
+///
+///     let mut actor = MyActorLive::new();
+///
+///     // Setting name for `live` instance
+///     actor.inter_set_name("cloud");
+///
+///     // Setting actor's value now
+///     // Note the signature, it's not the same  
+///     actor.set_value();
+///
+///     assert_eq!("cloud".to_string(), actor.get_value());
+/// }
+/// ```
+/// 
+/// 
+/// Here is how `live` instance method `set_value` will look like:
+/// 
+/// 
+/// ```rust
+/// 
+/// pub fn set_value(&mut self) {
+///     let inter_name = self.inter_get_name();
+///     let msg = MyActorScript::SetValue {
+///         input: inter_name,
+///     };
+///     let _ = self
+///         .sender
+///         .send(msg)
+///         .expect("'MyActorLive::method.send'. Channel is closed!");
+/// }
+/// 
+/// ```
+/// 
+/// 
+/// The signature has changed; it no longer takes arguments, as the 
+/// getter call is happening inside providing the required type. 
+/// It will work for any custom getter as long as it adheres to rule 3.
 /// 
 /// 
 /// 
+/// 
+/// 
+
 
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_attribute]
 pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
     
-    // let mac  = attribute::AAExpand::Actor;
     let item_impl = syn::parse_macro_input!(item as syn::ItemImpl);
 
     let mut aaa = model::attribute::ActorAttributeArguments::default();
@@ -1285,11 +1369,6 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     }
 
     let (code,_) = model_sdpl.get_code_edit();
-    // error here 
-    // let edifile =  syn::parse2::<syn::File>(code).unwrap();
-    // let edifix  = &prettyplease::unparse(&edifile);
-
-    // proc_macro_error::abort!(proc_macro::Span::call_site(),edifix);
 
     quote::quote!{
         #item_impl
@@ -1299,39 +1378,317 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 
 }
 
-/// ## Currently under development (((
-/// 
-/// The `group` macro, although not currently included 
-/// in the `interthread` crate.It aims to address 
-/// several critical challenges encountered when
-///  working with the `actor` macro:
-/// 
-/// - Instead of creating separate threads for each object, 
-/// the `group` macro will enable the user to create an actor 
-/// that represents a group of objects, consolidating 
-/// their processing and execution within a single thread.
-/// 
-/// 
-/// - In scenarios where objects are already created or imported,
-/// and the user does not have the authority to implement 
-/// additional methods such as  "new" or "try_new",
-/// the `group` macro should offer a way to include 
-/// these objects as part of the actor system.
+
+/// ## A set of actors sharing  a single thread
 ///
-/// Although the `group` macro is not currently part of the 
-/// `interthread` crate, its development aims to offer a 
-/// comprehensive solution to these challenges, empowering 
-/// users to efficiently manage groups of objects within an 
-/// actor system.
+/// In the realm of concurrent programming, creating a separate thread 
+/// for each individual actor can sometimes incur a significant overhead. 
+/// In such scenarios, developers may opt to populate an `actor`'s 
+/// definition with complex encapsulations (potential actors), 
+/// effectively creating a collection of objects running within 
+/// a single thread. While this approach proves resource-efficient, 
+/// it does come with a trade-off: accessing the methods of field 
+/// types must be explicitly written within the main `actor` 
+/// implementation block.
 /// 
-/// Check `interthread` on ['GitHub'](https://github.com/NimonSour/interthread.git)
+/// This is where the `group` macro comes into play. A `group` is a 
+/// set of `actors` that share a single thread, consisting of 
+/// a `main-actor` and `group-actors` contained within the 
+/// `main-actor`'s fields. Developers can now bypass the need to rewrite 
+/// method wrappers, gaining direct access to `group-actor` methods via 
+/// dot notation, as seamlessly as if these `group-actors` were `actors` 
+/// in their own right.
+/// 
+/// In this scenario, the methods of the `main-actor` take on the responsibility 
+/// for interaction within and between `group-actors`, while the latter primarily 
+/// serve to export their functionality. 
+/// 
+/// Before delving into further details, let's explore an example of a `group`. 
+/// Assuming there is a good understanding of how an `actor` operates, once the 
+/// `Live` instance is returned after invoking the `new` method, the `actor` is 
+/// already running in a separate thread. Therefore, there’s no need to 
+/// complicate the example with extra thread spawning just for visual clarity. 
+/// 
+/// 
+/// ## Examples
+///  
+///```rust
+///
+///// We have `Aa` and `Bb`
+///pub struct Aa(u8);
+///impl Aa {
+///    pub fn add(&mut self, v: u8){
+///        self.0 += v;
+///    }
+///}
+///
+///pub struct Bb(u8);
+///impl Bb {
+///    pub fn add(&mut self, v: u8){
+///        self.0 += v;
+///    }
+///}
+///
+///// Definition of group
+///pub struct AaBb {
+///    pub a: Aa,
+///    pub b: Bb,
+///}
+///
+///#[interthread::group( file= "path/to/file.rs")]
+///impl AaBb {
+///
+///    pub fn new( ) -> Self {
+///        let a = Aa(0);
+///        let b = Bb(0);
+///        Self{ a,b}
+///    }
+///
+///    pub fn add(&mut self, v:u8){
+///        self.a.0 += v;
+///        self.b.0 += v;
+///    }
+///
+///    pub fn get_value(&mut self) -> (u8,u8) {
+///        (self.a.0,self.b.0)
+///    }
+///}
+///
+///
+///pub fn main(){
+///
+///    let mut group = AaBbGroupLive::new();
+///    
+///    // access to group method
+///    group.add(1);
+///    assert_eq!((1,1),group.get_value());
+///
+///    // access to field `a` method
+///    group.a.add(10);
+///    assert_eq!((11,1),group.get_value());
+///
+///    // access to field `b` method
+///    group.b.add(100);
+///    assert_eq!((11,101),group.get_value());
+///}
+///
+///```
+///
+/// Behind the scenes, the macro will generate some additional types 
+/// very similar to `actor`'s types, for `group-actor` 
+/// `NameScriptGroup` and  `NameLiveGroup`:
+///
+///- `Aa` -       `AaScriptGroup`, `AaLiveGroup`
+///- `Bb` -       `BbScriptGroup`, `BbLiveGroup`
+///
+/// For `main-actor` itself: `NameGroupScript` and  `NameGroupLive`:
+///- `AaBb` -     `AaBbGroupScript`, `AaBbGroupLive` 
+///
+/// In the context of the `SDPL` framework, `group-actors` are designated as `SDL`
+/// (Script, Direct, Live) and will share the `play` method with the `main-actor`,
+/// which is full `SDPL`.
+/// The following is a type schema of the `group` model in relation 
+/// to the above example:
+///  
+/// ```rust
+/// 
+/// struct Aa;
+/// struct Bb;
+/// 
+/// enum AaScriptGroup;
+/// struct AaLiveGroup;
+/// 
+/// enum BbScriptGroup;
+/// struct BbLiveGroup;
+/// 
+/// struct AaBb {
+///     pub a: Aa,
+///     pub b: Bb,
+/// }
+/// 
+/// enum AaBbGroupScript;
+/// struct AaBbGroupLive {
+///     pub a: AaLiveGroup,
+///     pub b: BbLiveGroup,
+/// }
+/// 
+/// ```
+///
+/// To view all the generated code by `group`, you can either utilize 
+/// the [`example`](attr.example.html) macro or employ the 
+/// [`edit`](attr.actor.html#edit) option within the `group` macro. 
+/// For a convenient shortcut to see the full example using `edit`,
+/// simply use `edit(file)`."
+/// 
+/// ```rust
+/// #[interthread::group( file="path/to/file.rs",edit(file))]
+/// ```
+/// To inspect the generated code for field `a` type from the 
+/// above example, utilize the [`edit`](attr.actor.html#edit)
+/// option as `edit(a::edit(file))`, for struct `AaBb` itself
+/// use `edit(self::edit(file))`. 
+/// 
+/// ## Requirements for Using the `group` Macro
+/// 
+/// Much like individual actors, the `group` macro enables a 
+/// set of actors to run collectively within a shared thread. 
+/// While many requirements align with those of individual actors, 
+/// there are some distinctions to be aware of. Below are the 
+/// crucial conditions that need to be satisfied for the `group` 
+/// macro to operate :
+/// 
+///- The object must be a struct with named fields.
+///- As an `actor` impl block must contain a method named `new` 
+///  returning a self-instance or `try_new` if it may fail to return.
+///- The macro requires a `file` field with a file path to the 
+///  current file at all times.
+///- Fields in the definition block that are intended to act as 
+///  `group-actor`s should have non-private visibility (public or restricted).
+///  Private fields will not be considered as `group-actors` by the macro.
+///
+/// 
+/// ## Configuration Options
+/// The configuration options for a `group` are slightly different, 
+/// but consist of the same arguments as those used for an `actor`
+/// except couple of them.
+/// In some cases (see notation `(AA)` in the table below), 
+/// the argument is a list of the same arguments, specified as 
+/// `argument(field_name::argument,..)`. 
+/// In context of the example code from above, if we wanted to 
+/// include any hypothetical static (associated) methods of struct `Aa`,
+/// we would use the `assoc` argument, like so: 
+/// ```rust 
+/// assoc(a::assoc)
+/// ```
+/// To include the same argument for `main-actor` itself, we would write 
+/// ```rust 
+/// assoc(a::assoc, self::assoc)
+/// ```
+/// 
+/// The following is the full table of configuration options:
+/// 
+/// ```text
+///
+/// #[interthread::group( 
+///    
+/// AA  channel = 0 * 
+///              n (usize)
+///
+/// AA      lib = \"std\" *
+///              \"smol\"
+///              \"tokio\"
+///              \"async_std\"
+///
+/// AA     file = \"path/to/current/file.rs\"
+///
+/// AA     debut(
+///             legend
+///             )   
+///
+/// (AA)   assoc(
+///             self::assoc,
+///             ..
+///             )
+///
+/// (AA)    edit( 
+///             self::edit(
+///                       script(..)
+///                       live(..)
+///                       ),
+///             ..
+///             ) 
+///
+/// (AA)    name(
+///             self::name = \"\",
+///             ..
+///             )
+///
+/// (AA)    path(
+///             a::path = \"path/to/type.rs\",
+///             ..
+///             )       
+///    )
+/// ]
+///
+///   *     -  default 
+///   AA    -  similar to `actor` attribute argument.
+///  (AA)   -  a list of similar to `actor` attribute arguments.
+///
+/// ```
+/// All `group` configuration options (arguments) are the same as `actor`'s arguments, 
+/// except for `path` and `allow`, which are unique to `group`.
+
+/// # Arguments
+///  
+/// - [`channel`](attr.actor.html#channel)
+/// - [`lib`](attr.actor.html#lib) 
+/// - [`edit`](attr.actor.html#edit)
+/// - [`file`](attr.actor.html#file)
+/// - [`name`](attr.actor.html#name)
+/// - [`assoc`](attr.actor.html#assoc)
+/// - [`debut`](attr.actor.html#debut)
+/// - [`path`](#path)
+/// - [`allow`](#allow)
+
+/// # `path`
+/// Argument `path` is used when a `group-actor` is defined in a file different from the `group` itself.
+
+/// # `allow`
+/// Argument `allow` is used when a non-private field of the `group` is necessary but should not be included 
+/// as a `group-actor`.
+///
+/// 
+/// 
+/// # Handling Identical Types in the `group` Model
+/// 
+/// In certain situations, the `group` model may encounter a scenario where the `main-actor` 
+/// possesses multiple fields of the same type. Let's consider an example:
+/// 
+/// ```rust
+/// struct AaBb {
+///     pub a:  Aa,
+///     pub a1: Aa,
+///     pub b:  Bb,
+/// }
+/// ```
+/// 
+/// Due to the model naming convention which is based on type names, both fields `a` and `a1` generate 
+/// identical model names for both the `Script` and `Live` components. This leads to a 
+/// compilation error:
+/// 
+/// ```text
+/// the name `AaScriptGroup` is defined multiple times
+/// `AaScriptGroup` must be defined only once in the type namespace of this module
+/// ``` 
+/// 
+/// To resolve this scenario, adjust the names for identical types as follows:
+/// 
+///```rust
+/// struct AaBb {
+///     pub a:  Aa,
+///     pub a1: Aa,
+///     pub b:  Bb,
+/// }
+/// 
+/// // Usage of the macro may be as follows:
+/// 
+/// #[interthread::group(
+///     file="path/to/file.rs",
+///     name( a1::name="Aa1" )
+/// )]
+/// impl AaBb {
+///     // ...
+/// }
+/// 
+/// ```
+/// 
+/// 
 /// 
 
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_attribute]
 pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
 
-    let mac  = model::argument::Model::Group;
     let item_impl = syn::parse_macro_input!(item as syn::ItemImpl);
 
     let mut gaa = model::attribute::GroupAttributeArguments::default();
@@ -1347,34 +1704,14 @@ pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 
     let model_sdpl = crate::model::generate_model( aa,&item_impl,None);
 
-
-    let (exam_code,edit_sdpl) = model_sdpl.split();
-
-    // error start
-
-    // let crate::model::ModelSdpl{ fields} = &edit_sdpl;
-    
-    
-    // let mut string = String::new();
-    // for (key,edit) in exam_code{
-
-    //     string += &format!("key-  {key}   -   {} ",edit.to_string());
-        
-    // }
-    // let msg = exam_code.to_string();
-    // proc_macro_error::abort!(item_impl,msg);
-    // errror end 
-
+    let (_,edit_sdpl) = model_sdpl.split();
 
     if let Some( edit_attr ) = edit_attr {
         parse::edit_write( &edit_attr, &item_impl, edit_sdpl);
     }
 
     let (code,_) = model_sdpl.get_code_edit();
-    //error
-    // let msg = code.to_string();
-    // proc_macro_error::abort!(item_impl,msg);
-    //end of error
+
     quote::quote!{
         #item_impl
         #code

@@ -1,16 +1,11 @@
-use crate::model::{Cont,Vars};
+use crate::error;
+use crate::model::{Cont,ImplVars,MpscChannel,Vars};
 use quote::{quote,format_ident};
+use proc_macro2::{Span,TokenStream};
+use proc_macro_error::abort;
 use syn::{Visibility,Ident,TypeGenerics,WhereClause};
-use proc_macro2::TokenStream;
+
 use std::path::PathBuf;
-
-// pub static INTER_GET_DEBUT: &'static str = "inter_get_debut";
-// pub static INTER_GET_COUNT: &'static str = "inter_get_count";
-// pub static INTER_SET_NAME: &'static str  = "inter_set_name";
-// pub static INTER_GET_NAME: &'static str  = "inter_get_name";
-// pub static INTER_NAME: &'static str      = "InterName";
-// pub static DEBUT: &'static str           = "debut";
-
 
 //-----------------------  ACTOR DEBUT
 #[derive(Debug, Eq, PartialEq, Clone)]
@@ -65,18 +60,12 @@ impl Debut {
             debut,
             intername,..
         }: &Vars,
-        // live_name: &Ident,
         new_vis:        &Option<Visibility>,
         ty_generics:          &TypeGenerics,
         where_clause: &Option<&WhereClause>,
         
     ){  
-        // let inter_get_debut = format_ident!("{INTER_GET_DEBUT}");
-        // let ts  = quote!{
-        //     #new_vis fn #inter_get_debut (&self) -> std::time::SystemTime {
-        //         *self.debut
-        //     }
-        // };
+
         live_mets.push((inter_get_debut.clone(),
             quote!{
                 #new_vis fn #inter_get_debut (&self) -> std::time::SystemTime {
@@ -85,13 +74,6 @@ impl Debut {
             }
         ));
         
-    
-        // let inter_get_count = format_ident!("{INTER_GET_COUNT}");
-        // let ts = quote!{
-        //     #new_vis fn #inter_get_count (&self) -> usize {
-        //         std::sync::Arc::strong_count(&self.debut)
-        //     }
-        // };
         live_mets.push((inter_get_count.clone(),
             quote!{
                 #new_vis fn #inter_get_count (&self) -> usize {
@@ -99,11 +81,7 @@ impl Debut {
                 }
             }
         ));
-    
-    
-        // let inter_set_name  = format_ident!("{INTER_SET_NAME}");
-        // let gen_type = format_ident!("{INTER_NAME}");
-        // let ts = 
+
         live_mets.push((inter_set_name.clone(),
             quote!{
                 #new_vis fn #inter_set_name < #intername: std::string::ToString>(&mut self, name:  #intername) {
@@ -112,17 +90,10 @@ impl Debut {
             }
         ));
     
-    
-        // let inter_get_name = format_ident!("{INTER_GET_NAME}");
-        // let ts = quote!{    
-        //     #new_vis fn #inter_get_name (&self) -> &str {
-        //         &self.name
-        //     } 
-        // };
         live_mets.push((inter_get_name.clone(),
             quote!{    
-                #new_vis fn #inter_get_name (&self) -> &str {
-                    &self.name
+                #new_vis fn #inter_get_name (&self) -> std::string::String {
+                    self.name.clone()
                 } 
             }
         ));
@@ -188,6 +159,157 @@ impl Debut {
                     other.debut.cmp(&self.debut)
                 }
             }
-        }));  
+        })); 
     } 
+
+
+    pub fn impl_legend(&self,
+        Cont{
+
+            live_mets,
+            live_trts,
+            script_mets,..
+        }: &mut Cont,
+        Vars{
+            actor,
+            live,
+            debut_play,
+            sender,
+            receiver,
+            name,
+            live_name,
+            script_name,
+            debut,
+            intername,
+            inter_get_name,
+            inter_get_count,
+            inter_get_debut,
+            impl_vars,
+            actor_legend,
+            live_legend,
+            inter_new_channel,
+            try_old,..
+        }: &Vars,
+        new_vis:        &Option<Visibility>,
+        mpsc:                  &MpscChannel,
+        fields:                 Vec<&Ident>,
+        ty_generics:          &TypeGenerics,
+        where_clause: &Option<&WhereClause>,
+        spawn:                 &TokenStream,
+    
+    ) { 
+
+        let ImplVars{actor_type,model_generics,..} = &impl_vars;
+        let MpscChannel{ type_receiver,declaration,..} = mpsc;
+        let old_inst_live = format_ident!("old_{actor}_live");
+
+        // let actor_legend      = format_ident!("actor_legend");
+        // let live_legend       = format_ident!("live_legend");
+
+
+        if crate::model::is_generic(model_generics){
+            abort!(Span::call_site(),error::LEGEND_LIMIT_GENERIC);
+        }
+        
+
+        let replace_field  = | field: &Ident|{
+            quote!{ let _ =  std::mem::replace(&mut self. #field. #sender, #sender.clone()) }
+        };
+        let replace_fields = {
+            let mut loc = vec![];
+            for f in fields {
+                loc.push(replace_field(f));
+            } 
+            loc.push(quote!{ let _ =  std::mem::replace(&mut self.#sender, #sender) });
+            loc
+        };
+
+
+        script_mets.push((actor_legend.clone(),
+            quote!{    
+                #new_vis fn #actor_legend(#debut: std::time::SystemTime, #actor: std::option::Option<#actor_type> ) -> std::option::Option<#actor_type>
+                {
+                    static COLLECTION: std::sync::Mutex<std::collections::BTreeMap<std::time::SystemTime, #actor_type>> = 
+                    std::sync::Mutex::new(std::collections::BTreeMap::new());
+         
+                    let mut collection = COLLECTION.lock().unwrap();
+                    if let Some(#actor) = #actor {
+         
+                        (*collection).insert(#debut, #actor);
+                        None
+                    } else {
+                        (*collection).remove(&#debut)
+                    }
+                }
+            }
+        ));
+
+
+
+        script_mets.push((live_legend.clone(),
+            quote!{    
+                #new_vis fn #live_legend <#intername:std::string::ToString>(#name : #intername, #live: std::option::Option<#live_name> ) -> std::option::Option<#live_name> {
+
+                    static COLLECTION: std::sync::Mutex<std::collections::BTreeMap<String, #live_name>> = 
+                    std::sync::Mutex::new(std::collections::BTreeMap::new());
+            
+                    let mut collection = COLLECTION.lock().unwrap();
+            
+                    if let Some(#live) = #live {
+            
+                        (*collection).insert(#name .to_string(), #live);
+                        None
+                    } else {
+                        (*collection).remove(& #name .to_string())
+                    }
+                }
+            }
+        ));
+
+
+
+        live_trts.push((format_ident!("Drop"),
+        quote!{
+
+            impl #ty_generics std::ops::Drop for #live_name #ty_generics #where_clause  {
+                fn drop(&mut self) {
+                
+                    if self. #inter_get_count () < 2 {
+                        // this will stop the while loop in play
+                        let _ = self. #inter_new_channel ();
+                        let #name = self. #inter_get_name ();
+                        let _ = #script_name :: #live_legend ( #name ,Some(self.clone()));
+                    }
+                }
+            }
+        }));
+
+        live_mets.push( (inter_new_channel.clone(),
+            quote!{
+                #new_vis  fn #inter_new_channel (&mut self) -> #type_receiver {
+                    #declaration
+                    #(#replace_fields;)*
+                    #receiver
+                }
+            }
+        ));
+        
+        live_mets.push( (try_old.clone(),
+            quote!{
+                #new_vis fn #try_old < #intername :std::string::ToString > (#name : #intername) -> std::option::Option< #live_name > {
+                    //get actor
+                    let mut #old_inst_live = #script_name :: #live_legend (#name,None)?;
+                    let #debut = #old_inst_live. #inter_get_debut();
+                    let #debut_play = #debut .clone();
+                    let receiver = #old_inst_live. #inter_new_channel();
+                    let #actor = #script_name :: #actor_legend ( #debut, None )?;
+
+                    #spawn
+                    Some(#old_inst_live)
+                }
+            }
+        ));
+
+    }
+
 }

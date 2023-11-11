@@ -4,8 +4,6 @@ use syn::{Type,Ident};
 use proc_macro::Span;
 use proc_macro_error::abort;
 
-// use crate::attribute::AAExpand;
-use crate::model::Model;
 use crate::error;
 
 pub fn get_ident_type_generics(item_impl: &syn::ItemImpl) -> (syn::Ident,syn::Type,syn::Generics) {
@@ -13,7 +11,6 @@ pub fn get_ident_type_generics(item_impl: &syn::ItemImpl) -> (syn::Ident,syn::Ty
     match &*item_impl.self_ty {
         syn::Type::Path(tp) => {
             let ident = tp.path.segments.last().unwrap().ident.clone();
-            // let typ :syn::Type = syn::parse_quote!{ #ident };
             let generics = item_impl.generics.clone();
             (ident,Type::Path(tp.clone()),generics)
         },
@@ -62,27 +59,6 @@ pub fn live_group(name: &Ident) -> Ident{
     format_ident!("{}",new_name)
 }
 
-pub fn get_group_names(name: &Ident) ->  ( Ident, Ident ){
-    ( group_script(name), group_live(name) )
-}
-
-pub fn get_actor_names(name: &Ident, mac: &Model) -> ( Ident, Ident ){
-
-    match mac {
-        Model::Actor => ( script(name), live(name) ),
-        Model::Group => ( script_group(name), live_group(name) ),
-    }
-}
-
-pub fn get_names(name: &Ident, mac: Model, model: &Model) -> ( Ident, Ident ){
-
-    match mac {
-        Model::Actor => ( script(name), live(name) ),
-        Model::Group => ( script_group(name), live_group(name) ),
-    }
-}
-
-
 pub fn check_name_conflict( names: Vec<&Ident> ){
 
     let mut names = 
@@ -90,12 +66,11 @@ pub fn check_name_conflict( names: Vec<&Ident> ){
 
     while let Some((o_name,m_name)) = names.pop(){
         if let Some(pos) =  names.iter().position(|(_,x)| m_name.eq(x)){
-            let msg = crate::error::type_nameing_conflict(&o_name,&names[pos].0);
+            let msg = crate::error::type_naming_conflict(&o_name,&names[pos].0);
             abort!(Span::call_site(), msg;help=error::HELP_TYPE_NAMING_CONFLICT )
         }
     } 
 }
-
 
 fn fn_to_struct(input: &str) -> String {
 
@@ -110,4 +85,13 @@ fn fn_to_struct(input: &str) -> String {
         struct_name.push_str(&word_without_first);
     }
     struct_name
+}
+
+pub fn gen_temp_inter( ident: &Ident) -> Ident {
+    quote::format_ident!("inter{ident}")
+}
+
+pub fn gen_add_field( field: &Ident, ident: &Ident,) -> Ident {
+    let field_str = &fn_to_struct( &field.to_string());
+    quote::format_ident!("{field_str}{ident}")
 }

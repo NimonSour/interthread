@@ -12,30 +12,20 @@ pub use interact::*;
 
 use crate::error;
 
-use proc_macro2::{Span,TokenStream};
+use proc_macro2::TokenStream;
 use proc_macro_error::abort;
-use quote::{quote,format_ident};
+use quote::quote;
 use syn::{Ident,Meta};
 
 use std::path::PathBuf;
 
 
 
-//-----------------------  EXAMPLE EXPAND
-#[derive(Debug, Copy,Eq, PartialEq, Clone)]
-
-pub enum SubModel{
-    Actor,
-    GroupActor,
-    Group,
-}
-
 
 //-----------------------  EXAMPLE EXPAND
 #[derive(Debug,Copy, Eq, PartialEq, Clone)]
 pub enum Model {
     Actor,
-    // GroupActor,
     Group,
 }
 impl Model {
@@ -48,22 +38,11 @@ impl Model {
     }
 }
 
-// impl Model {
-
-//     pub fn to_str(&self) -> &'static str {
-
-//         match self {
-//             Self::Actor => crate::ACTOR,
-//             Self::Group => crate::GROUP,
-//         }
-//     }
-// }
 impl std::fmt::Display for Model {
 
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Actor => write!(f,"{}",crate::ACTOR),
-            // Self::GroupActor => write!(f,"{}_{}",crate::GROUP,crate::ACTOR),
             Self::Group => write!(f,"{}",crate::GROUP),
         }
     }
@@ -160,7 +139,6 @@ impl Edit {
 
         match model {
             Model::Actor      => Self::Actor(EditActor::default()),
-            // Model::GroupActor => Self::Actor(EditActor::default()),
             Model::Group      => Self::Group(EditGroup::default()),
         }
     }
@@ -199,76 +177,6 @@ impl Edit {
             }, 
         }
     }
-
-    // pub fn get_attr_str(&self) -> String {
-
-    //     if let Some(attr)  = match &self {
-    //         Self::Actor(edit_actor) => edit_actor.attr.as_ref().map(|e| e.attr), 
-    //         Self::Group(edit_group) => edit_group.attr.as_ref().map(|e| e.attr), 
-    //     }{
-    //         // let attr = &edit_attr.attr;
-    //         let mut attr_str = quote::quote!{ #attr }.to_string();
-    //         attr_str = (&attr_str).replace(crate::LINE_ENDING,"");
-    //         attr_str = (&attr_str).replace(" ","");
-    //         return attr_str;
-    //     }
-    //     "".to_string()
-    // }
-
-
 }
 
 
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_functions(){
-
-        let sig: syn::Signature     = syn::parse_quote!{ fn foo ( send: oneshot::Sender<&'static str>) -> i8 };  
-        let mut my_type:  syn::Type = syn::parse_quote!{ oneshot::Receiver };
-        let argument  =  sig.inputs.last().unwrap();
-        
-        let target = quote::format_ident!("Sender");
-        
-        if let syn::FnArg::Typed(arg) = &argument{
-            // ty = arg.ty.clone();
-
-            if let syn::Type::Path(type_path) = &*arg.ty {
-                if let Some(seg) = type_path.path.segments.last(){
-                    if target.eq(&seg.ident) {
-                        
-                        let gen_args = seg.arguments.clone();
-                        if let syn::PathArguments::AngleBracketed(ang_brck_gen_arg) = &gen_args{
-                            if let Some( gen ) = ang_brck_gen_arg.args.first(){
-                                if let syn::GenericArgument::Type(ty) = gen {
-                                    let ty_str = quote!{#ty}.to_string();
-                                    println!("ty - {}",ty_str); 
-                                } else { println!("Not generic argument Type "); }
-                            } else { println!("Not first arg"); }
-                        } else { println!("Not angle bracketed"); }
-                         
-                        // let mut my_type:  syn::Type = syn::parse_quote!{ oneshot::Receiver #gen_args };
-
-                        // println!(" new Receiver -  {}", quote::quote!{#my_type}.to_string())
-                    } else { println!("Not equal to Sender!") }
-                }
-            };
-        };
-        
-
-
-
-
-
-
-        println!("fn argument -  {}", quote::quote!{#argument}.to_string() );
-
-    }
-
-
-
-    
-}
