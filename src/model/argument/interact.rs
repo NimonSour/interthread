@@ -47,7 +47,7 @@ impl InterOneshot {
 pub struct InterGetter { 
     name:        Ident, 
     method_name: Ident,
-    ty:           Type,
+    _ty:           Type,
 }
 
 
@@ -97,7 +97,7 @@ pub fn some_inter_var( org_err: &error::OriginVars, ident_ty:Vec<(&Ident, &Type)
             } 
             else { 
                 let method_name = format_ident!("inter_get_{second}");
-                inter_vars.push(InterVar::Getter(InterGetter{ name:ident.clone(), ty:ty.clone(), method_name })) 
+                inter_vars.push(InterVar::Getter(InterGetter{ name:ident.clone(), _ty:ty.clone(), method_name })) 
             }
         } else { 
             let msg = org_err.origin("Unexpected usage of `inter variables` mixed identifiers.");

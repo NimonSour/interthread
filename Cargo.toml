@@ -6,7 +6,7 @@ edition = "2021"
 description = "Auto implementation of the Actor Model"
 categories = ["development-tools", "asynchronous"]
 license = "MIT OR Apache-2.0"
-author = "Simon Nour"
+authors = ["Simon Nour"]
 repository = "https://github.com/NimonSour/interthread.git"
 keywords = ["actor","async","thread","interthread","actor-model"]
 
