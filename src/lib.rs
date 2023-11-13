@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.2.0"
+//!interthread = "1.2.1"
 //!oneshot     = "0.1.5" 
 //!```
 //! 
