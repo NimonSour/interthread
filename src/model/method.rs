@@ -3,7 +3,7 @@ use crate::model::{
     ActorAttributeArguments, OneshotChannel, MpscChannel,
     name,Cont,Vars,Lib,ImplVars,InterVars};
 
-use syn::{Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Receiver,Token};
+use syn::{Path,Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Receiver,Token};
 use proc_macro_error::abort;
 use proc_macro2::{TokenStream,Span};
 use quote::{quote,format_ident};
@@ -74,9 +74,11 @@ pub struct ActorMethodNew {
     pub sig:                Signature,
     pub new_sig:            Signature,
     pub res_opt:         Option<bool>,
+    pub res_opt_path:    Option<Path>,
     pub ident:                  Ident,
     pub arguments: Option<Vec<FnArg>>,
-    pub output:             Box<Type>,      
+    pub output:             Box<Type>,
+          
 
 }
 
@@ -86,15 +88,15 @@ impl ActorMethodNew {
         &mut self.new_sig
     }
 
-    pub fn try_new( met: ActorMethod, new_sig: Signature,  res_opt: Option<bool> ) -> Option<Self>{
+    pub fn try_new( met: ActorMethod, new_sig: Signature,  res_opt: Option<bool>, res_opt_path: Option<Path> ) -> Option<Self>{
         
         match met {
 
             ActorMethod::Io   { vis,sig,ident,arguments,output,.. } =>  {
-                return  Some(ActorMethodNew{ vis,sig,ident,arguments: Some(arguments), output, new_sig, res_opt });
+                return  Some(ActorMethodNew{ vis,sig,ident,arguments: Some(arguments), output, new_sig, res_opt,res_opt_path });
             },
             ActorMethod::O    { vis,sig,ident,output,..} =>  {
-                return  Some(ActorMethodNew{ vis,sig,ident,arguments: None, output, new_sig, res_opt });
+                return  Some(ActorMethodNew{ vis,sig,ident,arguments: None, output, new_sig, res_opt,res_opt_path });
             } 
             _   =>  return  None,
         };
@@ -108,10 +110,10 @@ impl ActorMethodNew {
     }
 
     pub fn  live_ret_statement(&self,  init_live: &TokenStream ) -> TokenStream {
-       
-        match self.res_opt {
-            Some(true)  =>  quote!{ Ok ( #init_live )},
-            Some(false) =>  quote!{ Some( #init_live )},
+        let ActorMethodNew{res_opt,res_opt_path,..} = &self;
+        match res_opt {
+            Some(true)  =>  quote!{ #res_opt_path :: Ok ( #init_live )},
+            Some(false) =>  quote!{ #res_opt_path :: Some( #init_live )},
             None        =>  quote!{ #init_live },
         }
     }
@@ -163,8 +165,15 @@ pub fn get_new_sig( sig: &Signature, ty: &Type) -> Signature {
     signature
 }
 
+pub fn clean_path( path : &Path ) -> Path {
+    let mut path = path.clone();
+    if let Some(segment) = path.segments.last_mut(){
+        segment.arguments = syn::PathArguments::None;
+    }
+    path
+}
 
-fn check_self_return( sig: &Signature, ty_name: &Type ) -> (Signature,Option<bool>) {
+fn check_self_return( sig: &Signature, ty_name: &Type ) -> (Signature,Option<bool>,Option<Path>) {
 
     let option_ident = format_ident!("Option");
     let result_ident = format_ident!("Result");
@@ -174,24 +183,27 @@ fn check_self_return( sig: &Signature, ty_name: &Type ) -> (Signature,Option<boo
         ReturnType::Type(_,ty_path) => {
             
             if  ty_self.eq(ty_path) {
-                return (get_new_sig(sig,ty_name), None);
+                return (get_new_sig(sig,ty_name), None, None);
             } 
 
             else if ty_name.eq(ty_path) { 
-                return (get_new_sig(sig,ty_name), None);
+                return (get_new_sig(sig,ty_name), None, None);
             }
 
             match ty_path.as_ref(){ 
                 Type::Path( p ) => {
-                    let segment = &mut p.path.segments.last().unwrap();
-                    let mut res_opt : Option<bool> = None;
+                    let segment = p.path.segments.last().unwrap();
+                    let mut res_opt : Option<bool>      = None;
+                    let mut res_opt_path : Option<Path> = None;
                     
                     if  option_ident.eq(&segment.ident) {
                         res_opt = Some(false);
+                        res_opt_path = Some(clean_path(&p.path));
                     }
 
                     else if result_ident.eq(&segment.ident) {
                         res_opt = Some(true);
+                        res_opt_path = Some(clean_path(&p.path));
                     }
 
                     if res_opt.is_some(){
@@ -204,11 +216,11 @@ fn check_self_return( sig: &Signature, ty_name: &Type ) -> (Signature,Option<boo
                                     match arg {   
                                         syn::GenericArgument::Type( ty ) => {
                                             if ty_self.eq(ty){ 
-                                                return (get_new_sig(sig,ty_name), res_opt);
+                                                return (get_new_sig(sig,ty_name), res_opt, res_opt_path);
                                             }
 
                                             else if ty_name.eq(ty){
-                                                return (get_new_sig(sig,ty_name), res_opt);
+                                                return (get_new_sig(sig,ty_name), res_opt, res_opt_path);
                                             }
                                             else {
                                                 let (msg,note,help) = error::met_new_not_instance(sig, ty_name, quote!{#ty},res_opt);
@@ -322,9 +334,9 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, aaa: &ActorAttr
                 // check if there is a function "new" or "try_new"
                 if sig.ident.eq(&ident_new) || sig.ident.eq(&ident_try_new){
                 
-                    let(new_sig,res_opt) = check_self_return(&mut sig.clone(),actor_type);
+                    let(new_sig,res_opt,res_opt_path) = check_self_return(&mut sig.clone(),actor_type);
                     let method = sieve( vis,org_err,sig.clone(),Some(true));
-                    method_new = ActorMethodNew::try_new( method, new_sig, res_opt );
+                    method_new = ActorMethodNew::try_new( method, new_sig, res_opt,res_opt_path );
                     act = false;
                     continue; 
                 } 

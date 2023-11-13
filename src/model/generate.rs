@@ -412,14 +412,14 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars:
 
         let legend_call = 
         if aaa.debut.is_legend(){
-            quote!{ let _ = #script_name :: #actor_legend ( #debut, Some( #actor )); }
+            quote!{ let _ = #script_name :: #actor_legend ( #debut, std::option::Option::Some( #actor )); }
         } else { quote!{} };
 
         let play_method = {
         
             let ok_or_some = match aaa.lib {
-                Lib::Tokio => quote!{Some},
-                _ => quote!{Ok}
+                Lib::Tokio => quote!{std::option::Option::Some},
+                _ => quote!{std::result::Result::Ok}, 
             };
             quote! {
                 #new_vis #async_decl fn #play ( #pat_type_receiver mut #actor: #actor_type #debut_pat_type ) {

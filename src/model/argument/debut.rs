@@ -203,10 +203,6 @@ impl Debut {
         let MpscChannel{ type_receiver,declaration,..} = mpsc;
         let old_inst_live = format_ident!("old_{actor}_live");
 
-        // let actor_legend      = format_ident!("actor_legend");
-        // let live_legend       = format_ident!("live_legend");
-
-
         if crate::model::is_generic(model_generics){
             abort!(Span::call_site(),error::LEGEND_LIMIT_GENERIC);
         }
@@ -233,10 +229,10 @@ impl Debut {
                     std::sync::Mutex::new(std::collections::BTreeMap::new());
          
                     let mut collection = COLLECTION.lock().unwrap();
-                    if let Some(#actor) = #actor {
+                    if let std::option::Option::Some(#actor) = #actor {
          
                         (*collection).insert(#debut, #actor);
-                        None
+                        std::option::Option::None 
                     } else {
                         (*collection).remove(&#debut)
                     }
@@ -255,10 +251,10 @@ impl Debut {
             
                     let mut collection = COLLECTION.lock().unwrap();
             
-                    if let Some(#live) = #live {
+                    if let std::option::Option::Some(#live) = #live {
             
                         (*collection).insert(#name .to_string(), #live);
-                        None
+                        std::option::Option::None
                     } else {
                         (*collection).remove(& #name .to_string())
                     }
@@ -278,7 +274,7 @@ impl Debut {
                         // this will stop the while loop in play
                         let _ = self. #inter_new_channel ();
                         let #name = self. #inter_get_name ();
-                        let _ = #script_name :: #live_legend ( #name ,Some(self.clone()));
+                        let _ = #script_name :: #live_legend ( #name ,std::option::Option::Some(self.clone()));
                     }
                 }
             }
@@ -298,14 +294,14 @@ impl Debut {
             quote!{
                 #new_vis fn #try_old < #intername :std::string::ToString > (#name : #intername) -> std::option::Option< #live_name > {
                     //get actor
-                    let mut #old_inst_live = #script_name :: #live_legend (#name,None)?;
+                    let mut #old_inst_live = #script_name :: #live_legend (#name, std::option::Option::None)?;
                     let #debut = #old_inst_live. #inter_get_debut();
                     let #debut_play = #debut .clone();
                     let receiver = #old_inst_live. #inter_new_channel();
-                    let #actor = #script_name :: #actor_legend ( #debut, None )?;
+                    let #actor = #script_name :: #actor_legend ( #debut, std::option::Option::None )?;
 
                     #spawn
-                    Some(#old_inst_live)
+                    std::option::Option::Some(#old_inst_live)
                 }
             }
         ));
