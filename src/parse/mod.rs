@@ -97,7 +97,7 @@ pub fn split_file(
                         } else {
 
                             let end = index + s.len();
-                            let new_attr_str = nested::edit_remove_active_file_args(&prefix[index..=end], &edit_attr.idents);
+                            let new_attr_str = nested::edit_remove_active_file_args(s,&prefix[index..=end], &edit_attr.idents);
                             prefix.replace_range(index..=end, &new_attr_str);
 
                         }
@@ -188,6 +188,7 @@ fn create_edifix(edit_sdpl: BTreeMap<Ident,TokenStream>) -> String {
 mod tests {
     use super::*;
 
+
     #[test]
     fn test_func_group_edit(){
         let attr_str = r#"
@@ -209,7 +210,7 @@ mod tests {
     let b = quote::format_ident!("b");
     let c = quote::format_ident!("c");
     let new_attr_str = 
-    nested::edit_remove_active_file_args(attr_str,&Some(vec![a,b,c]));
+    nested::edit_remove_active_file_args(attr_str,attr_str,&Some(vec![a,b,c]));
 
     let expect_attr_str = r#"
 #[interthread::group(
@@ -244,7 +245,7 @@ mod tests {
 )]"#;
 
 
-    let new_attr_str = nested::edit_remove_active_file_args(attr_str,&None);
+    let new_attr_str = nested::edit_remove_active_file_args(attr_str,attr_str,&None);
 
     let expect_attr_str = r#"
 #[interthread::actor(

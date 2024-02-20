@@ -15,7 +15,7 @@
 //! [Actors with Tokio – a lesson in ownership - Alice Ryhl](https://www.youtube.com/watch?v=fTXuGRP1ee4)
 //! (video).
 //! This article not only inspired the development of the 
-//! `interthread` crate but also serves as foundation 
+//! `interthread` crate but serves as foundation 
 //! for the Actor Model implementation logic in it. 
 
 
@@ -85,8 +85,8 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.2.0"
-//!oneshot     = "0.1.5" 
+//!interthread = "1.2.2"
+//!oneshot     = "0.1.6" 
 //!```
 //! 
 //! Filename: main.rs
@@ -95,7 +95,7 @@
 //!    value: i8,
 //!}
 //!
-//!#[interthread::actor(channel=2)] // <-  this is it 
+//!#[interthread::actor] 
 //!impl MyActor {
 //!
 //!    pub fn new( v: i8 ) -> Self {
@@ -259,14 +259,14 @@
 //! macro, such as 
 //! 
 //!```rust
-//!#[interthread::actor(channel=2, edit(script(imp(play))))]
+//!#[interthread::actor(edit(script(imp(play))))]
 //!``` 
 //! 
 //! it allows for manual implementation of the `play` part, which 
 //! gives the flexibility to customize and modify 
 //! the behavior of the `play` to suit any requared logic.
 //! 
-//! In addition the Debug trait is also implemented for the `script`struct.
+//! In addition the Debug trait is implemented for the `script`struct.
 //!  
 //! ```rust
 //!impl std::fmt::Debug for MyActorScript {
@@ -487,7 +487,7 @@ const LINE_ENDING: &'static str = "\n";
 /// // you can have "example" macro in the same file
 /// // #[example(path="src/my_file.rs")]
 ///
-///#[actor(channel=5)]
+///#[actor]
 ///impl Number {
 ///    pub fn new(value: u32) -> Self {Self}
 ///}
@@ -624,7 +624,7 @@ const LINE_ENDING: &'static str = "\n";
 /// [`group`](./attr.group.html) macros.
 /// 
 /// For example, if you want to expand only the
-/// [`actor`](./attr.actor.html) macro in the generated 
+/// [`actor`](./attr.actor.html) macro in generated 
 /// example code, you can use the following attribute:
 /// 
 /// ```rust
@@ -691,19 +691,19 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    channel = 0 * 
 ///              n (usize)
 ///
-///        lib = \"std\" *
-///              \"smol\"
-///              \"tokio\"
-///              \"async_std\"
+///        lib = "std" *
+///              "smol"
+///              "tokio"
+///              "async_std"
 ///
 ///        edit( 
 ///             script(..)
 ///             live(..)
 ///            ) 
 ///
-///        file = \"path/to/current/file.rs\"
+///        file = "path/to/current/file.rs"
 ///        
-///        name = \"\" 
+///        name = "" 
 ///
 ///       assoc 
 ///        
@@ -811,9 +811,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///
 /// To modify the `foo` method within `ActorLive` methods:
 /// ```rust
-/// #[actor(channel = 2,
-///    edit(live(imp(foo))))
-/// ]
+/// #[actor( edit(live(imp(foo))) )]
 /// ```
 /// For multiple methods, simply extend the list: `edit(live(imp(foo, bar)))`.
 /// To edit code from both structs : `edit(script(imp(play)), live(imp(foo, bar)))`.
@@ -837,7 +835,6 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///pub struct MyActor(u8);
 ///
 ///#[interthread::actor(
-///    channel=2,
 ///    file="src/main.rs",
 ///    edit(live(imp( file(increment) )))
 ///)]  
@@ -858,7 +855,6 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///pub struct MyActor(u8);
 ///
 ///#[interthread::actor(
-///    channel=2,
 ///    file="src/main.rs",
 ///    edit(live(imp(increment)))
 ///)]  
@@ -1009,7 +1005,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///use std::thread::spawn;
 ///pub struct MyActor ;
 ///
-///#[interthread::actor(channel=2, debut)] 
+///#[interthread::actor( debut )] 
 ///impl MyActor {
 ///    pub fn new() -> Self { Self{} } 
 ///}
@@ -1150,7 +1146,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// pub struct MyActor(u8);
 ///
 ///
-///#[interthread::actor(channel=2, debut(legend))] 
+///#[interthread::actor( debut(legend) )] 
 ///impl MyActor {
 ///
 ///    pub fn new() -> Self { Self(0) }
@@ -1222,7 +1218,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///pub struct MyActor;
 ///
 ///// opt `interact`
-///#[interthread::actor(channel=2,interact)] 
+///#[interthread::actor( interact )] 
 ///impl MyActor {
 ///
 ///    pub fn new() -> Self { Self{} } 
@@ -1280,7 +1276,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// ```rust
 /// pub struct MyActor(String);
 ///
-/// #[interthread::actor(channel=2, debut, interact)] 
+/// #[interthread::actor(debut, interact )] 
 /// impl MyActor {
 ///
 ///     pub fn new() -> Self { Self("".to_string()) } 
@@ -1296,7 +1292,6 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///     }
 /// }
 ///
-/// #[interthread::example(main(path="examples/intro_interact.rs"))] 
 /// fn main () {
 ///
 ///     let mut actor = MyActorLive::new();
@@ -1574,12 +1569,12 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 /// AA  channel = 0 * 
 ///              n (usize)
 ///
-/// AA      lib = \"std\" *
-///              \"smol\"
-///              \"tokio\"
-///              \"async_std\"
+/// AA      lib = "std" *
+///               "smol"
+///               "tokio"
+///               "async_std"
 ///
-/// AA     file = \"path/to/current/file.rs\"
+/// AA     file = "path/to/current/file.rs"
 ///
 /// AA     debut(
 ///             legend
@@ -1599,12 +1594,12 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 ///             ) 
 ///
 /// (AA)    name(
-///             self::name = \"\",
+///             self::name = "",
 ///             ..
 ///             )
 ///
 /// (AA)    path(
-///             a::path = \"path/to/type.rs\",
+///             a::path = "path/to/type.rs",
 ///             ..
 ///             )       
 ///    )
