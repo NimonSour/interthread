@@ -77,8 +77,8 @@ Be sure to explore the [`example`](https://docs.rs/interthread/latest/interthrea
 
 The same example can be run in 
 - [tokio](https://crates.io/crates/tokio)
-- [async-std](https://crates.io/cratesasync-std) 
-- [smol](https://crates.io/cratessmol) 
+- [async-std](https://crates.io/crates/async-std) 
+- [smol](https://crates.io/crates/smol) 
 
 with the only difference being that the methods will 
 be marked as `async` and need to be `await`ed for 
