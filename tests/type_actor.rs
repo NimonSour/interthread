@@ -11,8 +11,15 @@ fn actor_sync_unbound_default() {
     impl Actor {
         pub fn new() -> Self{Self(0)}
         pub fn input(&mut self, v:i8){self.0 = v}
+        /// Single line doc comment check
         pub fn output(&self)->i8{self.0}
+        /**
+          * Multi-line comments...
+          * check
+        */
         pub fn in_out(&self,v:i8)->i8{v}
+
+        #[doc = r"Direct doc comment check"]
         pub fn add(&mut self, v:i8) -> i8{self.0 += v;self.0}
     }
     let mut live = ActorLive::new();

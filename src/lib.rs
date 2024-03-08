@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.2.2"
+//!interthread = "1.2.3"
 //!oneshot     = "0.1.6" 
 //!```
 //! 
@@ -641,7 +641,7 @@ const LINE_ENDING: &'static str = "\n";
 #[proc_macro_attribute]
 pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
 
-    let mut eaa   = model::attribute::example::ExampleAttributeArguments::default();
+    let mut eaa   = model::attribute::ExampleAttributeArguments::default();
 
     let aaa_parser = 
     syn::meta::parser(|meta| eaa.parse(meta));

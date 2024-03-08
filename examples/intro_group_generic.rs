@@ -137,7 +137,7 @@ where
 
 pub fn main(){
 
-    let aa = Aa(8u8,vec![1u16,1,1],1u32);
+    let aa  = Aa(8u8, vec![1u16,1,1],1u32);
     let bb = Bb(8u16,vec![1u16,1,1],1u32);
     let cc = Cc(8u32,vec![1u16,1,1],1u32);
     let mut group = AaBbCcGroupLive::new(aa,bb,cc);

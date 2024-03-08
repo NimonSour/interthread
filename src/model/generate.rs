@@ -316,6 +316,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars:
         let func_new_name           = &new_sig.ident;
         let (args_ident, _ )   = method::arguments_pat_type(&met_new.get_arguments());
         let unwrapped          = met_new.unwrap_sign();
+        let doc_attrs      = &met_new.doc_attrs;
         let vis                = &met_new.vis.clone();
         let group_fields_init = model_sdpl.get_fields_init();
         let (init_live, play_args) = {
@@ -345,6 +346,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars:
         
         let func_new_body = quote!{
 
+            #(#doc_attrs)*
             #vis #new_sig {
                 let #actor = #actor_name:: #func_new_name #args_ident #unwrapped;
                 #declaration

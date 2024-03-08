@@ -121,7 +121,7 @@ fn be_main( path: &PathBuf ,lib: Lib ) ->  Option<syn::File> {
             if stem == "main" {
                 return None;
             }
-            let main_file = crate::file::main_file(stem.clone().into(),lib);
+            let main_file = crate::file::main_file(stem.into(),lib);
             return Some( main_file);
         }
         let msg = "Internal Error.'show::be_main'. Could not cast OsStr to Str!";

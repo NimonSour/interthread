@@ -3,31 +3,31 @@ use crate::model::{
     ActorAttributeArguments, OneshotChannel, MpscChannel,
     name,Cont,Vars,Lib,ImplVars,InterVars};
 
-use syn::{Path,Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Receiver,Token};
+use syn::{Attribute,Path,Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Receiver,Token};
 use proc_macro_error::abort;
 use proc_macro2::{TokenStream,Span};
 use quote::{quote,format_ident};
 
 #[derive(Debug,Clone)]
 pub enum ActorMethod {
-    Io  { vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars, stat: bool,  arguments: Vec<FnArg>, output: Box<Type> },   
-    I   { vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars,              arguments: Vec<FnArg>,                   },    
-    O   { vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars, stat: bool,                         output: Box<Type> },    
-    None{ vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars,                                                        }, 
+    Io  { doc_attrs: Vec<Attribute>, vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars, stat: bool,  arguments: Vec<FnArg>, output: Box<Type> },   
+    I   { doc_attrs: Vec<Attribute>, vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars,              arguments: Vec<FnArg>,                   },    
+    O   { doc_attrs: Vec<Attribute>, vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars, stat: bool,                         output: Box<Type> },    
+    None{ doc_attrs: Vec<Attribute>, vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars,                                                        }, 
 }
 
 impl ActorMethod {
 
     pub fn reset(self) -> Self {
 
-        let (vis,org_err,sig,stat) = 
+        let (doc_attrs,vis,org_err,sig,stat) = 
         match self {
-            Self::Io  {vis,org_err,sig,stat,..} => (vis,org_err,sig,Some(stat)),  
-            Self::I   {vis,org_err,sig,..} => (vis,org_err,sig,None),  
-            Self::O   {vis,org_err,sig,stat,..} => (vis,org_err,sig,Some(stat)),  
-            Self::None{vis,org_err,sig,..} => (vis,org_err,sig,None),  
+            Self::Io  {doc_attrs, vis,org_err,sig,stat,..} => (doc_attrs, vis, org_err, sig, Some(stat)),  
+            Self::I   {doc_attrs, vis,org_err,sig,..}            => (doc_attrs, vis, org_err, sig, None),  
+            Self::O   {doc_attrs, vis,org_err,sig,stat,..} => (doc_attrs, vis, org_err, sig, Some(stat)),  
+            Self::None{doc_attrs, vis,org_err,sig,..}            => (doc_attrs, vis, org_err, sig, None),  
         };
-        sieve(vis,org_err, sig, stat)
+        sieve(doc_attrs,vis,org_err, sig, stat)
     }
 
     pub fn get_mut_sig(&mut self) -> &mut Signature {
@@ -70,6 +70,7 @@ impl ActorMethod {
 #[derive(Debug,Clone)]
 pub struct ActorMethodNew {
     
+    pub doc_attrs:     Vec<Attribute>,
     pub vis:               Visibility,
     pub sig:                Signature,
     pub new_sig:            Signature,
@@ -92,11 +93,11 @@ impl ActorMethodNew {
         
         match met {
 
-            ActorMethod::Io   { vis,sig,ident,arguments,output,.. } =>  {
-                return  Some(ActorMethodNew{ vis,sig,ident,arguments: Some(arguments), output, new_sig, res_opt,res_opt_path });
+            ActorMethod::Io   { doc_attrs,vis,sig,ident,arguments,output,.. } =>  {
+                return  Some(ActorMethodNew{ doc_attrs,vis,sig,ident,arguments: Some(arguments), output, new_sig, res_opt,res_opt_path });
             },
-            ActorMethod::O    { vis,sig,ident,output,..} =>  {
-                return  Some(ActorMethodNew{ vis,sig,ident,arguments: None, output, new_sig, res_opt,res_opt_path });
+            ActorMethod::O    { doc_attrs,vis,sig,ident,output,..} =>  {
+                return  Some(ActorMethodNew{ doc_attrs,vis,sig,ident,arguments: None, output, new_sig, res_opt,res_opt_path });
             } 
             _   =>  return  None,
         };
@@ -296,14 +297,21 @@ fn is_vis( v: &Visibility ) -> bool {
     }
 }
 
-fn get_sigs(item_impl: &syn::ItemImpl) -> Vec<(Visibility,Signature)>{
-    let mut res :Vec<(Visibility,Signature)> = Vec::new();
+
+fn get_sigs(item_impl: &syn::ItemImpl) -> Vec<(Vec<syn::Attribute>,Visibility,Signature)>{
+    let mut res  = Vec::new();
 
     for itm in &item_impl.items {
         match itm {
             ImplItem::Fn( met ) => {
                 if is_vis(&met.vis) {
-                    res.push((met.vis.clone(),met.sig.clone()));
+                    let doc_attrs = 
+                        met.attrs
+                            .iter()
+                            .filter(|&x|  x.path().is_ident("doc"))
+                            .map(|x|x.clone())
+                            .collect::<Vec<_>>();
+                    res.push((doc_attrs, met.vis.clone(), met.sig.clone()));
                 }
             },
             _ => (),
@@ -321,13 +329,10 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, aaa: &ActorAttr
     let ident_try_new                   = format_ident!("try_new");
     let ActorAttributeArguments{ assoc,path,..} = aaa;
 
-    // use item_vis for `group` 
-    let sigs = get_sigs(&item_impl);
-
-    for (vis,sig) in sigs {
+    for (doc_attrs, vis,sig) in get_sigs(&item_impl) {
         let org_err = OriginVars{path: path.clone(), actor_type: actor_type.clone(),sig:sig.clone()};
         if is_self_refer(&sig){
-            loc.push(sieve( vis,org_err,explicit(&sig,actor_type),Some(false)));
+            loc.push(sieve( doc_attrs,vis,org_err,explicit(&sig,actor_type),Some(false)));
         } else {
             
             if act {
@@ -335,7 +340,7 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, aaa: &ActorAttr
                 if sig.ident.eq(&ident_new) || sig.ident.eq(&ident_try_new){
                 
                     let(new_sig,res_opt,res_opt_path) = check_self_return(&mut sig.clone(),actor_type);
-                    let method = sieve( vis,org_err,sig.clone(),Some(true));
+                    let method = sieve(doc_attrs,vis,org_err,sig.clone(),Some(true));
                     method_new = ActorMethodNew::try_new( method, new_sig, res_opt,res_opt_path );
                     act = false;
                     continue; 
@@ -344,7 +349,7 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, aaa: &ActorAttr
     
             if *assoc {
                 if is_return(&sig){
-                    loc.push(sieve( vis,org_err,explicit(&sig,actor_type),Some(true)));
+                    loc.push(sieve( doc_attrs,vis,org_err,explicit(&sig,actor_type),Some(true)));
                 }
             }
         }
@@ -352,7 +357,7 @@ pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, aaa: &ActorAttr
     (loc, method_new)
 }
 
-pub fn sieve( vis: Visibility, org_err: OriginVars, mut sig: Signature, stat: Option<bool>) -> ActorMethod {
+pub fn sieve( doc_attrs: Vec<Attribute>, vis: Visibility, org_err: OriginVars, mut sig: Signature, stat: Option<bool>) -> ActorMethod {
 
     let stat = if stat.is_some(){ stat.unwrap() } else { is_self_refer(&sig) };
     let arg_bool = if_args_sig_clean_pats(&org_err, &mut sig);
@@ -362,17 +367,17 @@ pub fn sieve( vis: Visibility, org_err: OriginVars, mut sig: Signature, stat: Op
         ReturnType::Type(_,output) => { 
 
             if arg_bool {
-                return ActorMethod::Io{ vis, org_err, sig, stat, ident, arguments, output };
+                return ActorMethod::Io{ doc_attrs, vis, org_err, sig, stat, ident, arguments, output };
             } else {
-                return ActorMethod::O{ vis, org_err, sig, stat, ident, output };
+                return ActorMethod::O{ doc_attrs, vis, org_err, sig, stat, ident, output };
             }
         },
         ReturnType::Default => {
 
             if arg_bool {
-                return ActorMethod::I{ vis, org_err, sig, ident, arguments };
+                return ActorMethod::I{ doc_attrs,vis, org_err, sig, ident, arguments };
             } else {
-                return ActorMethod::None{ vis, org_err, sig,ident };
+                return ActorMethod::None{ doc_attrs, vis, org_err, sig,ident };
             }
         },
     }
@@ -486,7 +491,8 @@ pub fn to_async( lib: &Lib, sig: &mut Signature ) {
 
 pub fn live_static_method( 
     actor_name: &Ident,
-         ident: &Ident, 
+         ident: &Ident,
+     doc_attrs: &Vec<Attribute>, 
            vis: &Visibility,
        mut sig: Signature,
           args: TokenStream,
@@ -495,6 +501,7 @@ pub fn live_static_method(
     change_signature_refer(&mut sig);
     let await_call = sig.asyncness.as_ref().map(|_|quote!{.await});
     let stat_met = quote! {
+        #(#doc_attrs)*
         #vis #sig {
             #actor_name:: #ident #args #await_call
         }
@@ -574,14 +581,14 @@ pub fn to_raw_parts (
 
         match &method {
 
-            ActorMethod::Io   { vis, org_err,  ident, stat,  arguments, output,.. } => {
+            ActorMethod::Io   { doc_attrs, vis, org_err,  ident, stat,  arguments, output,.. } => {
                 check_met_name(ident,org_err);
                 let mut inter_vars = some_inter_vars(*interact, org_err, &sig, arguments,None);
                 let (args_ident,args_type) = arguments_pat_type(&arguments);
 
                 if *stat {
 
-                    live_static_method(&actor_name,ident, vis, sig, args_ident,live_mets)
+                    live_static_method(&actor_name,ident, doc_attrs,vis, sig, args_ident,live_mets)
                 }
                 else {
                     // Debug Arm push
@@ -609,7 +616,7 @@ pub fn to_raw_parts (
                     } else {( None,sig)};
 
                     let live_met    = quote! {
-
+                        #(#doc_attrs)*
                         #vis #sig {
                             #live_meth_send_recv
                             #inter_gets
@@ -637,7 +644,7 @@ pub fn to_raw_parts (
 
 
 
-            ActorMethod::I    { vis,org_err, ident, arguments ,..} => {
+            ActorMethod::I    { doc_attrs,vis,org_err, ident, arguments ,..} => {
                 
                 check_met_name(ident,org_err);
                 let mut inter_vars = some_inter_vars(*interact, org_err, &sig, arguments, Some(oneshot));
@@ -673,7 +680,7 @@ pub fn to_raw_parts (
                 } else {( None,sig,None)};
 
                 let live_met = quote!{
-    
+                    #(#doc_attrs)*
                     #vis #sig {
 
                         #inter_gets
@@ -693,13 +700,13 @@ pub fn to_raw_parts (
                 script_fields.push(script_field);
                 
             },
-            ActorMethod::O    { vis, ident, org_err, stat, output ,..} => {
+            ActorMethod::O    { doc_attrs, vis, ident, org_err, stat, output ,..} => {
                 
                 check_met_name(ident,org_err);
                 let (args_ident,_) = arguments_pat_type(&vec![]);
 
                 if *stat {
-                    live_static_method(&actor_name,ident, vis, sig, args_ident,live_mets)
+                    live_static_method(&actor_name,ident, doc_attrs, vis, sig, args_ident,live_mets)
                 }
                 else {
                     
@@ -722,7 +729,7 @@ pub fn to_raw_parts (
                     let recv_output = oneshot.recv_call(cust_name,&ident);
                     let msg_variant = (*group_wrap_variant)(quote!{ #script_name :: #arm_match });
                     let live_met = quote!{
-                    
+                        #(#doc_attrs)*
                         #vis #sig {
                             #live_meth_send_recv
                             let #msg = #msg_variant ;
@@ -747,7 +754,7 @@ pub fn to_raw_parts (
 
 
 
-            ActorMethod::None { vis, ident ,org_err,..} => {
+            ActorMethod::None { doc_attrs,vis, ident ,org_err,..} => {
 
                 check_met_name(ident,org_err);
                 // Debug Arm push
@@ -766,7 +773,7 @@ pub fn to_raw_parts (
                 // Live Method
                 let msg_variant = (*group_wrap_variant)(quote!{ #script_name :: #arm_match });
                 let live_met = quote!{
-                
+                    #(#doc_attrs)*
                     #vis #sig {
                         let #msg = #msg_variant ;
                         #sender_call

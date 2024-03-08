@@ -15,7 +15,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.2.2"
+interthread = "1.2.3"
 oneshot     = "0.1.6" 
 ```
 
