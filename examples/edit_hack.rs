@@ -7,7 +7,7 @@ pub struct MyActor {
 }
 
 // this is initial macro 
-// #[actor(channel=2,file="src/main.rs",edit(script(imp(play))))]
+// #[actor(channel=2,file="src/main.rs",edit(script(imp(file(play)))))]
 // will change to 
 #[actor(channel=2, edit(script(imp(play))))]
 
@@ -33,7 +33,7 @@ impl MyActor {
 
 // we have the code of `play` component
 // using `edit` in conjuction with `file`
-// Initiated By  : #[actor(channel=2,file="src/main.rs",edit(script(imp(play))))]  
+// Initiated By  : #[actor(channel=2,file="src/main.rs",edit(script(imp(file(play)))))]  
 impl MyActorScript {
 
     pub fn play( 

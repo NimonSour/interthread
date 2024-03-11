@@ -30,7 +30,7 @@ impl Actor
 
 //++++++++++++++++++[ Interthread  Write to File ]+++++++++++++++++//
 // Object Name   : MaunActor  
-// Initiated By  : #[interthread::actor(channel=2,file="path/to/this/file.rs",edit(live(imp(concat))))]  
+// Initiated By  : #[interthread::actor(channel=2,file="path/to/this/file.rs",edit(live(imp(file(concat)))))]  
 
 
 impl ActorLive {

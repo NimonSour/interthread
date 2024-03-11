@@ -870,7 +870,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///
 /// //++++++++++++++++++[ Interthread  Write to File ]+++++++++++++++++//
 /// // Object Name   : MyActor  
-/// // Initiated By  : #[interthread::actor(channel=2,file="src/main.rs",edit(live(imp(file(increment)))))]  
+/// // Initiated By  : #[interthread::actor(file="src/main.rs",edit(live(imp(file(increment)))))]  
 /// 
 /// 
 /// impl MyActorLive {

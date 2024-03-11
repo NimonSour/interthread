@@ -47,7 +47,7 @@ where
 
 //++++++++++++++++++[ Interthread  Write to File ]+++++++++++++++++//
 // Object Name   : MaunActor  
-// Initiated By  : #[interthread::actor(channel=2,file="path/to/this/file.rs",edit(live(imp(add_number))))]  
+// Initiated By  : #[interthread::actor(channel=2,file="path/to/this/file.rs",edit(live(imp(file(add_number)))))]  
 
 
 impl<T> MaunActorLive<T>
