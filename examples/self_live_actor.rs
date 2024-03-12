@@ -46,7 +46,7 @@ impl Actor {
 
     // c)
     // this method will end up in so called "deadlock"
-    // for any method that return a type 
+    // for any method that returns a type 
     
     /* 
     pub fn call(&mut self, msg: String ) -> bool {
@@ -56,6 +56,12 @@ impl Actor {
         true 
     }
     // */
+
+    // d
+    // TODO 
+    // add a case when the lock 
+    // can be avoided using `interact`
+    // Actor needs a field to hold oneshot::Receiver
 
 
 }

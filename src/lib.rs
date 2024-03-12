@@ -737,7 +737,8 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// The `channel` argument specifies the type of channel. 
 ///   
 /// - `0`  (default)
-/// - `n` ( [`usize`] buffer size)
+/// - [`usize`] ( buffer size)
+/// 
 /// The two macros
 /// ```rust
 /// #[actor]
@@ -804,21 +805,44 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// The SDPL Model encompasses two main structs, namely `ActorScript` and `ActorLive`.
 /// Within the `edit` statement, these are referenced as `script` 
 /// and `live` respectively.
+/// 
 /// Each struct comprises three distinct sections: 
 /// - `def` - definition
 /// - `imp` - implementation block
 /// - `trt` - implemented traits
 ///
-/// To modify the `foo` method within `ActorLive` methods:
 /// ```rust
-/// #[actor( edit(live(imp(foo))) )]
+/// edit(
+///     script(
+///         def,     // <- script definition
+///         imp(..), // <- list of methods in impl block
+///         trt(..)  // <- list of traits
+///     ),
+///     
+///     live(
+///         def,     // <- live definition
+///         imp(..), // <- list of methods in impl block
+///         trt(..)  // <- list of traits
+///     )
+/// )
 /// ```
-/// For multiple methods, simply extend the list: `edit(live(imp(foo, bar)))`.
-/// To edit code from both structs : `edit(script(imp(play)), live(imp(foo, bar)))`.
-///
 /// 
-/// Also see the `file` argument which works in conjuction with `edit` for an explicit example. 
+/// So this option instructs the macro to:
 /// 
+/// - Exclude specified sections of code from the generated model.
+/// 
+/// Examples:
+/// - `edit(script)`: Excludes the entire Script enum.
+/// - `edit(live(imp))`: Excludes the entire implementation block of the Live struct.
+/// - `edit(live(def, imp(new)))`: Excludes both the definition of the Live struct and the method 'new.'
+/// - `edit(script(imp(play)), live(imp(new)))`: Excludes the 'play' method from the Script enum and the 'new' method from the Live struct.
+/// 
+/// Exclusion of code becomes necessary when the user has already 
+/// customized specific sections of the model. 
+/// To facilitate the exclusion of parts from the generated 
+/// model and enable printing them to the file for further 
+/// user customization, consider the [`file`](#file) option,
+/// which works in conjunction with the `edit` option.
 /// 
 /// # file
 /// This argument is designed to address proc macro file blindness. It requires 
@@ -886,9 +910,16 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// // *///.............[ Interthread  End of Write  ].................//
 ///
 /// ```
+/// 
 /// To specify the part of your model that should be written to 
 /// the file, simply enclose it within `file(..)` inside the `edit` 
-/// argument.
+/// argument. Once the desired model parts are printed, 
+/// the macro will automatically clean the `file` arguments, 
+/// adjusting itself to the correct state.
+/// 
+/// A special case of the `edit` and `file` conjunction, 
+/// using `edit(file)` results in the macro being replaced with 
+/// the generated code on the file.
 /// 
 ///  > **Note:** While it is possible to have multiple actor macros
 /// within the same module, only one of the macro can have file 
