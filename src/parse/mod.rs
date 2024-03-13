@@ -188,6 +188,27 @@ fn create_edifix(edit_sdpl: BTreeMap<Ident,TokenStream>) -> String {
 mod tests {
     use super::*;
 
+    #[test]
+    fn test_for_attr_inside_impl() {
+
+        let attr_text = r##"#[actor(file="abs.rs", edit(script) )]"##;
+        let impl_text = r#"
+        impl ActorB{
+            #[doc="Comment on ActorB::new"]
+            pub fn new() -> Self{ Self{} }
+        }
+        "#;
+
+        let text = format!("{attr_text}{impl_text}");
+        let org_attr = parse_attr(attr_text).unwrap();
+        let org_impl = syn::parse_str::<ItemImpl>(impl_text).unwrap();
+
+        let mut icb = ItemCodeBlock::new(text);
+        let res_attr = 
+        icb.get_item_code(vec![org_attr.clone()],&org_impl).unwrap()[0].1.clone();
+
+        assert_eq!(res_attr,org_attr);
+    }
 
     #[test]
     fn test_func_group_edit(){
@@ -231,10 +252,11 @@ mod tests {
     // println!("{new_attr_str}");
 
     }
-    
+
 
     #[test]
     fn test_func_actor_edit(){
+        // in 'trt' file is an ident
         let attr_str = r#"
 #[interthread::actor(
     file="path/to/abc.rs",
@@ -260,7 +282,39 @@ mod tests {
     // println!("{new_attr_str}");
 
     }
+
     
+
+    #[test]
+    fn test_func_actor_edit_plus_comment(){
+        let attr_str = r#"
+#[interthread::actor(
+    file="path/to/abc.rs",
+    edit(
+        script( def, file(imp), trt(file) ),
+        file(live(   def, imp, trt)),
+        //file(live(   def, imp, trt)),
+    )
+)]"#;
+
+
+    let new_attr_str = nested::edit_remove_active_file_args(attr_str,attr_str,&None);
+
+    let expect_attr_str = r#"
+#[interthread::actor(
+    file="path/to/abc.rs",
+    edit(
+        script( def, imp, trt(file) ),
+        live(   def, imp, trt),
+        //file(live(   def, imp, trt)),
+    )
+)]"#;
+
+    assert_eq!(expect_attr_str,new_attr_str);
+
+    }
+
+
    // TESTS FOR PARSER
     #[test]
     fn explicit_chars_in_str(){

@@ -15,7 +15,7 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "1.2.3"
+interthread = "1.2.4"
 oneshot     = "0.1.6" 
 ```
 
@@ -35,6 +35,7 @@ impl MyActor {
     pub fn increment(&mut self) {
         self.value += 1;
     }
+    /// support for doc comments!
     pub fn add_number(&mut self, num: i8) -> i8 {
         self.value += num;
         self.value

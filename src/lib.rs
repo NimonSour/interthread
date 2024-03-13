@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.2.3"
+//!interthread = "1.2.4"
 //!oneshot     = "0.1.6" 
 //!```
 //! 
@@ -847,7 +847,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// # file
 /// This argument is designed to address proc macro file blindness. It requires 
 /// a string path to the current file as its value. Additionally, within the `edit` argument,
-/// you can use the keyword `file` to specify which portion of the excluded code should be written
+/// one can use the keyword `file` to specify which portion of the excluded code should be written
 /// to the current module, providing the user with a starting point for customization.
 ///  
 ///  
@@ -913,17 +913,27 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// To specify the part of your model that should be written to 
 /// the file, simply enclose it within `file(..)` inside the `edit` 
-/// argument. Once the desired model parts are printed, 
+/// argument. Once the desired model parts are written, 
 /// the macro will automatically clean the `file` arguments, 
 /// adjusting itself to the correct state.
+/// 
+/// 
+/// Attempting to nest `file` arguments like: 
+/// ```rust
+/// edit( file( script( file( def))))
+/// ```
+/// will result in an error.
+/// 
 /// 
 /// A special case of the `edit` and `file` conjunction, 
 /// using `edit(file)` results in the macro being replaced with 
 /// the generated code on the file.
 /// 
+/// 
+/// 
 ///  > **Note:** While it is possible to have multiple actor macros
-/// within the same module, only one of the macro can have file 
-/// argument active.
+/// within the same module, only one of the macro can have `file` 
+/// active arguments (`file` within `edit`) at a time.
 /// 
 /// 
 /// # name
@@ -961,6 +971,14 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// in generated code as instance methods, allowing them to be invoked on 
 /// the generated struct itself. 
 ///
+///  > **Note:** In the forthcoming version 1.3.0, the `assoc` option will be deprecated and removed, 
+/// in favor of supporting all non-private static (associated) methods.
+/// With this change, every `Actor::method` will be mirrored by an 
+/// equivalent named `ActorLive::method`, effectively calling `Actor::method` internally. 
+/// This option enhances the model abstraction, 
+/// eliminating the need to import the entire `Actor` type 
+/// solely to access its associated methods. 
+/// 
 /// 
 ///  ## Examples
 ///```rust

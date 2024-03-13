@@ -116,7 +116,7 @@ impl ItemCodeBlock {
 
             'l1: loop {
 
-                if self.token != "#" {
+                if self.token != "#" && self.depth == 0 {
                     if code.contains("#"){
                         while let Some((_,a,_)) = done_attrs.pop() {
                             attrs.push(a);
@@ -230,7 +230,9 @@ impl ItemCodeBlock {
                 continue 'w1;
             }
         }
-        Err("Expected Item not found!".to_string())
+        
+        let msg = format!("Internal Error. 'icb::ItemCodeBlock::get_item_code'.Expected Item not found!");
+        Err(msg)
     }
 }
 
