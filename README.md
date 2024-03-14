@@ -35,7 +35,6 @@ impl MyActor {
     pub fn increment(&mut self) {
         self.value += 1;
     }
-    /// support for doc comments!
     pub fn add_number(&mut self, num: i8) -> i8 {
         self.value += num;
         self.value
