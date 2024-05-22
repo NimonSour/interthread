@@ -7,7 +7,7 @@ struct Actor {
 // we want method "new" of Live to be excluded from 
 // code generation and to be printed on the file 
 // so we could modify it 
-// #[interthread::actor(file="path/to/file.rs", edit(live(imp( file(new) ))))]
+// #[interthread::actor(file="examples/self_live_actor.rs", edit(live(imp( file(new) ))))]
 // right after the desired part of code is added to
 // the file our initial macro will change to 
 #[interthread::actor(file="examples/self_live_actor.rs", edit(live(imp( new ))))]
