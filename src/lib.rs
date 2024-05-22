@@ -1740,6 +1740,7 @@ pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     gaa.parse_nested(nested);
     gaa.cross_check(&item_impl);
     
+    
     check::channels_import( &gaa.lib );
 
      let edit_attr = gaa.edit.attr.clone();
