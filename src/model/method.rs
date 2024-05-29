@@ -4,7 +4,7 @@ use crate::model::{
     name,Cont,Vars,Lib,ImplVars,InterVars};
 
 use syn::punctuated::Punctuated;
-use syn::{Attribute,Path,Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Receiver,Token};
+use syn::{Attribute,Path,Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Token};
 use proc_macro_error::abort;
 use proc_macro2::{TokenStream,Span};
 use quote::{quote,format_ident};
@@ -89,7 +89,6 @@ pub struct ActorMethodNew {
     pub doc_attrs:     Vec<Attribute>,
     pub vis:               Visibility,
     pub sig:                Signature,
-    // pub new_sig:            Signature,
     pub res_opt:         Option<bool>,
     pub res_opt_path:    Option<Path>,
     pub ident:                  Ident,
