@@ -18,7 +18,7 @@ impl MyActor {
 }
 pub enum MyActorScript {
     Increment {},
-    AddNumber { input: (i8), inter_send: oneshot::Sender<i8> },
+    AddNumber { num: i8, inter_send: oneshot::Sender<i8> },
     GetValue { inter_send: oneshot::Sender<i8> },
 }
 impl MyActorScript {
@@ -27,7 +27,7 @@ impl MyActorScript {
             MyActorScript::Increment {} => {
                 actor.increment();
             }
-            MyActorScript::AddNumber { input: (num), inter_send } => {
+            MyActorScript::AddNumber { num, inter_send } => {
                 inter_send
                     .send(actor.add_number(num))
                     .unwrap_or_else(|_error| {
@@ -48,7 +48,7 @@ impl MyActorScript {
         }
     }
     pub fn play(receiver: std::sync::mpsc::Receiver<MyActorScript>, mut actor: MyActor) {
-        while let Ok(msg) = receiver.recv() {
+        while let std::result::Result::Ok(msg) = receiver.recv() {
             msg.direct(&mut actor);
         }
         eprintln!("MyActor the end ...");
@@ -65,12 +65,12 @@ impl std::fmt::Debug for MyActorScript {
 }
 #[derive(Clone)]
 pub struct MyActorLive {
-    sender: std::sync::mpsc::SyncSender<MyActorScript>,
+    sender: std::sync::mpsc::Sender<MyActorScript>,
 }
 impl MyActorLive {
     pub fn new(v: i8) -> Self {
         let actor = MyActor::new(v);
-        let (sender, receiver) = std::sync::mpsc::sync_channel(2);
+        let (sender, receiver) = std::sync::mpsc::channel();
         std::thread::spawn(move || { MyActorScript::play(receiver, actor) });
         Self { sender }
     }
@@ -84,7 +84,7 @@ impl MyActorLive {
     pub fn add_number(&mut self, num: i8) -> i8 {
         let (inter_send, inter_recv) = oneshot::channel();
         let msg = MyActorScript::AddNumber {
-            input: (num),
+            num,
             inter_send,
         };
         let _ = self

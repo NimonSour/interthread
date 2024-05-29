@@ -85,12 +85,12 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "1.2.4"
+//!interthread = "2.0.0"
 //!oneshot     = "0.1.6" 
 //!```
 //! 
 //! Filename: main.rs
-//!```rust
+//!```rust no_run
 //!pub struct MyActor {
 //!    value: i8,
 //!}
@@ -112,8 +112,7 @@
 //!        self.value
 //!    }
 //!}
-//! // uncomment to see the generated code
-//! //#[interthread::example(path="src/main.rs")]  
+//!
 //!fn main() {
 //!
 //!    let actor = MyActorLive::new(5);
@@ -184,18 +183,13 @@
 //! the respective public methods of the Actor.
 //!  
 //! 
-//! ```rust
+//! ```rust no_run
 //! 
-//!pub enum MyActorScript {
-//!    Increment {},
-//!    AddNumber {
-//!        input: (i8),
-//!        output: oneshot::Sender<i8>,
-//!    },
-//!    GetValue {
-//!        output: oneshot::Sender<i8>,
-//!    },
-//!}
+//! pub enum MyActorScript {
+//!     Increment {},
+//!     AddNumber { num: i8, inter_send: oneshot::Sender<i8> },
+//!     GetValue { inter_send: oneshot::Sender<i8> },
+//! }
 //! 
 //! ```
 //! 
@@ -209,23 +203,30 @@
 //! the enum variants to the corresponding function calls.
 //! 
 //! 
-//!```rust
+//!```rust no_run
 //!impl MyActorScript {
 //!    pub fn direct(self, actor: &mut MyActor) {
 //!        match self {
 //!            MyActorScript::Increment {} => {
 //!                actor.increment();
 //!            }
-//!            MyActorScript::AddNumber {
-//!                input: (num),
-//!                output: send,
-//!            } => {
-//!                send.send(actor.add_number(num))
-//!                    .expect("'my_actor_direct.send'. Channel closed");
+//!            MyActorScript::AddNumber { num, inter_send } => {
+//!                inter_send
+//!                    .send(actor.add_number(num))
+//!                    .unwrap_or_else(|_error| {
+//!                        core::panic!(
+//!                            "'MyActorScript::AddNumber.direct'. Sending on a closed channel."
+//!                        )
+//!                    });
 //!            }
-//!            MyActorScript::GetValue { output: send } => {
-//!                send.send(actor.get_value())
-//!                    .expect("'my_actor_direct.send'. Channel closed");
+//!            MyActorScript::GetValue { inter_send } => {
+//!                inter_send
+//!                    .send(actor.get_value())
+//!                    .unwrap_or_else(|_error| {
+//!                        core::panic!(
+//!                            "'MyActorScript::GetValue.direct'. Sending on a closed channel."
+//!                        )
+//!                    });
 //!            }
 //!        }
 //!    }
@@ -241,16 +242,14 @@
 //! Also this function serves as the home for the Actor itself.
 //! 
 //! 
-//!```rust
+//!```rust no_run
 //!impl MyActorScript { 
-//!    pub fn play(
-//!        receiver: std::sync::mpsc::Receiver<MyActorScript>, 
-//!        mut actor: MyActor) {
-//!     
-//!        while let Ok(msg) = receiver.recv() {
+//!    pub fn play(receiver: std::sync::mpsc::Receiver<MyActorScript>, 
+//!               mut actor: MyActor) {
+//!        while let std::result::Result::Ok(msg) = receiver.recv() {
 //!            msg.direct(&mut actor);
 //!        }
-//!        eprintln!("MyActor end of life ...");
+//!        eprintln!("MyActor the end ...");
 //!    }
 //!}
 //!``` 
@@ -258,7 +257,7 @@
 //! When using the [`edit`](./attr.actor.html#edit) argument in the [`actor`](./attr.actor.html) 
 //! macro, such as 
 //! 
-//!```rust
+//!```rust no_run
 //!#[interthread::actor(edit(script(imp(play))))]
 //!``` 
 //! 
@@ -268,7 +267,7 @@
 //! 
 //! In addition the Debug trait is implemented for the `script`struct.
 //!  
-//! ```rust
+//! ```rust no_run
 //!impl std::fmt::Debug for MyActorScript {
 //!    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 //!        match self {
@@ -295,19 +294,18 @@
 //! - returns an instance of `Self`
 //! 
 //! 
-//! ```rust 
+//! ```rust no_run 
 //! 
 //!#[derive(Clone)]
 //!pub struct MyActorLive {
-//!    sender: std::sync::mpsc::SyncSender<MyActorScript>,
+//!    sender: std::sync::mpsc::Sender<MyActorScript>,
 //!}
 //!impl MyActorLive {
 //!    pub fn new(v: i8) -> Self {
-//!        let (sender, receiver) = std::sync::mpsc::sync_channel(2);
 //!        let actor = MyActor::new(v);
-//!        let actor_live = Self { sender };
-//!        std::thread::spawn(|| { MyActorScript::play(receiver, actor) });
-//!        actor_live
+//!        let (sender, receiver) = std::sync::mpsc::channel();
+//!        std::thread::spawn(move || { MyActorScript::play(receiver, actor) });
+//!        Self { sender }
 //!    }
 //!    pub fn increment(&mut self) {
 //!        let msg = MyActorScript::Increment {};
@@ -317,27 +315,35 @@
 //!            .expect("'MyActorLive::method.send'. Channel is closed!");
 //!    }
 //!    pub fn add_number(&mut self, num: i8) -> i8 {
-//!        let (send, recv) = oneshot::channel();
+//!        let (inter_send, inter_recv) = oneshot::channel();
 //!        let msg = MyActorScript::AddNumber {
-//!            input: (num),
-//!            output: send,
+//!            num,
+//!            inter_send,
 //!        };
 //!        let _ = self
 //!            .sender
 //!            .send(msg)
 //!            .expect("'MyActorLive::method.send'. Channel is closed!");
-//!        recv.recv().expect("'MyActorLive::method.recv'. Channel is closed!")
+//!        inter_recv
+//!            .recv()
+//!            .unwrap_or_else(|_error| {
+//!                core::panic!("'MyActor::add_number' from inter_recv. Channel is closed!")
+//!            })
 //!    }
 //!    pub fn get_value(&self) -> i8 {
-//!        let (send, recv) = oneshot::channel();
+//!        let (inter_send, inter_recv) = oneshot::channel();
 //!        let msg = MyActorScript::GetValue {
-//!            output: send,
+//!            inter_send,
 //!        };
 //!        let _ = self
 //!            .sender
 //!            .send(msg)
 //!            .expect("'MyActorLive::method.send'. Channel is closed!");
-//!        recv.recv().expect("'MyActorLive::method.recv'. Channel is closed!")
+//!        inter_recv
+//!            .recv()
+//!            .unwrap_or_else(|_error| {
+//!                core::panic!("'MyActor::get_value' from inter_recv. Channel is closed!")
+//!            })
 //!    }
 //!}
 //! 
@@ -479,7 +485,7 @@ const LINE_ENDING: &'static str = "\n";
 /// in `src/my_file.rs`.
 /// 
 ///Filename: my_file.rs 
-///```rust
+///```rust no_run
 ///use interthread::{actor,example};
 ///
 ///pub struct Number;
@@ -495,7 +501,7 @@ const LINE_ENDING: &'static str = "\n";
 ///```
 /// 
 ///Filename: main.rs 
-///```rust
+///```rust no_run
 ///use interthread::example;
 ///#[example(path="src/my_file.rs")]
 ///fn main(){
@@ -534,13 +540,13 @@ const LINE_ENDING: &'static str = "\n";
 /// The macro generates an example code file within the 
 /// `examples/inter` directory. For example:
 ///
-///```rust
+///```rust no_run
 ///#[example(path="my_file.rs")]
 ///```
 ///
 /// This is equivalent to:
 ///
-///```rust
+///```rust no_run
 ///#[example(mod(path="my_file.rs"))]
 ///```
 ///
@@ -558,7 +564,7 @@ const LINE_ENDING: &'static str = "\n";
 /// the `examples/inter` directory: the expanded code file 
 /// and an additional `main.rs` file. 
 ///
-///```rust
+///```rust no_run
 ///#[example(main(path="my_file.rs"))]
 ///```
 ///
@@ -627,7 +633,7 @@ const LINE_ENDING: &'static str = "\n";
 /// [`actor`](./attr.actor.html) macro in generated 
 /// example code, you can use the following attribute:
 /// 
-/// ```rust
+/// ```rust no_run
 /// #[example(path="my_file.rs",expand(actor))]
 /// ```
 /// This will generate an example code file that includes 
@@ -676,12 +682,13 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// public methods that do not consume the receiver, excluding 
 /// methods like `pub fn foo(self, val: u8) -> ()` where `self` 
 /// is consumed. Please ensure that the 
-/// receiver is defined as `&self` or `&mut self`. 
+/// receiver is defined as `&mut self` or `&self`. 
 /// 
 /// If only a subset of methods is required to be 
 /// accessible across threads, split the `impl` block 
 /// into two parts. By applying the macro to a specific block, 
-/// the macro will only consider the methods within that block.
+/// the macro will only consider the methods within that block, also see options
+/// [`include-exclude`](#include-exclude).
 /// 
 /// ## Configuration Options
 ///```text 
@@ -705,7 +712,9 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///        
 ///        name = "" 
 ///
-///       assoc 
+///        show
+///       
+///       include | exclude  
 ///        
 ///       debut(
 ///             legend
@@ -726,7 +735,8 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - [`edit`](#edit)
 /// - [`file`](#file)
 /// - [`name`](#name)
-/// - [`assoc`](#assoc)
+/// - [`show`](#show)
+/// - [`include|exclude`](#include|exclude)
 /// - [`debut`](#debut)
 /// - [`interact`](#interact)
 ///
@@ -740,18 +750,18 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - [`usize`] ( buffer size)
 /// 
 /// The two macros
-/// ```rust
+/// ```rust no_run
 /// #[actor]
 /// ```
 /// and
-/// ```rust
+/// ```rust no_run
 /// #[actor(channel=0)]
 /// ```
 /// are in fact identical, both specifying same unbounded channel.
 /// 
 /// When specifying an [`usize`] value for the `channel` argument 
 /// in the [`actor`](./attr.actor.html) macro, such as 
-/// ```rust
+/// ```rust no_run
 /// #[actor(channel=4)]
 /// ```
 /// the actor will use a bounded channel with a buffer size of 4.
@@ -776,7 +786,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - `"async_std"`
 ///
 ///## Examples
-///```rust
+///```rust no_run
 ///use interthread::actor;
 ///
 ///struct MyActor;
@@ -790,8 +800,6 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///    let my_act = MyActorLive::new();
 ///}
 ///```
-/// 
-/// 
 /// 
 /// # edit
 ///
@@ -811,7 +819,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - `imp` - implementation block
 /// - `trt` - implemented traits
 ///
-/// ```rust
+/// ```rust no_run
 /// edit(
 ///     script(
 ///         def,     // <- script definition
@@ -855,7 +863,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// Filename: main.rs
 /// 
-///```rust
+///```rust no_run
 ///pub struct MyActor(u8);
 ///
 ///#[interthread::actor(
@@ -874,7 +882,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///```
 /// This is the output after saving:
 /// 
-/// ```rust
+/// ```rust no_run
 ///
 ///pub struct MyActor(u8);
 ///
@@ -919,7 +927,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// 
 /// Attempting to nest `file` arguments like: 
-/// ```rust
+/// ```rust no_run
 /// edit( file( script( file( def))))
 /// ```
 /// will result in an error.
@@ -947,7 +955,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// - "" (default): No name specified
 ///
 /// ## Examples
-///```rust
+///```rust no_run
 ///use interthread::actor;
 /// 
 ///pub struct MyActor;
@@ -964,50 +972,62 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// 
 /// 
-/// # assoc
+/// # show 
 /// 
-/// The `assoc` option indicates whether **associated**  **functions**
-/// ( also known as static methods ) that **return** a type of the actor struct are included 
-/// in generated code as instance methods, allowing them to be invoked on 
-/// the generated struct itself. 
-///
-///  > **Note:** In the forthcoming version 1.3.0, the `assoc` option will be deprecated and removed, 
-/// in favor of supporting all non-private static (associated) methods.
-/// With this change, every `Actor::method` will be mirrored by an 
-/// equivalent named `ActorLive::method`, effectively calling `Actor::method` internally. 
-/// This option enhances the model abstraction, 
-/// eliminating the need to import the entire `Actor` type 
-/// solely to access its associated methods. 
+/// The `show` option is particularly useful for users who are just starting to 
+/// work with this crate. When enabled, the model will generate doc comments 
+/// for every block of code it produces, containing the code produce, with the 
+/// exception of traits, which are simply listed.
 /// 
+/// Your text editor handles the rest.
+/// 
+/// By default, the model carries over the user's documentation comments from 
+/// the actor object methods. 
+/// Enabling `show` will add additional information, detailing the exact 
+/// code generated by the model.
+/// Try hovering over `AaLive` and its `new` method to see the generated code.
 /// 
 ///  ## Examples
-///```rust
+///```rust no_run
 ///use interthread::actor;
 ///pub struct Aa;
 ///  
-/// 
-///#[actor(name="Bb", assoc)]
+///#[actor(show)]
 ///impl Aa {
-///
+///    /// This is my comment
+///    /// Creates a new instance of AaLive.
 ///    pub fn new() -> Self { Self{} }
 /// 
-///    // we don't have a `&self`
-///    // receiver 
-///    pub fn is_even( n: u8 ) -> bool {
-///        n % 2 == 0
-///    }
 ///}
 ///
-///fn main() {
-///    
-///    let bb = BbLive::new();
-/// 
-///    // but we can call it 
-///    // as if there was one   
-///    assert_eq!(bb.is_even(84), Aa::is_even(84));
+///fn main() {    
+///    let bb = AaLive::new(); 
 ///}
 ///
 ///```
+/// Disable `show` to avoid performance overhead and excessive code generation, 
+/// when the option is no longer needed.
+/// 
+///  
+/// # include-exclude
+/// The include and exclude options are mutually exclusive filters that control 
+/// which methods are included in the generated model. Only one of these 
+/// options can be used at a time.
+/// 
+/// Usage
+/// 
+/// - include: Specifies the methods to include in the generated model.
+/// - exclude: Specifies the methods to exclude from the generated model.
+/// 
+/// For a given list of actor's methods `[a, b, c, d]`:
+/// 
+/// - Using `include(a)` will generate a model that only includes the method `a`.
+/// - Using `exclude(a,b)` will generate a model that includes the methods `c`, and `d`.
+/// 
+/// ```rust no_run
+/// #[interthread::actor( exclude(foo,bar))]
+/// ```
+/// 
 /// # debut
 /// 
 /// The generated code is designed to 
@@ -1050,7 +1070,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// ## Examples
 ///  
-///```rust
+///```rust no_run
 ///use std::thread::spawn;
 ///pub struct MyActor ;
 ///
@@ -1191,7 +1211,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 ///# Examples
 ///
-///```rust
+///```rust no_run
 /// pub struct MyActor(u8);
 ///
 ///
@@ -1262,7 +1282,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// 
 /// ## Examples
-/// ```rust
+/// ```rust no_run
 /// 
 ///pub struct MyActor;
 ///
@@ -1301,7 +1321,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// model will accommodate the user's request by instantiating 
 /// a channel pair. 
 /// 
-///```rust
+///```rust no_run
 /// 
 ///pub fn heavy_work(&self) -> oneshot::Receiver<u8> {
 ///    let (inter_send, inter_recv) = oneshot::channel::<u8>();
@@ -1322,7 +1342,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// method of the `live` instance.
 /// 
 /// ## Examples
-/// ```rust
+/// ```rust no_run
 /// pub struct MyActor(String);
 ///
 /// #[interthread::actor(debut, interact )] 
@@ -1360,7 +1380,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// Here is how `live` instance method `set_value` will look like:
 /// 
 /// 
-/// ```rust
+/// ```rust no_run
 /// 
 /// pub fn set_value(&mut self) {
 ///     let inter_name = self.inter_get_name();
@@ -1456,7 +1476,7 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 /// 
 /// ## Examples
 ///  
-///```rust
+///```rust no_run
 ///
 ///// We have `Aa` and `Bb`
 ///pub struct Aa(u8);
@@ -1534,7 +1554,7 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 /// The following is a type schema of the `group` model in relation 
 /// to the above example:
 ///  
-/// ```rust
+/// ```rust no_run
 /// 
 /// struct Aa;
 /// struct Bb;
@@ -1564,7 +1584,7 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 /// For a convenient shortcut to see the full example using `edit`,
 /// simply use `edit(file)`."
 /// 
-/// ```rust
+/// ```rust no_run
 /// #[interthread::group( file="path/to/file.rs",edit(file))]
 /// ```
 /// To inspect the generated code for field `a` type from the 
@@ -1600,13 +1620,13 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 /// `argument(field_name::argument,..)`. 
 /// In context of the example code from above, if we wanted to 
 /// include any hypothetical static (associated) methods of struct `Aa`,
-/// we would use the `assoc` argument, like so: 
+/// we would use the `show` argument, like so: 
 /// ```rust 
-/// assoc(a::assoc)
+/// show(a::show)
 /// ```
 /// To include the same argument for `main-actor` itself, we would write 
 /// ```rust 
-/// assoc(a::assoc, self::assoc)
+/// show(a::show, self::show)
 /// ```
 /// 
 /// The following is the full table of configuration options:
@@ -1627,10 +1647,31 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 ///
 /// AA     debut(
 ///             legend
-///             )   
-///
-/// (AA)   assoc(
-///             self::assoc,
+///             )
+///    
+/// AA      skip(
+///             field_name
+///             ..
+///             )
+///  
+/// (AA)   show(
+///             self::show,
+///             ..
+///             )
+/// 
+/// (AA) include(
+///             self::include(
+///                           method_name,
+///                           ..
+///                          ),
+///             ..
+///             )
+/// 
+/// (AA) exclude(
+///             self::exclude(
+///                           method_name,
+///                           ..
+///                          ),
 ///             ..
 ///             )
 ///
@@ -1650,7 +1691,7 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 /// (AA)    path(
 ///             a::path = "path/to/type.rs",
 ///             ..
-///             )       
+///             )      
 ///    )
 /// ]
 ///
@@ -1660,7 +1701,7 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 ///
 /// ```
 /// All `group` configuration options (arguments) are the same as `actor`'s arguments, 
-/// except for `path` and `allow`, which are unique to `group`.
+/// except for `path` and `skip`, which are unique to `group`.
 
 /// # Arguments
 ///  
@@ -1669,16 +1710,17 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 /// - [`edit`](attr.actor.html#edit)
 /// - [`file`](attr.actor.html#file)
 /// - [`name`](attr.actor.html#name)
-/// - [`assoc`](attr.actor.html#assoc)
+/// - [`show`](attr.actor.html#show)
+/// - [`include|exclude`](attr.actor.html#include|exclude)
 /// - [`debut`](attr.actor.html#debut)
 /// - [`path`](#path)
-/// - [`allow`](#allow)
+/// - [`skip`](#skip)
 
 /// # `path`
 /// Argument `path` is used when a `group-actor` is defined in a file different from the `group` itself.
 
-/// # `allow`
-/// Argument `allow` is used when a non-private field of the `group` is necessary but should not be included 
+/// # `skip`
+/// Argument `skip` is used when a non-private field of the `group` is necessary but should not be included 
 /// as a `group-actor`.
 ///
 /// 
@@ -1707,7 +1749,7 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 /// 
 /// To resolve this scenario, adjust the names for identical types as follows:
 /// 
-///```rust
+///```rust no_run
 /// struct AaBb {
 ///     pub a:  Aa,
 ///     pub a1: Aa,

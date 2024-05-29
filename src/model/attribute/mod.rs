@@ -188,13 +188,15 @@ pub fn get_ident_group( meta: &Meta,arg: &str) -> syn::Ident {
                 if let Some(last_path_segment) =  path.segments.first(){
                     let ident =  last_path_segment.ident.clone();
                     if ident.eq(&self_ident){
-                        let msg = format!("Expected `self::{arg}`.");
+                        let msg = format!("Expected path - `self::{arg}`.");
                         abort!(meta.path(),msg);
                     } else { return ident;}
                 }
             }
         }
     } 
-    abort!(path, error::UNEXPECTED_EDIT_GROUP_PATH; note=error::AVAIL_EDIT_GROUP );
+    let msg = "Unexpected group option path!";
+    let note = "Expected a path containing < 'field_name' :: 'option' > .";
+    abort!(path, msg; note=note );
 }
 

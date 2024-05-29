@@ -71,7 +71,8 @@ impl Debut {
                 #new_vis fn #inter_get_debut (&self) -> std::time::SystemTime {
                     *self.debut
                 }
-            }
+            },
+            vec![]
         ));
         
         live_mets.push((inter_get_count.clone(),
@@ -79,7 +80,8 @@ impl Debut {
                 #new_vis fn #inter_get_count (&self) -> usize {
                     std::sync::Arc::strong_count(&self.debut)
                 }
-            }
+            },
+            vec![]
         ));
 
         live_mets.push((inter_set_name.clone(),
@@ -87,7 +89,8 @@ impl Debut {
                 #new_vis fn #inter_set_name < #intername: std::string::ToString>(&mut self, name:  #intername) {
                     self.name = name.to_string();
                 }
-            }
+            },
+            vec![]
         ));
     
         live_mets.push((inter_get_name.clone(),
@@ -95,7 +98,8 @@ impl Debut {
                 #new_vis fn #inter_get_name (&self) -> std::string::String {
                     self.name.clone()
                 } 
-            }
+            },
+            vec![]
         ));
     
     
@@ -173,9 +177,8 @@ impl Debut {
         Vars{
             actor,
             live,
-            debut_play,
+            debut_for_play,
             sender,
-            receiver,
             name,
             live_name,
             script_name,
@@ -184,10 +187,11 @@ impl Debut {
             inter_get_name,
             inter_get_count,
             inter_get_debut,
+            inter_set_channel,
+            inter_get_channel,
             impl_vars,
             actor_legend,
             live_legend,
-            inter_new_channel,
             try_old,..
         }: &Vars,
         new_vis:        &Option<Visibility>,
@@ -200,7 +204,7 @@ impl Debut {
     ) { 
 
         let ImplVars{actor_type,model_generics,..} = &impl_vars;
-        let MpscChannel{ type_receiver,declaration,..} = mpsc;
+        let MpscChannel{ pat_type_sender, type_sender,declaration_call, declaration,..} = mpsc;
         let old_inst_live = format_ident!("old_{actor}_live");
 
         if crate::model::is_generic(model_generics){
@@ -209,14 +213,16 @@ impl Debut {
         
 
         let replace_field  = | field: &Ident|{
-            quote!{ let _ =  std::mem::replace(&mut self. #field. #sender, #sender.clone()) }
+            // quote!{ let _ =  std::mem::replace(&mut self. #field. #sender, #sender.clone()) }
+            quote!{ self. #field. #sender =  #sender.clone() ; }
         };
         let replace_fields = {
             let mut loc = vec![];
             for f in fields {
                 loc.push(replace_field(f));
             } 
-            loc.push(quote!{ let _ =  std::mem::replace(&mut self.#sender, #sender) });
+            // loc.push(quote!{ let _ =  std::mem::replace(&mut self.#sender, #sender) });
+            loc.push(quote!{ self. #sender =  #sender ; });
             loc
         };
 
@@ -263,7 +269,7 @@ impl Debut {
         ));
 
 
-
+        
         live_trts.push((format_ident!("Drop"),
         quote!{
 
@@ -272,7 +278,8 @@ impl Debut {
                 
                     if self. #inter_get_count () < 2 {
                         // this will stop the while loop in play
-                        let _ = self. #inter_new_channel ();
+                        let ( #sender, _ ) = #declaration_call ;
+                        self . #inter_set_channel ( #sender );
                         let #name = self. #inter_get_name ();
                         let _ = #script_name :: #live_legend ( #name ,std::option::Option::Some(self.clone()));
                     }
@@ -280,30 +287,40 @@ impl Debut {
             }
         }));
 
-        live_mets.push( (inter_new_channel.clone(),
+        live_mets.push( (inter_get_channel.clone(),
             quote!{
-                #new_vis  fn #inter_new_channel (&mut self) -> #type_receiver {
-                    #declaration
-                    #(#replace_fields;)*
-                    #receiver
+                #new_vis  fn #inter_get_channel (&self) -> #type_sender {
+                    self . #sender . clone()
                 }
-            }
+            },
+            vec![]
         ));
-        
+
+        live_mets.push( (inter_set_channel.clone(),
+            quote!{
+                #new_vis  fn #inter_set_channel (&mut self, #pat_type_sender){
+                    #(#replace_fields;)*
+                }
+            },
+            vec![]
+        ));
+
         live_mets.push( (try_old.clone(),
             quote!{
                 #new_vis fn #try_old < #intername :std::string::ToString > (#name : #intername) -> std::option::Option< #live_name > {
                     //get actor
                     let mut #old_inst_live = #script_name :: #live_legend (#name, std::option::Option::None)?;
                     let #debut = #old_inst_live. #inter_get_debut();
-                    let #debut_play = #debut .clone();
-                    let receiver = #old_inst_live. #inter_new_channel();
+                    let #debut_for_play = #debut .clone();
                     let #actor = #script_name :: #actor_legend ( #debut, std::option::Option::None )?;
+                    #declaration
+                    #old_inst_live . #inter_set_channel ( #sender );
 
                     #spawn
                     std::option::Option::Some(#old_inst_live)
                 }
-            }
+            },
+            vec![]
         ));
 
     }

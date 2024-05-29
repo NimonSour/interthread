@@ -125,11 +125,13 @@ impl ItemCodeBlock {
                     }
                 }
 
-                if self.first.is_some(){
+                if let Some(first) = self.first {
 
                     for (i,c) in code.clone().char_indices() {
                         // add char to future code_block 
-                        self.code_block.push(c);
+                        if first <= (index + i) {
+                            self.code_block.push(c);
+                        }
 
                         if self.start.is_some() {
                             if c == self.open { 
@@ -157,7 +159,7 @@ impl ItemCodeBlock {
                                     if self.token == "#" {
 
                                         let attr_str = &self.src[self.first.unwrap()..=self.end.unwrap()];
-                                        let attr = parse_attr(attr_str)?;
+                                        let attr = parse_attr(attr_str);
 
                                         'l2: loop {
 

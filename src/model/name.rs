@@ -15,7 +15,7 @@ pub fn get_ident_type_generics(item_impl: &syn::ItemImpl) -> (syn::Ident,syn::Ty
             (ident,Type::Path(tp.clone()),generics)
         },
         _ => {
-            let msg ="Internal Error.'actor_gen::impl_get_name'. Could not get item Impl's name!";
+            let msg ="Internal Error.'name::get_ident_type_generics'. Could not get item Impl's name!";
             abort!(item_impl,msg);
         }
     }
@@ -94,4 +94,22 @@ pub fn gen_temp_inter( ident: &Ident) -> Ident {
 pub fn gen_add_field( field: &Ident, ident: &Ident,) -> Ident {
     let field_str = &fn_to_struct( &field.to_string());
     quote::format_ident!("{field_str}{ident}")
+}
+
+pub fn combined_ident( idents: Vec<Ident>) -> Ident {
+
+    match idents.len() {
+        0 => {            
+            let msg ="Internal Error.'name::combined_ident'. Empty container not expected.";
+            abort!(Span::call_site(),msg);
+        },
+        1 => return idents[0].clone(),
+        _ => {
+            let mut combined_ident = idents[0].clone();
+            for ident in idents[1..].iter() {
+                combined_ident = format_ident!("{combined_ident}_{ident}");
+            }
+            return combined_ident;
+        }
+    }
 }

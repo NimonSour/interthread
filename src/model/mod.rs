@@ -16,7 +16,7 @@ pub use generate::*;
 
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
-use syn::{Generics,Type,Ident};
+use syn::{Item,Generics,Type,Ident,Attribute};
 use quote::{format_ident,quote};
 use std::collections::BTreeMap;
 
@@ -51,7 +51,7 @@ pub struct Cont {
 
     script_mets  : Vec<(Ident,TokenStream)>,
     script_trts  : Vec<(Ident,TokenStream)>,
-    live_mets    : Vec<(Ident,TokenStream)>,
+    live_mets    : Vec<(Ident,TokenStream, Vec<Attribute>)>,
     live_trts    : Vec<(Ident,TokenStream)>,
 
     script_fields: Vec<TokenStream>,
@@ -81,7 +81,7 @@ pub struct Vars {
     pub actor:             Ident,
     pub name:              Ident,
     pub debut:             Ident,
-    pub debut_play:        Ident,
+    pub debut_for_play:    Ident,
     pub sender:            Ident,
     pub receiver:          Ident,
     pub play:              Ident,
@@ -91,12 +91,13 @@ pub struct Vars {
     pub inter_recv:        Ident,
     pub actor_legend:      Ident,
     pub live_legend:       Ident,
-    pub inter_new_channel: Ident,
     pub try_old:           Ident,
     pub inter_get_debut:   Ident,
     pub inter_get_count:   Ident,
     pub inter_set_name:    Ident,
     pub inter_get_name:    Ident,
+    pub inter_get_channel: Ident,
+    pub inter_set_channel: Ident,
     pub intername:         Ident,
     pub msg:               Ident,
     pub self_:             Ident,
@@ -144,28 +145,29 @@ impl Vars {
         Self{
 
             actor,
-            name:             format_ident!("name"),
-            debut:            format_ident!("debut"),
-            debut_play:       format_ident!("debut_play"),
-            sender:           format_ident!("sender"),
-            receiver:         format_ident!("receiver"),
-            play:             format_ident!("play"),
-            direct:           format_ident!("direct"),
-            live:             format_ident!("live"),
-            inter_send:       format_ident!("inter_send"),
-            inter_recv:       format_ident!("inter_recv"),
-            actor_legend:     format_ident!("actor_legend"),
-            live_legend:      format_ident!("live_legend"),
-            inter_new_channel:format_ident!("inter_new_channel"),
-            try_old:          format_ident!("try_old"),
-            inter_get_debut:  format_ident!("inter_get_debut"),
-            inter_get_count:  format_ident!("inter_get_count"),
-            inter_set_name:   format_ident!("inter_set_name"),
-            inter_get_name:   format_ident!("inter_get_name"),
-            intername:        format_ident!("InterName"),
-            msg:              format_ident!("msg"),
-            self_:            format_ident!("self"),
-            impl_vars:        impl_vars,
+            name:              format_ident!("name"),
+            debut:             format_ident!("debut"),
+            debut_for_play:    format_ident!("debut_for_play"),
+            sender:            format_ident!("sender"),
+            receiver:          format_ident!("receiver"),
+            play:              format_ident!("play"),
+            direct:            format_ident!("direct"),
+            live:              format_ident!("live"),
+            inter_send:        format_ident!("inter_send"),
+            inter_recv:        format_ident!("inter_recv"),
+            actor_legend:      format_ident!("actor_legend"),
+            live_legend:       format_ident!("live_legend"),
+            try_old:           format_ident!("try_old"),
+            inter_get_debut:   format_ident!("inter_get_debut"),
+            inter_get_count:   format_ident!("inter_get_count"),
+            inter_set_name:    format_ident!("inter_set_name"),
+            inter_get_name:    format_ident!("inter_get_name"),
+            inter_get_channel: format_ident!("inter_get_channel"),
+            inter_set_channel: format_ident!("inter_set_channel"),
+            intername:         format_ident!("InterName"),
+            msg:               format_ident!("msg"),
+            self_:             format_ident!("self"),
+            impl_vars:         impl_vars,
 
             cust_name,
             script_name,
@@ -192,9 +194,11 @@ impl Vars {
             ];
             if aaa.debut.is_legend(){
                 let Vars{
-                    inter_new_channel,
+                    inter_get_channel,
+                    inter_set_channel,
                     try_old,..} = &self;
-                mets.push(inter_new_channel);
+                mets.push(inter_get_channel);
+                mets.push(inter_set_channel);
                 mets.push(try_old);
             }
             mets
@@ -213,10 +217,6 @@ impl ModelSdpl {
     pub fn new()-> Self {
         Self{ fields:BTreeMap::new() }
     }
-
-    // pub fn from( fields: BTreeMap<Ident,ActorModelSdpl> ) -> Self {
-    //     Self{fields}
-    // }
 
     pub fn insert(&mut self, field: Ident, ams:ActorModelSdpl){
         self.fields.insert(field,ams);
@@ -272,8 +272,6 @@ impl ModelSdpl {
         let edit = quote!{#(#edit)*};
         (code,edit)
     }
-
-
 }
 
 
@@ -285,8 +283,9 @@ pub struct ActorModelSdpl {
     pub edit:    EditActor,
     pub generics: Generics,
     pub vars:         Vars,
-    pub script: (  TokenStream,  Vec<(Ident,TokenStream)>,  Vec<(Ident,TokenStream)> ),
-    pub live:   (  TokenStream,  Vec<(Ident,TokenStream)>,  Vec<(Ident,TokenStream)> ),
+    pub show:         bool,
+    pub script: ( Option<Item>, Vec<(Ident,Item)>, Vec<(Ident,Item)> ),
+    pub live:   ( Option<Item>, Vec<(Ident,Item)>, Vec<(Ident,Item)> ),
 }
 
 
@@ -302,43 +301,27 @@ impl ActorModelSdpl {
     pub fn split_edit(&mut self) -> (TokenStream,TokenStream){
 
         let mut edit_script_def  = None;
-        let mut edit_script_mets = None;
-        let mut edit_script_trts = None;
+        let mut edit_script_mets   = None;
+        let mut edit_script_trts  = None;
     
         let mut edit_live_def  = None;
-        let mut edit_live_mets = None;
-        let mut edit_live_trts = None;
+        let mut edit_live_mets  = None;
+        let mut edit_live_trts  = None;
 
-
-
-        let (script,live) = 
-        match &self.edit {  EditActor{ script, live, ..  } => {(script.clone(),live.clone())}};
-        
-        let select = 
-        |
-        edit_cont: (Option<Vec<(Ident,bool)>>,bool),
-        model_cont: &mut Vec<(Ident,TokenStream)>,
-        | -> Option<Vec<TokenStream>>
-        {
-            let cont = edit_select(edit_cont,model_cont);
-            if cont.is_empty() { None } else { Some(cont) }
-        };
+        let EditActor{ script, live, ..  } = &self.edit;
 
         let diff = 
-        | ((def,scope_def),mets,trts): ( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ),
-          model_def:  &mut TokenStream,
-          model_mets: &mut Vec<(Ident,TokenStream)>,
-          model_trts: &mut Vec<(Ident,TokenStream)>,
-          edit_def:   &mut Option<TokenStream>,
-          edit_mets:  &mut Option<Vec<TokenStream>>,
-          edit_trts:  &mut Option<Vec<TokenStream>>
+        | ((def,scope_def),mets,trts): &( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ),
+          model_def:  &mut Option<Item>,
+          model_mets: &mut Vec<(Ident,Item)>,
+          model_trts: &mut Vec<(Ident,Item)>,
+          edit_def:   &mut Option<Item>,
+          edit_mets:  &mut Option<Vec<Item>>,
+          edit_trts:  &mut Option<Vec<Item>>,
         |{
-            if def {
-                let temp_def = Some(model_def.clone());
-                *model_def  = quote!{}; 
-
-                if scope_def {
-                    *edit_def = temp_def;
+            if *def {
+                if *scope_def {
+                    *edit_def = model_def.take();
                 }
             }
             // original 
@@ -366,18 +349,18 @@ impl ActorModelSdpl {
              &mut edit_live_trts 
         );
         
-        let coll_token_stream = 
-        |coll: &Vec<(Ident,TokenStream)>| -> Vec<TokenStream> 
+        let collect_items = 
+        |coll: &Vec<(Ident,Item)>| -> Vec<Item> 
         { coll.iter().map(|x| x.1.clone()).collect::<Vec<_>>() };
         
         // Prepare Token Stream Vecs
-        let script_def         = &self.script.0;
-        let script_methods = coll_token_stream(&self.script.1);
-        let script_traits  = coll_token_stream(&self.script.2);
+        let script_def = &self.script.0;
+        let script_methods = collect_items(&self.script.1);
+        let script_traits  = collect_items(&self.script.2);
 
-        let live_def           = &self.live.0;
-        let live_methods   = coll_token_stream(&self.live.1);
-        let live_traits    = coll_token_stream(&self.live.2);
+        let live_def   = &self.live.0;
+        let live_methods   = collect_items(&self.live.1);
+        let live_traits    = collect_items(&self.live.2);
 
         let (( s_impl_generics,
             s_ty_generics,
@@ -403,6 +386,14 @@ impl ActorModelSdpl {
             #(#live_traits)*
     
         };
+
+        if self.show {
+            // remove_doc_comments 
+            edit_script_def.as_mut().map(|item| remove_doc_comment(item));
+            edit_script_mets .as_mut().map(|items| for item in items { remove_doc_comment(item);});
+            edit_live_def.as_mut().map(|item| remove_doc_comment(item));
+            edit_live_mets.as_mut().map(|items| for item in items { remove_doc_comment(item);});
+        }
     
     
         let res_edit_script_mets =  
@@ -418,9 +409,7 @@ impl ActorModelSdpl {
             edit_script_trts.as_ref().map(|trts| 
                 quote!{ #(#trts)* }
             );
-    
 
-        
         let res_edit_live_mets = 
 
             edit_live_mets.as_ref().map(|mets| 
@@ -432,9 +421,9 @@ impl ActorModelSdpl {
             ); 
 
         let res_edit_live_trts = 
-        edit_live_trts.as_ref().map(|trts| 
-            quote!{ #(#trts)* }
-        );
+            edit_live_trts.as_ref().map(|trts| 
+                quote!{ #(#trts)* }
+            );
 
         let res_edit = quote!{
     
@@ -453,9 +442,30 @@ impl ActorModelSdpl {
 
 }    
 
+fn remove_doc_comment( item: &mut Item ){
 
-pub fn edit_select((edit_idents,scope): (Option<Vec<(Ident,bool)>>,bool), 
-    ident_mets: &mut Vec<(Ident,TokenStream)> ) -> Vec<TokenStream> {
+    let attrs = 
+    match item {
+
+        Item::Fn(item_fn) => &mut item_fn.attrs,
+        Item::Enum(item_enum) => &mut item_enum.attrs,
+        Item::Struct(item_struct) =>  &mut item_struct.attrs,
+        _ =>{ return ();}
+    };
+    let new_attrs= 
+        attrs.clone()
+            .into_iter()
+            .filter(|x|  !x.path().is_ident("doc"))
+            .map(|x|x.clone())
+            .collect::<Vec<_>>();
+    *attrs = new_attrs;
+}
+
+
+pub fn select(
+    (   edit_idents,scope): &(Option<Vec<(Ident,bool)>>,bool), 
+        ident_mets: &mut Vec<(Ident,Item)> 
+    ) -> Option<Vec<Item>> {
 
     let mut res = Vec::new();
 
@@ -464,24 +474,24 @@ pub fn edit_select((edit_idents,scope): (Option<Vec<(Ident,bool)>>,bool),
         if idents.is_empty() {
 
             let temp_ident_mets = std::mem::replace(ident_mets,Vec::new());
-            if scope {
+            if *scope {
                 res = temp_ident_mets.into_iter().map(|x| x.1).collect::<Vec<_>>();
             }
         }
 
         for (ident,scp) in idents {
-            if let Some(pos) = ident_mets.iter().position(|x| x.0 == ident){
+            if let Some(pos) = ident_mets.iter().position(|x| x.0 == *ident){
                 let (_,met)  = ident_mets.remove(pos);
-                if scope || scp {
+                if *scope || *scp {
                     res.push(met);
                 }
             } else {
-                let msg = format!("No method named `{}` in Actor's methods.",ident.to_string());
-                abort!(ident,msg);
+                abort!(ident,"Unknown ident.");
             }
         }
     } 
-    res
+    if res.is_empty() { None } else { Some(res) }
 }
+
 
 

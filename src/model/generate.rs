@@ -1,7 +1,7 @@
 use crate::error;
 use crate::model::{
     self,get_ident_type_generics,ModelSdpl,AttributeArguments,
-    MpscChannel,Cont,Vars,method,generic,
+    MpscChannel,Cont,Vars,method,generic,ShowComment,
     ActorAttributeArguments,Lib,Model};
 use super::{ActorMethodNew,ActorMethod};
 
@@ -79,7 +79,6 @@ pub struct ImplVars {
 
 impl ImplVars {
 
-
     pub fn get_mut_sigs(&mut self) -> Vec<&mut Signature>{
 
         let mut sigs = self.actor_methods.iter_mut().map(|m| m.get_mut_sig()).collect::<Vec<_>>();
@@ -136,7 +135,7 @@ pub fn get_impl_vars(
 
     let mut model_generics = generics.clone();
 
-    let mut sigs = actor_methods.iter_mut().map(|m| m.get_mut_sig()).collect::<Vec<_>>();
+    let mut sigs = actor_methods.iter_mut().filter(|x| !x.is_static()).map(|m| m.get_mut_sig()).collect::<Vec<_>>();
     if let Some(met_new_sig) = met_new.as_mut().map(|x| x.get_mut_sig()){
         sigs.push(met_new_sig);
     }
@@ -269,7 +268,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars:
 
     let Vars{
         actor, play, direct,
-        debut, msg,  debut_play,
+        debut, msg,  debut_for_play,
         sender,receiver,name,
         impl_vars,script_name,live_name,
         cust_name, .. } = vars;
@@ -290,7 +289,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars:
             l_where_clause )) = impl_vars.get_split_model_generics();
 
     // generate raw parts of model   
-    method::to_raw_parts( vars,&mut cont,&aaa,oneshot,mpsc );
+    method::to_raw_parts( vars,&mut cont,&aaa,oneshot,mpsc,l_ty_generics.clone() );
     
 
     // condition if is Group ONLY!!!
@@ -312,9 +311,10 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars:
         new_vis = met_new.as_ref().map(|m| m.vis.clone());
 
         let met_new         = met_new.clone().unwrap();
-        let new_sig             = &met_new.new_sig;
+
+        let new_sig             = &met_new.sig;
         let func_new_name           = &new_sig.ident;
-        let (args_ident, _ )   = method::arguments_pat_type(&met_new.get_arguments());
+        let (args_ident, _ ) = method::args_to_pat_type(&met_new.arguments);
         let unwrapped          = met_new.unwrap_sign();
         let doc_attrs      = &met_new.doc_attrs;
         let vis                = &met_new.vis.clone();
@@ -322,7 +322,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars:
         let (init_live, play_args) = {
             if aaa.debut.active() {
                 (quote!{ Self { #group_fields_init #debut: std::sync::Arc::clone(&#debut), #name : format!("{:?}",* #debut),#sender  }} ,
-                    quote!{ #receiver, #actor, #debut_play})
+                    quote!{ #receiver, #actor, #debut_for_play})
             } else {
 
                 (quote!{ Self{ #group_fields_init #sender  } }, 
@@ -336,7 +336,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars:
         let vars_debut = 
         if aaa.debut.active() {
             quote!{let #debut =  #script_name #turbofish ::#debut();
-                   let #debut_play = *std::sync::Arc::clone(&#debut); }
+                   let #debut_for_play = *std::sync::Arc::clone(&#debut); }
         } else {quote!{}};
 
         let return_statement   = met_new.live_ret_statement(&init_live);
@@ -346,9 +346,8 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars:
         
         let func_new_body = quote!{
 
-            #(#doc_attrs)*
             #vis #new_sig {
-                let #actor = #actor_name:: #func_new_name #args_ident #unwrapped;
+                let #actor = #actor_name:: #func_new_name (#(#args_ident),*) #unwrapped;
                 #declaration
                 #vars_debut
                 #spawn
@@ -356,7 +355,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars:
             }
         };
 
-        live_mets.insert(0,(new_sig.ident.clone(),func_new_body));
+        live_mets.insert(0,(new_sig.ident.clone(),func_new_body,doc_attrs.clone()));
 
 
         // LIVE INTER METHODS AND TRAITS
@@ -492,6 +491,8 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars:
     let Cont { script_mets, script_trts,
                live_mets,   live_trts,..} = cont;
     
+
+    let script_mets = script_mets.into_iter().map(|(ident,token)| (ident,token,vec![])).collect();
     let sdpl =  
     crate::model::ActorModelSdpl {
 
@@ -501,9 +502,10 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars:
             edit:                   aaa.edit,
             generics: model_generics.clone(),
             vars:               vars.clone(),
+            show:                   aaa.show,
 
-            script: ( script_def, script_mets, script_trts ),
-            live:   (   live_def,   live_mets,   live_trts ),
+            script: ShowComment::parse_model_part( script_def, script_mets, script_trts, aaa.show,true ),
+            live:   ShowComment::parse_model_part(   live_def,   live_mets,   live_trts, aaa.show, false),
     };
 
     let ImplVars{ field,..} = impl_vars;

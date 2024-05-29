@@ -89,10 +89,10 @@ pub struct AaBbCc<Ta,Va,Ma,Tb,Vb,Mb,Tc,Vc,Mc> {
     pub a: Aa<Ta,Va,Ma>,
     pub b: Bb<Tb,Vb,Mb>,
     pub c: Cc<Tc,Vc,Mc>,
-    any: AnyOtherType,
+    _any: AnyOtherType,
 }
 
-#[interthread::group(file="examples/intro_group_generic.rs",debut)]  
+#[interthread::group(show,file="examples/intro_group_generic.rs",debut)]  
 
 impl <Ta,Va,Ma,Tb,Vb,Mb,Tc,Vc,Mc> AaBbCc  <Ta,Va,Ma,Tb,Vb,Mb,Tc,Vc,Mc> 
 where 
@@ -113,9 +113,9 @@ where
         let a = a;
         let b = b;
         let c = c;
-        let any = AnyOtherType;
+        let _any = AnyOtherType;
 
-        Self{ a,b,c,any }
+        Self{ a,b,c,_any }
     }
 
     pub fn add_to_a(&mut self, v:Ta){

@@ -254,8 +254,6 @@ while the latter only writes to the file, persisting in the form of \
 
 
 ";
-pub static UNEXPECTED_EDIT_GROUP_PATH: &'static str ="
-Unexpected `edit` identation option. Expected field_name::edit( args ).";
 
 pub static AVAIL_DEBUT: &'static str = "
 \navailable 'debut' options:
@@ -288,7 +286,9 @@ pub static AVAIL_ACTOR: &'static str = "
         
         name = \"\" 
 
-       assoc 
+       show
+
+       include|exclude 
         
        debut(
              legend
@@ -318,10 +318,26 @@ AA     debut(
              legend
             )   
 
-(AA)   assoc(
-             self::assoc,
+(AA)   show(
+             self::show,
              ..
             )
+
+(AA) include(
+            self::include(
+                          method_name,
+                          ..
+                         ),
+            ..
+            )
+
+(AA) exclude(
+            self::exclude(
+                          method_name,
+                          ..
+                         ),
+            ..
+            )            
 
 (AA)    edit( 
              self::edit(
@@ -428,13 +444,13 @@ generated code. However, in explicit notation like \
 file as `edit(script, live)`, despite that the whole model \
 is written to the file.";
 
-pub static ABOUT_ALLOW: &'static str  =
+pub static ABOUT_SKIP: &'static str  =
 "The `group` macro automatically considers any non-private field as a \
-member of the group. The `allow` option is used to provide a list of \
+member of the group. The `skip` option is used to provide a list of \
 non-private fields to be excluded from `group` membership.";
 
-pub static PRIVATE_ALLOW_FIELD: &'static str  =
-"Use of private field. Please ensure you only include non-private fields in the `allow` list.";
+pub static SKIP_PRIVATE_FIELD_ERROR: &'static str  =
+"Use of private field. Ensure only non-private fields are included in the `skip` list.";
 
 pub static TUPLE_STRUCT_NOT_ALLOWED: &'static str  =
 "The `group` macro cannot be applied to a tuple struct. Please use it with a regular struct instead.";
@@ -473,18 +489,34 @@ to avoid naming conflicts. This will allow the model to function \
 correctly and generate accurate type names.
 ";
 
-pub static INCOMPLETE_PATTERN_NOT_ALLOWED: &'static str ="
-Incomplete patterns in method parameters are not allowed.
-Patterns like `(a, b, ..)`, `MyStruct { a, b, .. }`, or `MyTupleStruct(a, b, ..)` are not permitted as method parameters. Please provide complete patterns or specify individual variables.
+pub static FILTER_CONURENT_USE_OF_OPTIONS: &'static str = "Unexpected. Concurrent use of 'include' and 'exclude' options.";
+
+pub static FILTER_OPTION_USE_HELP: &'static str =
+"The 'actor' offers two filtering options: 'include' and 'exclude'. 
+When applied to the set {a, b, c, d}, these options function as follows:
+
+    include(a, c) -> {a, c}
+    exclude(a, c) -> {b, d}
+
+Only one option can be applied at a time.";
+
+pub static PARAMETERS_ALLOWED_PATTERN_NOTE: &'static str ="
+The model will accept the following patterns in method parameters:
+    1) Ident ( variable name ) - 'foo : Type'
+    2) Tuple - '(a, b, ..) : (Type, Type)' 
+    3) Array - '[a,b,..] : [Type; n]'
+    4) Struct  - 'Struct { a, b, .. } : MyStruct'
+    5) Tuple Struct - 'Struct(a, b, ..) : MyTupleStruct'
+
 ";
 
-pub static INTER_VARIABLE_PATTERN_NOTE: &'static str ="
-`inter variables` patterns must consist of either individual identifiers or a non-nested tuple of `inter variables` only (should not be mixed with non-`inter variables`).
-";
+pub static INTER_VARIABLE_SUPPORTED_PATTERN_NOTE: &'static str ="
+The ONLY pattern supported for `inter variable` is 'ident' (a variable name 'foo : Type')!";
 
 pub fn expected_path_ident(s: &str ) -> String {
    format!("Expected a path, `field`::{s} .")
 }
+
 pub fn type_naming_conflict(a: &Ident, b: &Ident )-> String {
     let ty_name = crate::model::name::script_field(a);
     format!("Naming conflict detected. Conflicting \
@@ -495,7 +527,6 @@ in {ty_name} .")
 pub fn double_decl(s: &str) -> String {
     format!("Double declaration of `{s}` option.")
 }
-
 
 pub fn end_of_life( name: &syn::Ident, debut: &Debut ) -> TokenStream {
     if debut.active(){
@@ -536,6 +567,7 @@ impl OriginVars {
         format!("{path}Object : `{actor_name}`\nMethod : `{sig}`\n\n{e} ") 
     }
 }
+
 pub static LEGEND_LIMIT_GENERIC: &str = 
 "   The 'legend' option is not supported for generic objects.";
 
@@ -546,14 +578,12 @@ internal getter calls to access the state of the `live` instance.\
 Please consult the documentation for correct usage.
 ";
 
-
 pub static INTER_SEND_RECV_RESTRICT_NOTE : &'static str =
 "   Using method arguments named `inter_send` or `inter_recv` will \
 interfere with the model's internal variables. To proceed with \
 these names, explicitly opt in by providing the argument `interact` \
 to the macro (see option `interact` in documentation). Otherwise, \
 consider renaming the arguments.";
-
 
 pub static CONCURRENT_INTER_SEND_RECV : &'static str =
 "   Concurrent use of `inter_send` and `inter_recv`.\
@@ -562,6 +592,7 @@ Please make sure to access only one end of the channel, not both simultaneously.
 pub static NOT_ACCESSIBLE_CHANNEL_END: &'static str =
 "   `inter_send` and `inter_recv` variables cannot be accessed in methods that return a type.";
 
+pub static EXPECTED_IDENTIFIER_SHOW: &'static str = "Expected an identifier ( show ).";
 
 pub fn var_name_conflict<V,P>( var: V, part: P ) -> String 
 where 
@@ -572,13 +603,3 @@ where
     {} name.", var.to_string(),part.to_string())
 } 
 
-// v1.2.0
-pub static OLD_ARG_ID: &'static str = "
-    Since v1.2.0 `id` argument is not aplicable. Use `debut` instead!
-";
-
-pub static OLD_ARG_ASSOC: &'static str = "
-Since  v1.2.0, activation of the `assoc` option is donne by \
-declaring it as a path, like `assoc`. There's no need to \
-specify it as name-value metadata like `assoc=true`.
-";

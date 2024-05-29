@@ -1,8 +1,8 @@
-use crate::error::{self, OriginVars};
+use crate::error;
 
 use proc_macro2::TokenStream;
 use crate::model::{OneshotChannel,to_string_wide};
-use syn::{Type,Ident,Signature,FnArg,Token, punctuated::Punctuated};
+use syn::{Type,Ident,Signature,FnArg};
 use quote::{quote,format_ident};
 
 use proc_macro_error::abort;
@@ -47,12 +47,11 @@ impl InterOneshot {
 pub struct InterGetter { 
     name:        Ident, 
     method_name: Ident,
-    _ty:           Type,
+    _ty:          Type,
 }
 
 
 #[derive(Debug,Clone)]
-
 pub enum InterVar {
 
     Oneshot(InterOneshot),
@@ -101,7 +100,7 @@ pub fn some_inter_var( org_err: &error::OriginVars, ident_ty:Vec<(&Ident, &Type)
             }
         } else { 
             let msg = org_err.origin("Unexpected usage of `inter variables` mixed identifiers.");
-            abort!(Span::call_site(), msg; note=error::INTER_VARIABLE_PATTERN_NOTE);
+            abort!(Span::call_site(), msg; note=error::INTER_VARIABLE_SUPPORTED_PATTERN_NOTE);
         }
     }
     Some(inter_vars)
@@ -152,9 +151,6 @@ pub struct InterVars{
 }
 
 impl InterVars {
-    pub fn some_ret_name(&self) -> Option<Ident> {
-        self.channel.as_ref().map(|x| x.get_invers_name())
-    }
     pub fn from( org_err: error::OriginVars, new_sig: Signature, 
                 new_args: Vec<FnArg>, one: Option<OneshotChannel> ) -> Self {
 
@@ -166,6 +162,10 @@ impl InterVars {
             one,
             org_err,
         }
+    }
+
+    pub fn some_ret_name(&self) -> Option<Ident> {
+        self.channel.as_ref().map(|x| x.get_invers_name())
     }
 
     pub fn insert(&mut self,  vars: Vec<InterVar>){
@@ -187,8 +187,8 @@ impl InterVars {
     pub fn check (&self) {
 
         if let Some(var) = check_send_recv( &self.new_args, None){
-        let msg = self.org_err.origin(format!("Unexpected pattern for `inter variable` - {}.",var));
-            abort!(Span::call_site(),msg;note=error::INTER_VARIABLE_PATTERN_NOTE);
+        let msg = self.org_err.origin(format!("Unexpected. `inter variable` - {}, within function parameter pattern. ",var));
+            abort!(Span::call_site(),msg;note=error::INTER_VARIABLE_SUPPORTED_PATTERN_NOTE);
         }
     }
 
@@ -213,26 +213,7 @@ impl InterVars {
         }
         quote!{#(#loc)*}
     }
-}
 
-pub fn get_pat_idents( org_err:&OriginVars, pat_tuple: &syn::PatTuple ) -> Option<Vec<syn::Ident>> {
-
-    if to_string_wide(pat_tuple).contains("inter_"){
-        let length = pat_tuple.elems.len();
-        let pat_idents = pat_tuple.elems.iter().filter_map(|p|  
-            
-            if let syn::Pat::Ident(pat_ident) = p {
-                Some(pat_ident.ident.clone())
-            } else {None} ).collect::<Vec<_>>();
-
-        if length == pat_idents.len(){
-            return Some(pat_idents);
-        } else {
-            let msg = org_err.origin("Unexpected usage of `inter variables` nested patterns.");
-            abort!(Span::call_site(), msg; note=error::INTER_VARIABLE_PATTERN_NOTE);
-        }
-    }
-    None
 }
 
 
@@ -257,37 +238,19 @@ pub fn get_variables( org_err: &error::OriginVars, sig: & Signature,
                     } 
                 }
             } 
-
-            if let syn::Pat::Tuple(pat_tuple) = &*pat_ty.pat { 
-
-                if let Some(idents) = get_pat_idents( org_err, &pat_tuple){
-
-                    if let syn::Type::Tuple(ty_tuple) = &*pat_ty.ty {
-                        let tys = ty_tuple.elems.iter();
-
-                        if idents.len() == tys.len() {
-                            let ident_ty = idents.iter().zip(tys).collect::<Vec<_>>();
-                        
-                            if let Some(inter_var) = some_inter_var( &org_err,ident_ty,ret){
-                                inter_vars.extend(inter_var.into_iter());
-                                continue;
-                            }
-                        }
-                    }
-                }
-            }
         } 
+
         new_args.push(arg.clone()); 
     }
 
     if inter_vars.is_empty(){
         return None;
     }
-    // change signature input
-    let mut new_sig = sig.clone();
-    new_sig.inputs = new_args.iter().cloned().collect::<Punctuated::<FnArg,Token![,]>>();
 
-    let mut vars = InterVars::from(org_err.clone(),new_sig,new_args,one.cloned());
+    // change signature input
+    let (live_arguments,live_sig) = crate::model::method::live_args_and_sig( &new_args, &sig );
+    
+    let mut vars = InterVars::from(org_err.clone(),live_sig,live_arguments,one.cloned());
     vars.insert(inter_vars);
     vars.check();
 
@@ -311,27 +274,6 @@ pub fn check_send_recv( args: &Vec<FnArg>, vars: Option<Vec<Ident>> ) -> Option<
 
                 if pat_str.contains(&format!(" {word} ")){
                     return Some(word.to_string());
-                    /*
-                    // the error can be more precises based on 
-                    if let Some(v) = &vars {
-                        if v.is_empty(){
-                            // msg for Some([]) pattern declaration not allowed
-                            let msg = "Some([])";
-                            abort!(Span::call_site(),msg;note= error::INTER_SEND_RECV_RESTRICT_NOTE; help=error::INTERACT_VARS_HELP);
-                        
-                        } else {
-                            // msg for Some([one]) only one end of the channel can be used and pattern delcaration not allowed
-                            let msg = "Some([one])";
-                            abort!(Span::call_site(),msg;note= error::INTER_SEND_RECV_RESTRICT_NOTE; help=error::INTERACT_VARS_HELP);
-                        
-                        }
-
-                    } else {
-                        // msg for None check there are not inter send recv
-                        let msg = org_err.origin(format!("Conflicting name case. Please use a different name for the argument `{word}`."));
-                        abort!(Span::call_site(),msg;note= error::INTER_SEND_RECV_RESTRICT_NOTE; help=error::INTERACT_VARS_HELP);
-                    }
-                     */
                 }
             }
         }

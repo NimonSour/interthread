@@ -1,5 +1,5 @@
 use crate::error;
-use crate::model::{Generics, Channel,Lib,
+use crate::model::{FilterSet, Generics, Channel,Lib,
     EditGroup,get_ident,get_ident_group,get_lit,get_lit_str,
     get_list,to_usize, check_name_conflict};
 
@@ -24,12 +24,14 @@ pub struct GroupAttributeArguments {
     pub debut   :  Debut,
 
     pub name    :  BTreeMap<Ident,Ident>,
-    pub assoc   :  Option<BTreeMap<Ident,bool>>,
+    pub show    :  Option<BTreeMap<Ident,bool>>,
     pub interact:  Option<BTreeMap<Ident,bool>>,
     pub edit    :  EditGroup,
     pub path    :  BTreeMap<Ident,PathBuf>,
-    pub allow   :  BTreeMap<Ident,Meta>,
-    
+    pub skip    :  BTreeMap<Ident,Meta>,
+    pub include :  BTreeMap<Ident,(FilterSet,Meta)>,
+    pub exclude :  BTreeMap<Ident,(FilterSet,Meta)>,
+
     pub members :  BTreeMap<Ident,(ItemImpl,Visibility,Type,Generics)>,
     pub def_generics: Generics,
 }
@@ -104,33 +106,52 @@ impl GroupAttributeArguments {
                 } else { abort!(meta,error::EXPECT_LIST;help=error::AVAIL_GROUP); }
             }
 
+            // INCLUDE - EXCLUDE
+            else if meta.path().is_ident("include") || meta.path().is_ident("exclude"){
+                let ioe = if meta.path().is_ident("include") {true} else {false};
+
+                if let Some(meta_list) = get_list( meta,Some(error::AVAIL_GROUP) ) { 
+                    super::check_path_set(&meta_list);
+                    for met in meta_list {
+
+                        if ioe {
+                            let ident = get_ident_group(&met,"include");
+                            self.include.insert(ident, (FilterSet::parse(&met,ioe),met));
+                        } else {
+                            let ident = get_ident_group(&met,"exclude");
+                            self.exclude.insert(ident, (FilterSet::parse(&met,ioe),met));
+                        }
+                    }
+
+                } else { abort!(meta,error::EXPECT_LIST;help=error::AVAIL_GROUP); }
+            }
+
             // ASSOC
-            else if meta.path().is_ident("assoc"){
+            else if meta.path().is_ident("show"){
 
                 if let Some(meta_list) = get_list( meta,Some(error::AVAIL_GROUP) ) { 
                     for met in meta_list.iter() {
-                        let ident = get_ident_group(met,"assoc");
+                        let ident = get_ident_group(met,"show");
                         match met {
                             
                             syn::Meta::Path(_) => { 
-                                if self.assoc.is_some() {
-                                    self.assoc.as_mut().map(|x| x.insert(ident,true));
+                                if self.show.is_some() {
+                                    self.show.as_mut().map(|x| x.insert(ident,true));
             
                                 } else { 
-                                    self.assoc = Some(BTreeMap::from([(ident,true)])); 
+                                    self.show = Some(BTreeMap::from([(ident,true)])); 
                                 }
                             },
-                            _ => { abort!(meta.path(), error::OLD_ARG_ASSOC); },
+                            _ => { abort!(meta.path(), error::EXPECTED_IDENTIFIER_SHOW); },
                         }
                     }
-                } else { self.assoc = Some( BTreeMap::new());  }
+                } else { self.show = Some( BTreeMap::new());  }
             }
 
             // EDIT
             else if meta.path().is_ident(crate::EDIT) { 
                 self.edit.parse(&meta);
             }
-
 
             // PATH 
             else if meta.path().is_ident("path") { 
@@ -151,7 +172,6 @@ impl GroupAttributeArguments {
             }
 
             // INTERACT
-
             else if meta.path().is_ident("interact"){
 
                 if let Some(meta_list) = get_list( meta,Some(error::AVAIL_GROUP) ) { 
@@ -168,21 +188,20 @@ impl GroupAttributeArguments {
                         }
                     }
                 } else { self.interact = Some( BTreeMap::new());  }
-                
             }
 
-            // ALLOW
-            else if meta.path().is_ident("allow") { 
+            // SKIP
+            else if meta.path().is_ident("skip") { 
 
                 if let Some(meta_list) = get_list( meta,Some(error::AVAIL_GROUP) ) { 
                     super::check_path_set(&meta_list);
 
                     for met in meta_list {
                         let ident = get_ident(&met);
-                        self.allow.insert(ident,meta.clone());
+                        self.skip.insert(ident,meta.clone());
                     }
 
-                } else { abort!(meta,error::EXPECT_LIST;help=error::ABOUT_ALLOW); }
+                } else { abort!(meta,error::EXPECT_LIST;help=error::ABOUT_SKIP); }
             }
 
             else if meta.path().is_ident("debug") {
@@ -207,10 +226,12 @@ impl GroupAttributeArguments {
                     Visibility::Inherited  => true,
                     _ => false,
                 };
-                let exclude = self.allow.get(ident);
+
+                let exclude = self.skip.get(ident);
+
                 match (private,exclude) {
                     (true,Some(met)) => {
-                        abort!(met,error::PRIVATE_ALLOW_FIELD;note=error::ABOUT_ALLOW);
+                        abort!(met,error::SKIP_PRIVATE_FIELD_ERROR;note=error::ABOUT_SKIP);
                     },
                     (true,None)     => (),
                     (false,Some(_)) => (),
@@ -238,7 +259,7 @@ impl GroupAttributeArguments {
 
     pub fn cross_check(&mut self,item_impl: &ItemImpl){
 
-        // if there if file
+        // if there is file
         if let Some(file) = &self.file {
 
             // check edit 
@@ -272,7 +293,7 @@ impl GroupAttributeArguments {
                     _ => {
                         let p = quote::quote!{#ty}.to_string();
                         let msg = format!("Expected identifier found : {}.",p);
-                        abort!(Span::call_site(),msg;note=error::GROUP_FIELD_TYPE;help=error::ABOUT_ALLOW);
+                        abort!(Span::call_site(),msg;note=error::GROUP_FIELD_TYPE;help=error::ABOUT_SKIP);
                     },
                 };
 
@@ -290,7 +311,6 @@ impl GroupAttributeArguments {
 
     }
 
-
     pub fn get_aaa(&self, fld: Option<&Ident>) -> ActorAttributeArguments {
 
         let mut aaa = ActorAttributeArguments::default();
@@ -304,12 +324,12 @@ impl GroupAttributeArguments {
         aaa.name = self.name.get(slf).cloned();
         aaa.path = self.path.get(slf).cloned();
 
-        if self.assoc.is_some(){
-            self.assoc
+        if self.show.is_some(){
+            self.show
                 .as_ref()
                 .map(|x| 
-                    if x.is_empty() { aaa.assoc = true; } 
-                    else { if x.get(slf).is_some(){ aaa.assoc = true; } }
+                    if x.is_empty() { aaa.show = true; } 
+                    else { if x.get(slf).is_some(){ aaa.show = true; } }
                 );
         }
 
@@ -326,6 +346,17 @@ impl GroupAttributeArguments {
                 edit.remove = self.edit.remove;
                 edit.attr = self.edit.attr.clone();
                 aaa.edit = edit;
+            }
+        }
+        if let Some((filter_set,_)) = self.include.get(slf).cloned(){
+            aaa.filter = Some(filter_set);
+        }
+
+        if let Some((filter_set,meta)) = self.exclude.get(slf).cloned(){
+            if aaa.filter.is_none(){
+                aaa.filter = Some(filter_set);
+            } else {
+                abort!(meta,error::FILTER_CONURENT_USE_OF_OPTIONS; help=error::FILTER_OPTION_USE_HELP);
             }
         }
         aaa
@@ -347,11 +378,14 @@ impl Default for GroupAttributeArguments {
             debut   :  Debut::default(),
 
             name    :  BTreeMap::new(),
-            assoc   :  None,
+            show    :  None,
             interact:  None,
             edit    :  EditGroup::default(),
             path    :  BTreeMap::new(),
-            allow   :  BTreeMap::new(),
+            skip    :  BTreeMap::new(),
+            include :  BTreeMap::new(),
+            exclude :  BTreeMap::new(),
+
             members :  BTreeMap::new(),
             def_generics: Generics::default(),
         }

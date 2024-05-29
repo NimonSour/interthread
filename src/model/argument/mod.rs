@@ -1,14 +1,16 @@
-pub mod channel;
-pub mod debut;
-pub mod edit;
-pub mod interact;
+mod channel;
+mod debut;
+mod edit;
+mod interact;
+mod include_exclude;
+mod show;
 
 pub use channel::*;
 pub use debut::*;
 pub use edit::*;
 pub use interact::*;
-
-
+pub use include_exclude::*;
+pub use show::ShowComment;
 
 use crate::error;
 
@@ -178,5 +180,9 @@ impl Edit {
         }
     }
 }
+
+
+
+
 
 

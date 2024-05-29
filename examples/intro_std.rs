@@ -3,7 +3,7 @@ pub struct MyActor {
     value: i8,
 }
 
-#[interthread::actor(channel=2)] // <-  this is it 
+#[interthread::actor] // <-  this is it 
 impl MyActor {
 
     pub fn new( v: i8 ) -> Self {

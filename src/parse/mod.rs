@@ -10,9 +10,9 @@ use crate::model::argument::EditAttribute;
 use crate::show::get_text;
 use crate::LINE_ENDING;
 
-use proc_macro_error::abort;
+use proc_macro_error::{abort, abort_call_site};
 use proc_macro2::{TokenStream,Span};
-use syn::{Attribute,Ident,Item,ItemImpl};
+use syn::{Attribute,Ident,ItemImpl};
 use std::collections::BTreeMap;
 
 
@@ -44,27 +44,20 @@ fn pad(n: usize, s: &str) -> String {
 } 
 
 // parse attr 
-fn parse_attr( s: &str ) -> Result<Attribute,String> {
+fn parse_attr( s: &str ) -> Attribute {
 
     let text = format!(r#"{}fn foo (){{}}"#,s); 
-    let msg_error = |e:&str|-> String {
-        format!("Internal Error.`parse::parse_attr`. Could not parse the Attribute. Error: {}",e.to_string())
-    };
-    match syn::parse_str::<Item>(&text) {
 
-        Ok(fn_) => {
-            match fn_ {
-                Item::Fn(func) => {
-                    if let Some(attr) = func.attrs.into_iter().next(){
-                        Ok(attr)
-                    } else {
-                        Err(msg_error("Function `attrs` is empty."))
-                    }
-                },
-                _ => Err(msg_error("Item is not a function.")),
+    match syn::parse_str::<syn::ItemFn>(&text) {
+
+        Ok(item_fn) => {
+            if let Some(attr) = item_fn.attrs.into_iter().next(){
+                return attr;
+            } else {
+                abort_call_site!("Internal Error.`parse::parse_attr`. Function `attrs` is empty.");
             }
         },
-        Err(e) => Err(msg_error(&e.to_string())),
+        Err(_) => abort_call_site!("Internal Error.`parse::parse_attr`. Could not parse the Attribute."),
     }
 }
 
@@ -200,7 +193,7 @@ mod tests {
         "#;
 
         let text = format!("{attr_text}{impl_text}");
-        let org_attr = parse_attr(attr_text).unwrap();
+        let org_attr = parse_attr(attr_text);
         let org_impl = syn::parse_str::<ItemImpl>(impl_text).unwrap();
 
         let mut icb = ItemCodeBlock::new(text);
@@ -249,8 +242,6 @@ mod tests {
 )]"#;
 
     assert_eq!(expect_attr_str,new_attr_str);
-    // println!("{new_attr_str}");
-
     }
 
 
@@ -266,7 +257,6 @@ mod tests {
     )
 )]"#;
 
-
     let new_attr_str = nested::edit_remove_active_file_args(attr_str,attr_str,&None);
 
     let expect_attr_str = r#"
@@ -279,8 +269,6 @@ mod tests {
 )]"#;
 
     assert_eq!(expect_attr_str,new_attr_str);
-    // println!("{new_attr_str}");
-
     }
 
     
@@ -293,10 +281,9 @@ mod tests {
     edit(
         script( def, file(imp), trt(file) ),
         file(live(   def, imp, trt)),
-        //file(live(   def, imp, trt)),
+        //file(live(def, imp, trt)),
     )
 )]"#;
-
 
     let new_attr_str = nested::edit_remove_active_file_args(attr_str,attr_str,&None);
 
@@ -306,13 +293,13 @@ mod tests {
     edit(
         script( def, imp, trt(file) ),
         live(   def, imp, trt),
-        //file(live(   def, imp, trt)),
+        //file(live(def, imp, trt)),
     )
 )]"#;
 
     assert_eq!(expect_attr_str,new_attr_str);
-
     }
+    
 
 
    // TESTS FOR PARSER

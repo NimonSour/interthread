@@ -27,9 +27,10 @@ where
 pub struct MaunActor<T> {
     value: T,
 }
-#[interthread::actor(channel=2,
-    edit( live( imp( add_number))))]
-impl<T> MaunActor<T>
+
+
+#[interthread::actor(file="examples/intro_generic.rs",edit(live(imp(add_number))))]
+impl <T> MaunActor <T>
 where
     T: std::ops::AddAssign + Copy,
 {
@@ -47,27 +48,26 @@ where
 
 //++++++++++++++++++[ Interthread  Write to File ]+++++++++++++++++//
 // Object Name   : MaunActor  
-// Initiated By  : #[interthread::actor(channel=2,file="path/to/this/file.rs",edit(live(imp(file(add_number)))))]  
+// Initiated By  : #[interthread::actor(file="examples/intro_generic.rs",edit(live(imp(file(add_number)))))]  
 
-
-impl<T> MaunActorLive<T>
+impl<T> MaunActorLive <T>
 where
     T: std::ops::AddAssign + Copy + Send + Sync + 'static,
 {
     // pub fn add_number(&mut self, num: T) {
     pub fn add_number<I: Into<T>>(&mut self, num:I) {
-        let msg = MaunActorScript::AddNumber {
-            // input: (num),
-            input: (num.into()),
-        };
+        let msg = MaunActorScript::AddNumber { num: num.into()};
         let _ = self
             .sender
             .send(msg)
-            .expect("'ActorLive::method.send'. Channel is closed!");
+            .expect("'MaunActorLive::method.send'. Channel is closed!");
     }
 }
 
 // *///.............[ Interthread  End of Write  ].................//
+
+
+
 
 
 fn main() {

@@ -378,7 +378,7 @@ impl EditGroup {
                         self.parse_meta(meta_value);
                     }
 
-                } else { /* internal error  */ }
+                } else { abort!(proc_macro2::Span::call_site(), " Internal Error. 'model::edit::EditGroup::parse' Failed to get 'meta_value'.")}
 
             } else {
                 // check for ..::edit

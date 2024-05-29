@@ -1,6 +1,8 @@
 mod intro_std;
+
+use intro_std::MyActorLive;
 fn main() {
-    let actor = intro_std::MyActorLive::new(5);
+    let actor = MyActorLive::new(5);
     let mut actor_a = actor.clone();
     let mut actor_b = actor.clone();
     let handle_a = std::thread::spawn(move || {

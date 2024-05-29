@@ -1,7 +1,7 @@
 pub struct MyActor(u8);
 
 
-#[interthread::actor(channel=2, debut(legend))] 
+#[interthread::actor(show,debut(legend))] 
 impl MyActor {
 
     pub fn new() -> Self { Self(0) }
@@ -14,6 +14,7 @@ impl MyActor {
         self.0
     }
 }
+
 
 // #[interthread::example(main(path="examples/intro_legend.rs"))]
 fn main() {

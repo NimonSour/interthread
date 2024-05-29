@@ -3,17 +3,20 @@ use crate::model::{
     ActorAttributeArguments, OneshotChannel, MpscChannel,
     name,Cont,Vars,Lib,ImplVars,InterVars};
 
+use syn::punctuated::Punctuated;
 use syn::{Attribute,Path,Visibility,Signature,Ident,FnArg,Type,ReturnType,ImplItem,ItemImpl,Receiver,Token};
 use proc_macro_error::abort;
 use proc_macro2::{TokenStream,Span};
 use quote::{quote,format_ident};
 
+use super::FilterSet;
+
 #[derive(Debug,Clone)]
 pub enum ActorMethod {
-    Io  { doc_attrs: Vec<Attribute>, vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars, stat: bool,  arguments: Vec<FnArg>, output: Box<Type> },   
-    I   { doc_attrs: Vec<Attribute>, vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars,              arguments: Vec<FnArg>,                   },    
-    O   { doc_attrs: Vec<Attribute>, vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars, stat: bool,                         output: Box<Type> },    
-    None{ doc_attrs: Vec<Attribute>, vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars,                                                        }, 
+    Io  { doc_attrs: Vec<Attribute>, vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars, stat: bool, arguments: Vec<FnArg>, output: Box<Type> },   
+    I   { doc_attrs: Vec<Attribute>, vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars, stat: bool, arguments: Vec<FnArg>,                   },    
+    O   { doc_attrs: Vec<Attribute>, vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars, stat: bool,                        output: Box<Type> },    
+    None{ doc_attrs: Vec<Attribute>, vis: Visibility, sig: Signature, ident: Ident, org_err: OriginVars, stat: bool,                                          }, 
 }
 
 impl ActorMethod {
@@ -22,10 +25,10 @@ impl ActorMethod {
 
         let (doc_attrs,vis,org_err,sig,stat) = 
         match self {
-            Self::Io  {doc_attrs, vis,org_err,sig,stat,..} => (doc_attrs, vis, org_err, sig, Some(stat)),  
-            Self::I   {doc_attrs, vis,org_err,sig,..}            => (doc_attrs, vis, org_err, sig, None),  
-            Self::O   {doc_attrs, vis,org_err,sig,stat,..} => (doc_attrs, vis, org_err, sig, Some(stat)),  
-            Self::None{doc_attrs, vis,org_err,sig,..}            => (doc_attrs, vis, org_err, sig, None),  
+            Self::Io  {doc_attrs, vis,org_err,sig,stat,..} => (doc_attrs, vis, org_err, sig, stat),  
+            Self::I   {doc_attrs, vis,org_err,sig,stat,..} => (doc_attrs, vis, org_err, sig, stat),  
+            Self::O   {doc_attrs, vis,org_err,sig,stat,..} => (doc_attrs, vis, org_err, sig, stat),  
+            Self::None{doc_attrs, vis,org_err,sig,stat,..} => (doc_attrs, vis, org_err, sig, stat),  
         };
         sieve(doc_attrs,vis,org_err, sig, stat)
     }
@@ -63,6 +66,19 @@ impl ActorMethod {
         };
         false
     }
+
+    pub fn is_static(&self) -> bool {
+
+        match self {
+
+            Self::Io   { stat,..} => *stat,
+            Self::I    { stat,..} => *stat,
+            Self::O    { stat,..} => *stat,
+            Self::None { stat,..} => *stat,
+        }
+    }
+
+
 }
  
 
@@ -73,11 +89,11 @@ pub struct ActorMethodNew {
     pub doc_attrs:     Vec<Attribute>,
     pub vis:               Visibility,
     pub sig:                Signature,
-    pub new_sig:            Signature,
+    // pub new_sig:            Signature,
     pub res_opt:         Option<bool>,
     pub res_opt_path:    Option<Path>,
     pub ident:                  Ident,
-    pub arguments: Option<Vec<FnArg>>,
+    pub arguments:         Vec<FnArg>,
     pub output:             Box<Type>,
           
 
@@ -86,28 +102,22 @@ pub struct ActorMethodNew {
 impl ActorMethodNew {
 
     pub fn get_mut_sig(&mut self) -> &mut Signature {
-        &mut self.new_sig
+        &mut self.sig
     }
 
-    pub fn try_new( met: ActorMethod, new_sig: Signature,  res_opt: Option<bool>, res_opt_path: Option<Path> ) -> Option<Self>{
+    pub fn try_new( met: ActorMethod,  res_opt: Option<bool>, res_opt_path: Option<Path> ) -> Option<Self>{
         
         match met {
 
             ActorMethod::Io   { doc_attrs,vis,sig,ident,arguments,output,.. } =>  {
-                return  Some(ActorMethodNew{ doc_attrs,vis,sig,ident,arguments: Some(arguments), output, new_sig, res_opt,res_opt_path });
+                let (arguments,sig) = live_args_and_sig( &arguments, &sig );
+                return  Some(ActorMethodNew{ doc_attrs,vis,sig,ident,arguments: arguments, output, res_opt,res_opt_path });
             },
             ActorMethod::O    { doc_attrs,vis,sig,ident,output,..} =>  {
-                return  Some(ActorMethodNew{ doc_attrs,vis,sig,ident,arguments: None, output, new_sig, res_opt,res_opt_path });
+                return  Some(ActorMethodNew{ doc_attrs,vis,sig,ident,arguments: vec![], output, res_opt,res_opt_path });
             } 
             _   =>  return  None,
         };
-    }
-
-    pub fn get_arguments(&self)-> Vec<FnArg> {
-        if let Some(arguments) = &self.arguments{
-            return arguments.clone();
-        }
-        vec![]
     }
 
     pub fn  live_ret_statement(&self,  init_live: &TokenStream ) -> TokenStream {
@@ -260,27 +270,27 @@ fn check_self_return( sig: &Signature, ty_name: &Type ) -> (Signature,Option<boo
     }
 }
 
-fn is_return( sig: &Signature ) -> bool {
-    match sig.output {
-        ReturnType::Default => return false,
-        ReturnType::Type(_, _) => return true,
-    }
-}
-
-fn is_self_refer (signature: &Signature ) -> bool{
+/// Some(true)  - &self 
+/// 
+/// Some(false) - static 
+/// 
+/// None        - self
+fn is_self_refer ( signature: &Signature ) -> Option<bool>{
     if let Some(input) = signature.inputs.iter().next() {
         match input {
             FnArg::Receiver(receiver) => {
                 let slf: syn::token::SelfValue = Default::default();
-                if receiver.reference.is_some()  && (receiver.self_token == slf) {
-                    return true;
-                }
-                return false
+                if receiver.self_token == slf {
+                    if receiver.reference.is_some() {
+                        return Some(true);
+                    }
+                } 
+                return None;
             },
-            _ => return false,
+            _ => return Some(false),
         }
     }  
-    false
+    Some(false)
 }
 
 pub fn explicit( sig: &Signature, ty_name: &syn::Type ) -> Signature{
@@ -321,45 +331,53 @@ fn get_sigs(item_impl: &syn::ItemImpl) -> Vec<(Vec<syn::Attribute>,Visibility,Si
 }
 
 
-pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, aaa: &ActorAttributeArguments, mut act: bool) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
+pub fn get_methods( actor_type: &syn::Type, item_impl: ItemImpl, aaa: & ActorAttributeArguments, mut act: bool) -> (Vec<ActorMethod>, Option<ActorMethodNew>){
 
     let mut loc              = vec![];
     let mut method_new = None;
     let ident_new                       = format_ident!("new");
     let ident_try_new                   = format_ident!("try_new");
-    let ActorAttributeArguments{ assoc,path,..} = aaa;
+    let ActorAttributeArguments{ path,filter,..} = aaa;
+
+    let mut filter = if let Some( filter) = filter { filter.clone() } else { FilterSet::Exclude(vec![])};
 
     for (doc_attrs, vis,sig) in get_sigs(&item_impl) {
-        let org_err = OriginVars{path: path.clone(), actor_type: actor_type.clone(),sig:sig.clone()};
-        if is_self_refer(&sig){
-            loc.push(sieve( doc_attrs,vis,org_err,explicit(&sig,actor_type),Some(false)));
-        } else {
-            
-            if act {
-                // check if there is a function "new" or "try_new"
-                if sig.ident.eq(&ident_new) || sig.ident.eq(&ident_try_new){
-                
-                    let(new_sig,res_opt,res_opt_path) = check_self_return(&mut sig.clone(),actor_type);
-                    let method = sieve(doc_attrs,vis,org_err,sig.clone(),Some(true));
-                    method_new = ActorMethodNew::try_new( method, new_sig, res_opt,res_opt_path );
-                    act = false;
-                    continue; 
-                } 
-            }
-    
-            if *assoc {
-                if is_return(&sig){
-                    loc.push(sieve( doc_attrs,vis,org_err,explicit(&sig,actor_type),Some(true)));
+
+        let org_err = OriginVars{ path: path.clone(), actor_type: actor_type.clone(), sig: sig.clone()};
+
+        if let Some(b) = is_self_refer(&sig) {
+            // fiter methods 
+            if !filter.condition(&sig){ continue; }
+
+            if b {
+
+                loc.push(sieve( doc_attrs,vis,org_err,explicit(&sig,actor_type),false));
+            } else {
+                if act {
+                    // check if there is a function "new" or "try_new"
+                    if sig.ident.eq(&ident_new) || sig.ident.eq(&ident_try_new){
+                    
+                        let(new_sig,res_opt,res_opt_path) = check_self_return(&mut sig.clone(),actor_type);
+                        let method = sieve(doc_attrs,vis,org_err,new_sig,true );
+                        method_new = ActorMethodNew::try_new( method, res_opt, res_opt_path );
+                        act = false;
+                        continue; 
+                    } 
+                } else {
+                    loc.push(sieve( doc_attrs,vis,org_err,explicit(&sig,actor_type),true));
                 }
             }
         }
     }
+    // checkif all names have been found
+    filter.check();
+
     (loc, method_new)
 }
 
-pub fn sieve( doc_attrs: Vec<Attribute>, vis: Visibility, org_err: OriginVars, mut sig: Signature, stat: Option<bool>) -> ActorMethod {
+pub fn sieve( doc_attrs: Vec<Attribute>, vis: Visibility, org_err: OriginVars, mut sig: Signature, stat: bool ) -> ActorMethod {
 
-    let stat = if stat.is_some(){ stat.unwrap() } else { is_self_refer(&sig) };
+
     let arg_bool = if_args_sig_clean_pats(&org_err, &mut sig);
     let (ident,arguments,output) = ident_arguments_output(&sig);
 
@@ -375,9 +393,9 @@ pub fn sieve( doc_attrs: Vec<Attribute>, vis: Visibility, org_err: OriginVars, m
         ReturnType::Default => {
 
             if arg_bool {
-                return ActorMethod::I{ doc_attrs,vis, org_err, sig, ident, arguments };
+                return ActorMethod::I{ doc_attrs,vis, org_err, sig, stat, ident, arguments };
             } else {
-                return ActorMethod::None{ doc_attrs, vis, org_err, sig,ident };
+                return ActorMethod::None{ doc_attrs, vis, org_err, sig, stat, ident };
             }
         },
     }
@@ -392,12 +410,6 @@ pub fn ident_arguments_output( sig: &Signature  ) -> (Ident,Vec<FnArg>,ReturnTyp
     (ident, arguments, output)
 }
  
-pub fn change_signature_refer( signature: &mut Signature ) {
-    let recv: Receiver = syn::parse2(quote!{ &self }).unwrap();
-    let slf = FnArg::Receiver(recv);
-    signature.inputs.insert(0,slf);
-}
-
 pub fn args_to_pat_type(args: &Vec<FnArg>) -> (Vec<Box<syn::Pat>>, Vec<Box<Type>>) {
     
     let mut pats = Vec::new();
@@ -433,50 +445,140 @@ pub fn if_args_sig_clean_pats( org_err: &OriginVars, sig: &mut Signature ) -> bo
 }
 
 pub fn clear_ref_mut(org_err: &OriginVars, pat: &mut syn::Pat ){
-    let rest = syn::Pat::Rest( syn::PatRest {
-        attrs: vec![],
-        dot2_token: Token![..](Span::call_site()),
-    });
+
+    
     match *pat {
-        syn::Pat::Ident(ref mut pat_ident) =>  { 
+        syn::Pat::Ident(ref mut pat_ident) => { 
             pat_ident.by_ref     = None;
             pat_ident.mutability = None;
         },
         syn::Pat::TupleStruct(ref mut pat_tuple_struct) => {
-            for p in pat_tuple_struct.elems.iter(){
-                    if p.eq(&rest){
-                    abort!(Span::call_site(),org_err.origin(error::INCOMPLETE_PATTERN_NOT_ALLOWED)); 
-                };
-            }
             let _ = pat_tuple_struct.elems.iter_mut().map(|p|{
                 clear_ref_mut(org_err,p)
             });
         },
         syn::Pat::Tuple(ref mut pat_tuple) => {
-            for p in pat_tuple.elems.iter(){
-                    if p.eq(&rest){
-                    abort!(Span::call_site(),org_err.origin(error::INCOMPLETE_PATTERN_NOT_ALLOWED)); 
-                };
-            }
             let _ = pat_tuple.elems.iter_mut().map(|p|{
                 clear_ref_mut(org_err,p)
             });
         },
         syn::Pat::Struct(ref mut pat_struct) => {
-            if pat_struct.rest.is_some(){
-                abort!(Span::call_site(),org_err.origin(error::INCOMPLETE_PATTERN_NOT_ALLOWED));
-            }
             let _ = pat_struct.fields.iter_mut().map(|f| clear_ref_mut(org_err,&mut *f.pat));
         },
-        _ =>(),
+        syn::Pat::Rest(_) => (),
+
+        syn::Pat::Slice( ref mut pat_slice) => {
+            let _ = pat_slice.elems.iter_mut().map(|p|{
+                clear_ref_mut(org_err,p)
+            });
+        },
+
+        _ => {
+            let msg = "Unexpected pattern for function argument.";
+            // let msg = format!(" Pattern - {}",match_pat(pat));
+            abort!(Span::call_site(),org_err.origin(msg);note=error::PARAMETERS_ALLOWED_PATTERN_NOTE); 
+        },
     }
 
 }
-pub fn arguments_pat_type( args: &Vec<FnArg> ) -> (TokenStream, TokenStream) { 
-    let (idents,types) = args_to_pat_type(args); 
-    let args_ident =  quote!{ (#(#idents),*)};
-    let args_type  =  quote!{ (#(#types),*) };
-    ( args_ident, args_type )
+
+
+pub fn pat_vars_flat_into_ident( pat: &syn::Pat ) -> Option<Ident> {
+
+    let mut loc = vec![];
+    
+    match pat {
+        syn::Pat::Ident( pat_ident) =>  { 
+            return Some(pat_ident.ident.clone());
+        },
+        syn::Pat::TupleStruct( pat_tuple_struct) => {
+            let vars = pat_tuple_struct.elems.iter().filter_map(|p|{
+                pat_vars_flat_into_ident(p)
+            });
+            loc.extend(vars);
+        },
+        syn::Pat::Tuple( pat_tuple) =>{
+            let vars = pat_tuple.elems.iter().filter_map(|p|{
+                pat_vars_flat_into_ident(p)
+            });
+            loc.extend(vars);
+        },
+        syn::Pat::Struct( pat_struct) => {
+            let vars= pat_struct.fields.iter().filter_map(|f| pat_vars_flat_into_ident(&f.pat));
+            loc.extend(vars);
+        },
+        syn::Pat::Slice( pat_slice) => {
+            let vars = pat_slice.elems.iter().filter_map(|p|{
+                pat_vars_flat_into_ident(p)
+            });
+            loc.extend(vars);
+        },
+        syn::Pat::Rest(_) => return None,
+        _ => {
+            let msg = "Internal Error.'method::pat_vars_flat_into_ident'. Unexpected pattern for function argument.";
+            abort!(Span::call_site(),msg;note=error::PARAMETERS_ALLOWED_PATTERN_NOTE); 
+        },
+    }
+
+    if loc.len() == 0 {
+        // the compiler allows an empty (Rest) pattern like  (..) : Tuple
+        // we will use '__' identifier to be able to carry the type within the model
+        // if the method contains two or more such parameters
+        // it will trigger some naming conflict error  
+        loc.push(format_ident!("__"));
+    }
+
+    return Some(name::combined_ident(loc));
+}
+
+
+fn flat_pat_fn_arg( pat_ty: &syn::PatType ) -> syn::PatType{
+
+    let mut pat_ty = pat_ty.clone();
+
+    let ident = pat_vars_flat_into_ident(&*pat_ty.pat).unwrap();
+    let pat = syn::Pat::Ident(
+        syn::PatIdent{ 
+            attrs: vec![],
+            by_ref: None,
+            mutability: None,
+            ident,
+            subpat: None,
+        });
+    *pat_ty.pat = pat;
+
+    pat_ty
+}
+
+fn flat_arguments( args: &Vec<FnArg> ) -> Vec<FnArg> {
+    let mut loc = vec![];
+
+    for arg in args {
+        match arg { 
+            FnArg::Typed(pat_ty) => { 
+                let new_arg = flat_pat_fn_arg(pat_ty);
+                loc.push(FnArg::Typed(new_arg));
+            },
+            _ => { loc.push( arg.clone());},
+        }
+    }
+    loc
+}
+
+pub fn live_args_and_sig( args: &Vec<FnArg>, sig: &Signature ) -> ( Vec<FnArg>, Signature) {
+
+    let new_args = flat_arguments(args);
+    let mut sig = sig.clone();
+
+    sig.inputs = new_args.iter().cloned().collect::<Punctuated::<FnArg,Token![,]>>();
+
+    let args = 
+    new_args.into_iter().filter(|x|  
+        match x {
+            FnArg::Typed(_)    => true,
+            FnArg::Receiver(_) => false, 
+        }).collect();
+    (args, sig)
 }
 
 pub fn to_async( lib: &Lib, sig: &mut Signature ) {
@@ -486,27 +588,42 @@ pub fn to_async( lib: &Lib, sig: &mut Signature ) {
     }
 }
 
-
 // TOKENSTREAM FROM METHODS 
 
 pub fn live_static_method( 
     actor_name: &Ident,
-         ident: &Ident,
-     doc_attrs: &Vec<Attribute>, 
-           vis: &Visibility,
-       mut sig: Signature,
-          args: TokenStream,
-     live_mets: &mut Vec<(Ident,TokenStream)> ) {
+    method:     ActorMethod,
+    live_mets:  &mut Vec<(Ident,TokenStream,Vec<Attribute>)>,
+    live_generics: syn::TypeGenerics ) 
+     
+{
 
-    change_signature_refer(&mut sig);
+    let (ident, doc_attrs, vis, sig, arguments ) = 
+        match &method {
+            ActorMethod::Io   { ident, doc_attrs, vis, sig, arguments,..} => (ident, doc_attrs, vis, sig, Some(arguments)),
+            ActorMethod::I    { ident, doc_attrs, vis, sig, arguments,..} => (ident, doc_attrs, vis, sig, Some(arguments)),
+            ActorMethod::O    { ident, doc_attrs, vis, sig,..}            => (ident, doc_attrs, vis, sig, None ),
+            ActorMethod::None { ident, doc_attrs, vis, sig,..}            => (ident, doc_attrs, vis, sig, None ),
+        };
+    
+    let mut sig = sig.clone();
     let await_call = sig.asyncness.as_ref().map(|_|quote!{.await});
+    let mut args = vec![];
+
+    if let Some(arguments) = arguments{ 
+        let (live_arguments,live_sig) = live_args_and_sig( &arguments, &sig );
+        let (args_ident,_) = args_to_pat_type(&live_arguments);
+        sig  = live_sig;
+        args = args_ident;
+    }
+    let turbofish = live_generics.as_turbofish();
     let stat_met = quote! {
-        #(#doc_attrs)*
         #vis #sig {
-            #actor_name:: #ident #args #await_call
+            #actor_name #turbofish :: #ident (#(#args),*) #await_call
         }
     };
-    live_mets.push((ident.clone(),stat_met));
+
+    live_mets.push((ident.clone(),stat_met,doc_attrs.clone()));
 }
 
 
@@ -514,18 +631,14 @@ pub fn live_static_method(
 
 
 pub fn to_raw_parts (
+
     vars: &Vars,
-    Cont{
-        live_mets,
-        debug_arms,
-        direct_arms,
-        script_fields,..
-    }: &mut Cont,
+    Cont{ live_mets,debug_arms,direct_arms,script_fields,.. }: &mut Cont,
     aaa : &ActorAttributeArguments,
     oneshot: &OneshotChannel,
-    MpscChannel{
-        sender_call,..
-    }: &MpscChannel,
+    MpscChannel{ sender_call,.. }: &MpscChannel,
+    live_generics: syn::TypeGenerics, 
+
 ){  
     let ActorAttributeArguments{ lib,interact,.. } = &aaa;
     let Vars {actor,cust_name,script_name,impl_vars,inter_send,msg,..} = &vars;
@@ -537,6 +650,11 @@ pub fn to_raw_parts (
     for mut method in actor_methods.clone() {
         
         method = method.reset();
+
+        if method.is_static(){
+            live_static_method(&actor_name, method, live_mets,live_generics.clone());
+            continue;
+        }
 
         let (mut sig, script_field_name) = method.get_sig_and_field_name();
         let await_call = sig.asyncness.as_ref().map(|_|quote!{.await});
@@ -581,86 +699,83 @@ pub fn to_raw_parts (
 
         match &method {
 
-            ActorMethod::Io   { doc_attrs, vis, org_err,  ident, stat,  arguments, output,.. } => {
+            ActorMethod::Io   { doc_attrs, vis, org_err,  ident, arguments, output,.. } => {
                 check_met_name(ident,org_err);
                 let mut inter_vars = some_inter_vars(*interact, org_err, &sig, arguments,None);
-                let (args_ident,args_type) = arguments_pat_type(&arguments);
+                let (live_arguments,live_sig) = live_args_and_sig( &arguments, &sig );
+                let (args_ident,_) = args_to_pat_type(&live_arguments);
 
-                if *stat {
 
-                    live_static_method(&actor_name,ident, doc_attrs,vis, sig, args_ident,live_mets)
-                }
-                else {
-                    // Debug Arm push
-                    add_arm(debug_arms, &script_field_name);
+                // Debug Arm push
+                add_arm(debug_arms, &script_field_name);
 
-                    // Direct Arm
-                    let arm_match        = quote! { 
-                        #script_field_name { input: #args_ident,  #inter_send }
-                    };
+                // Direct Arm
 
-                    let direct_arm = {
-                        quote! {
-                            #script_name :: #arm_match => {#inter_send .send( #actor.#ident #args_ident #await_call ) #error_send ;}
-                        }
-                    };
-                    direct_arms.push(direct_arm);
-                    
-                    // Live Method
-                    let recv_output = oneshot.recv_call(cust_name,&ident);
-                    let msg_variant = (*group_wrap_variant)(quote!{ #script_name :: #arm_match });
-                    
-                    let (inter_gets, sig) = 
-                    if let Some(inter_vars) = &mut inter_vars{
-                        ( Some( inter_vars.get_getters_decl()), inter_vars.new_sig.clone() )
-                    } else {( None,sig)};
+                let arm_match    = quote! { 
+                    #script_field_name {  #(#args_ident),* ,  #inter_send }
+                };
 
-                    let live_met    = quote! {
-                        #(#doc_attrs)*
-                        #vis #sig {
-                            #live_meth_send_recv
-                            #inter_gets
-                            // declaring getters here
-                            let #msg = #msg_variant ;
-                            #sender_call
-                            #recv_output
-                        }
-                    };
+                let direct_arm = {
+                    quote! {
+                        #script_name :: #arm_match => {#inter_send .send( #actor.#ident (#(#args_ident),*) #await_call ) #error_send ;}
+                    }
+                };
+                direct_arms.push(direct_arm);
+                
+                // Live Method
+                let recv_output = oneshot.recv_call(cust_name,&ident);
+                let msg_variant = (*group_wrap_variant)(quote!{ #script_name :: #arm_match });
+                
+                let (inter_gets, sig) = 
+                if let Some(inter_vars) = &mut inter_vars{
+                    ( Some( inter_vars.get_getters_decl()), inter_vars.new_sig.clone() )
+                } else {( None,live_sig)};
 
-                    live_mets.push((ident.clone(),live_met));
+                let live_met    = quote! {
+                    #vis #sig {
+                        #live_meth_send_recv
+                        #inter_gets
+                        // declaring getters here
+                        let #msg = #msg_variant ;
+                        #sender_call
+                        #recv_output
+                    }
+                };
 
-                    // Script Field Struct
-                    let send_pat_type = oneshot.pat_type_send(&*output);
-                    let script_field = quote! {
-                        #script_field_name {
-                            input: #args_type,
-                            #send_pat_type,
-                        }
-                    };
+                live_mets.push((ident.clone(),live_met,doc_attrs.clone()));
 
-                    script_fields.push(script_field);
-                }
+                // Script Field Struct
+                let send_pat_type = oneshot.pat_type_send(&*output);
+
+                let script_field = quote! {
+                    #script_field_name {
+                        #(#live_arguments),* ,
+                        #send_pat_type,
+                    }
+                };
+                script_fields.push(script_field);
             },
 
 
 
             ActorMethod::I    { doc_attrs,vis,org_err, ident, arguments ,..} => {
-                
                 check_met_name(ident,org_err);
                 let mut inter_vars = some_inter_vars(*interact, org_err, &sig, arguments, Some(oneshot));
 
-                let (args_ident,args_type) = arguments_pat_type(&arguments);
+
+                let (live_arguments,live_sig) = live_args_and_sig( &arguments, &sig );
+                let (args_ident,_) = args_to_pat_type(&live_arguments);
     
                 // Debug Arm push
                 add_arm(debug_arms, &script_field_name);
 
                 // Direct Arm
                 let arm_match = quote!{ 
-                    #script_field_name{ input: #args_ident }
+                    #script_field_name{ #(#args_ident),* }
                 };
             
                 let direct_arm = quote!{
-                    #script_name::#arm_match => {#actor.#ident #args_ident #await_call;},
+                    #script_name::#arm_match => {#actor.#ident (#(#args_ident),*) #await_call;},
                 };
 
                 direct_arms.push(direct_arm);
@@ -677,10 +792,9 @@ pub fn to_raw_parts (
                         inter_vars.some_ret_name(),
                     )
 
-                } else {( None,sig,None)};
+                } else {( None,live_sig,None)};
 
                 let live_met = quote!{
-                    #(#doc_attrs)*
                     #vis #sig {
 
                         #inter_gets
@@ -689,70 +803,61 @@ pub fn to_raw_parts (
                         #ret_chan_end
                     }
                 };
-                live_mets.push((ident.clone(),live_met));
+                live_mets.push((ident.clone(),live_met,doc_attrs.clone()));
             
                 // Script Field Struct
                 let script_field = quote!{
                     #script_field_name {
-                        input: #args_type,
+                        #(#live_arguments),*
                     }
                 };
                 script_fields.push(script_field);
                 
+                
             },
-            ActorMethod::O    { doc_attrs, vis, ident, org_err, stat, output ,..} => {
+            ActorMethod::O { doc_attrs, vis, ident, org_err, output ,..} => {
                 
                 check_met_name(ident,org_err);
-                let (args_ident,_) = arguments_pat_type(&vec![]);
 
-                if *stat {
-                    live_static_method(&actor_name,ident, doc_attrs, vis, sig, args_ident,live_mets)
-                }
-                else {
-                    
-                    // Debug Arm push
-                    add_arm(debug_arms, &script_field_name);
+                // Debug Arm push
+                add_arm(debug_arms, &script_field_name);
 
-                    // Direct Arm
-                    let arm_match = quote!{ 
-                        #script_field_name{ inter_send }
-                    };
-        
-                    let direct_arm = quote!{
-                        #script_name::#arm_match => {inter_send.send(#actor.#ident #args_ident #await_call) #error_send ;}
-                    };
-                    direct_arms.push(direct_arm);
+                // Direct Arm
+                let arm_match = quote!{ 
+                    #script_field_name{ inter_send }
+                };
+    
+                let direct_arm = quote!{
+                    #script_name::#arm_match => {inter_send.send(#actor.#ident () #await_call) #error_send ;}
+                };
+                direct_arms.push(direct_arm);
 
 
 
-                    // Live Method
-                    let recv_output = oneshot.recv_call(cust_name,&ident);
-                    let msg_variant = (*group_wrap_variant)(quote!{ #script_name :: #arm_match });
-                    let live_met = quote!{
-                        #(#doc_attrs)*
-                        #vis #sig {
-                            #live_meth_send_recv
-                            let #msg = #msg_variant ;
-                            #sender_call
-                            #recv_output
-                        }
-                    };
-                    live_mets.push((ident.clone(), live_met));
-                
-                    // Script Field Struct
-                    let send_pat_type = oneshot.pat_type_send(&*output);
+                // Live Method
+                let recv_output = oneshot.recv_call(cust_name,&ident);
+                let msg_variant = (*group_wrap_variant)(quote!{ #script_name :: #arm_match });
+                let live_met = quote!{
+                    #vis #sig {
+                        #live_meth_send_recv
+                        let #msg = #msg_variant ;
+                        #sender_call
+                        #recv_output
+                    }
+                };
+                live_mets.push((ident.clone(), live_met,doc_attrs.clone()));
+            
+                // Script Field Struct
+                let send_pat_type = oneshot.pat_type_send(&*output);
 
 
-                    let script_field = quote!{
-                        #script_field_name {
-                            #send_pat_type,
-                        }
-                    };
-                    script_fields.push(script_field);
-                }
+                let script_field = quote!{
+                    #script_field_name {
+                        #send_pat_type,
+                    }
+                };
+                script_fields.push(script_field);
             },
-
-
 
             ActorMethod::None { doc_attrs,vis, ident ,org_err,..} => {
 
@@ -773,13 +878,12 @@ pub fn to_raw_parts (
                 // Live Method
                 let msg_variant = (*group_wrap_variant)(quote!{ #script_name :: #arm_match });
                 let live_met = quote!{
-                    #(#doc_attrs)*
                     #vis #sig {
                         let #msg = #msg_variant ;
                         #sender_call
                     }
                 };
-                live_mets.push((ident.clone(),live_met));
+                live_mets.push((ident.clone(),live_met,doc_attrs.clone()));
             
                 // Script Field Struct
                 let script_field = quote!{

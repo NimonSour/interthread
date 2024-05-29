@@ -6,9 +6,8 @@ pub struct Actor {
 // writes to file when 'edit' is used
 // in conjuction with 'file' argument
 
-#[interthread::actor(channel=2,
-    edit(live(imp(concat))))
-]
+
+#[interthread::actor(file="examples/outside_generic.rs",edit(live(imp(concat))))]
 impl Actor 
 
 {
@@ -27,23 +26,20 @@ impl Actor
     }
 }
 
-
 //++++++++++++++++++[ Interthread  Write to File ]+++++++++++++++++//
-// Object Name   : MaunActor  
-// Initiated By  : #[interthread::actor(channel=2,file="path/to/this/file.rs",edit(live(imp(file(concat)))))]  
+// Object Name   : Actor  
+// Initiated By  : #[interthread::actor(file="examples/outside_generic.rs",edit(live(imp(file(concat)))))]  
+
 
 
 impl ActorLive {
     // pub fn concat(&mut self, s: String) {
     pub fn concat<S:ToString>(&mut self, s: S) {
-        let msg = ActorScript::Concat {
-            // input: (s)
-            input: (s.to_string()),
-        };
+        let msg = ActorScript::Concat { s: s.to_string() };
         let _ = self
             .sender
             .send(msg)
-            .expect("'MaunActorLive::method.send'. Channel is closed!");
+            .expect("'ActorLive::method.send'. Channel is closed!");
     }
 }
 

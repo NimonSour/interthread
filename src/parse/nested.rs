@@ -207,7 +207,6 @@ pub fn file_in_edit_ident(
                     }
                 }
                 if let Some(arg) = arg_ident_edit {
-
                     ranges.extend(file_in_edit(attr_str,nest_args,Some(arg)));
                 }
                 arg_ident_edit = None;
@@ -261,7 +260,7 @@ pub fn get_range( attr_str: &str, n: &NestedArgument)
 }
 
 pub fn edit_remove_active_file_args(actv_attr_str: &str, attr_str: &str, idents: &Option<Vec<syn::Ident>>) -> String {
-
+    
     let mut new_attr_str = attr_str.to_string();
     let args = parse_args(actv_attr_str);
     let ranges =  file_in_edit_ident(actv_attr_str,&args,idents);
@@ -269,4 +268,5 @@ pub fn edit_remove_active_file_args(actv_attr_str: &str, attr_str: &str, idents:
         new_attr_str.replace_range(range, "");
     }
     new_attr_str
+
 }

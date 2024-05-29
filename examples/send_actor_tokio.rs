@@ -34,6 +34,7 @@ impl MyActor {
 // #[interthread::example(main(path="examples/send_actor_tokio.rs"))]
 #[tokio::main]
 async fn main() {
+    
     let mut handles = Vec::new();
     let actor = MyActorLive::new();
     for i in 0..1000 {
@@ -45,11 +46,14 @@ async fn main() {
         });
         handles.push(handle);
     }
+
     let mut actors = Vec::new();
     for handle in handles {
         let act = handle.await.expect("Task Fails").expect("Receiver Fails");
         actors.push(act);
     }
+
+
     println!("Total tasks - {}", actor.get_value(). await);
     println!("actors.len() -> {}", actors.len());
     actors.sort();
