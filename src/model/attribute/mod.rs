@@ -62,7 +62,16 @@ impl AttributeArguments {
         }
     }
 
-    pub fn generate_code( self, item_impl: &ItemImpl )  -> (TokenStream,TokenStream){
+    fn remove_show_option(&mut self) {
+
+        match self {
+            Self::Actor(aaa) => { aaa.show = false;},
+            Self::Group(gaa) => { gaa.show = None; },
+        }
+    }
+
+    pub fn generate_code( mut self, item_impl: &ItemImpl)  -> (TokenStream,TokenStream){
+        self.remove_show_option();
         let model_sdpl = generate_model(self, item_impl, None );
         let (mut code,edit) = model_sdpl.get_code_edit();
 

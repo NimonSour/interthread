@@ -320,8 +320,9 @@ impl ActorModelSdpl {
           edit_trts:  &mut Option<Vec<Item>>,
         |{
             if *def {
+                let temp_def = model_def.take();
                 if *scope_def {
-                    *edit_def = model_def.take();
+                    *edit_def = temp_def;
                 }
             }
             // original 

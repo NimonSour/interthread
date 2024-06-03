@@ -4,6 +4,7 @@ use proc_macro_error::abort;
 use proc_macro2::Span;
 
 
+
 #[derive(Debug,Clone, Copy)]
 
 pub struct NestedArgument {
@@ -79,7 +80,6 @@ impl Default for NestedArgument {
 }
 
 
-
 pub fn parse_args(str_arg: &str) -> Vec<NestedArgument> {
 
     let open  = '(';
@@ -126,11 +126,11 @@ pub fn parse_args(str_arg: &str) -> Vec<NestedArgument> {
 }
 
 
-pub fn get_edit(attr_str: &str, v: &Vec<NestedArgument>) -> NestedArgument {
-    if let Some(pos) = v.iter().position(|x| x.get_name(attr_str).eq(crate::EDIT) && x.depth.eq(&1)) {
+pub fn get_option(attr_str: &str, v: &Vec<NestedArgument>, option: &str) -> NestedArgument {
+    if let Some(pos) = v.iter().position(|x| x.get_name(attr_str).eq(option) && x.depth.eq(&1)) {
         v[pos].clone()
     } else { 
-        let msg = "Internal Error.`parse::nested::get_edit`. Argument `edit` not found.";
+        let msg = format!("Internal Error.`parse::nested::get_edit`. Argument '{}' not found.", option);
         abort!(Span::call_site(),msg);
     }
 }
@@ -143,7 +143,7 @@ pub fn file_in_edit(
     //find edit
     let arg_edit = 
     if let Some(arg) = arg_edit { arg }
-    else { get_edit(attr_str,nest_args) };
+    else { get_option(attr_str,nest_args,crate::EDIT) };
         
     let start = arg_edit.start;
 
@@ -187,7 +187,7 @@ pub fn file_in_edit_ident(
     idents: &Option<Vec<syn::Ident>>) -> Vec<(usize, Range<usize>)> {
 
     //find edit
-    let arg_edit = get_edit(attr_str,nest_args);
+    let arg_edit = get_option(attr_str,nest_args,crate::EDIT);
 
     let mut ranges = Vec::new();
     let start = arg_edit.start;

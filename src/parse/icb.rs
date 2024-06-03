@@ -3,6 +3,7 @@ use crate::model::get_ident_type_generics;
 use crate::LINE_ENDING;
 
 use syn::{Attribute,ItemImpl};
+use proc_macro_error::abort_call_site;
 
 pub struct ItemCodeBlock{
     pub src  : String,
@@ -91,6 +92,15 @@ impl ItemCodeBlock {
         done_attrs[0].0
     }
 
+    fn get_code_block_clean(&self) -> String {
+        
+        if let Some(pos) = self.code_block.find('#'){ 
+            self.code_block[pos..].to_string()
+        } else { 
+            abort_call_site!("Internal Error. `ItemCodeBlock::get_code_block_clean`. Could not fin '#' in code_block!");
+        }
+    }
+
     pub fn get_item_code(&mut self, mut attrs: Vec<Attribute>, item_impl: &ItemImpl ) -> Result<Vec<(usize, Attribute, String)>,String> {
 
         let org_item = set_attrs(&attrs, item_impl);
@@ -125,13 +135,11 @@ impl ItemCodeBlock {
                     }
                 }
 
-                if let Some(first) = self.first {
+                if self.first.is_some() {
 
                     for (i,c) in code.clone().char_indices() {
-                        // add char to future code_block 
-                        if first <= (index + i) {
-                            self.code_block.push(c);
-                        }
+
+                        self.code_block.push(c);
 
                         if self.start.is_some() {
                             if c == self.open { 
@@ -164,7 +172,8 @@ impl ItemCodeBlock {
                                         'l2: loop {
 
                                             if let Some(pos)  = attrs.iter().position(|x| x.eq(&attr)){
-                                                done_attrs.push((self.first.unwrap(), attrs.remove(pos),self.code_block.clone()));
+
+                                                done_attrs.push((self.first.unwrap(), attrs.remove(pos), self.get_code_block_clean()));
 
                                                 if attrs.is_empty(){
 

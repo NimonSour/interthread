@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "2.0.0"
+//!interthread = "2.0.1"
 //!oneshot     = "0.1.6" 
 //!```
 //! 
@@ -1423,7 +1423,7 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 
     let aa = crate::model::AttributeArguments::Actor(aaa);
 
-    let model_sdpl = crate::model::generate_model( aa,&item_impl,None);
+    let model_sdpl = crate::model::generate_model( aa, &item_impl,None );
     
     let (_,edit_sdpl) = model_sdpl.split();
 
@@ -1789,7 +1789,7 @@ pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
 
     let aa = crate::model::AttributeArguments::Group(gaa);
 
-    let model_sdpl = crate::model::generate_model( aa,&item_impl,None);
+    let model_sdpl = crate::model::generate_model( aa,&item_impl,None );
 
     let (_,edit_sdpl) = model_sdpl.split();
 

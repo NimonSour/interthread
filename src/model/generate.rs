@@ -173,7 +173,7 @@ pub fn get_impl_vars(
     }
 }
 
-pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl , impl_vars: Option<ImplVars>) 
+pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: Option<ImplVars> ) 
     -> ModelSdpl {
 
     // mac model values 
