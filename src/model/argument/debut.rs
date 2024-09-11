@@ -1,9 +1,8 @@
-use crate::error;
+
 use crate::model::{Cont,ImplVars,MpscChannel,Vars};
 use quote::{quote,format_ident};
-use proc_macro2::{Span,TokenStream};
-use proc_macro_error::abort;
-use syn::{Visibility,Ident,TypeGenerics,WhereClause};
+use proc_macro2::TokenStream;
+use syn::{Visibility,Ident,ImplGenerics,TypeGenerics,WhereClause};
 
 use std::path::PathBuf;
 
@@ -61,6 +60,7 @@ impl Debut {
             intername,..
         }: &Vars,
         new_vis:        &Option<Visibility>,
+        impl_generics:        &ImplGenerics,
         ty_generics:          &TypeGenerics,
         where_clause: &Option<&WhereClause>,
         
@@ -103,7 +103,6 @@ impl Debut {
         ));
     
     
-        // let debut = format_ident!("{DEBUT}");
         let ts = quote!{
             // we need this function to return as much an id as it is possible
             // the model will build some options on top of this "id"
@@ -135,7 +134,7 @@ impl Debut {
     
         live_trts.push((format_ident!("PartialEq"),
         quote!{
-            impl #ty_generics std::cmp::PartialEq for #live_name #ty_generics #where_clause{
+            impl #impl_generics std::cmp::PartialEq for #live_name #ty_generics #where_clause{
                 fn eq(&self, other: &Self) -> bool {
                     *self.debut == *other.debut
                 }
@@ -144,12 +143,12 @@ impl Debut {
     
         live_trts.push((format_ident!("Eq"),
         quote!{
-            impl #ty_generics std::cmp::Eq for #live_name #ty_generics #where_clause {}
+            impl #impl_generics std::cmp::Eq for #live_name #ty_generics #where_clause {}
         }));  
     
         live_trts.push((format_ident!("PartialOrd"),
         quote!{
-            impl #ty_generics std::cmp::PartialOrd for #live_name #ty_generics #where_clause{
+            impl #impl_generics std::cmp::PartialOrd for #live_name #ty_generics #where_clause{
                 fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
                     other.debut.partial_cmp(&self.debut)
                 }
@@ -158,7 +157,7 @@ impl Debut {
     
         live_trts.push((format_ident!("Ord"),
         quote!{
-            impl #ty_generics std::cmp::Ord for #live_name #ty_generics #where_clause {
+            impl #impl_generics std::cmp::Ord for #live_name #ty_generics #where_clause {
                 fn cmp(&self, other: &Self) -> std::cmp::Ordering {
                     other.debut.cmp(&self.debut)
                 }
@@ -197,6 +196,8 @@ impl Debut {
         new_vis:        &Option<Visibility>,
         mpsc:                  &MpscChannel,
         fields:                 Vec<&Ident>,
+        s_ty_generics:        &TypeGenerics,
+        impl_generics:        &ImplGenerics,
         ty_generics:          &TypeGenerics,
         where_clause: &Option<&WhereClause>,
         spawn:                 &TokenStream,
@@ -206,14 +207,50 @@ impl Debut {
         let ImplVars{actor_type,model_generics,..} = &impl_vars;
         let MpscChannel{ pat_type_sender, type_sender,declaration_call, declaration,..} = mpsc;
         let old_inst_live = format_ident!("old_{actor}_live");
+        let s_turbofish = s_ty_generics.as_turbofish();
 
-        if crate::model::is_generic(model_generics){
-            abort!(Span::call_site(),error::LEGEND_LIMIT_GENERIC);
-        }
+        let actor_ty:TokenStream;
+        let live_ty:TokenStream;
+        let actor_bt_ty:TokenStream;
+        let live_bt_ty:TokenStream;
+        let actor_insert:TokenStream;
+        let live_insert:TokenStream;
+        let actor_remove_expr:TokenStream;
+        let live_remove_expr:TokenStream;
         
+        
+        if crate::model::is_generic(model_generics){
 
+            actor_ty = quote!{ #actor_type};
+            live_ty = quote!{ #live_name #ty_generics};
+            actor_bt_ty = quote!{ std::boxed::Box<dyn std::any::Any + Send> };
+            live_bt_ty = quote!{ std::boxed::Box<dyn std::any::Any + Send> };
+            actor_insert = quote!{ std::boxed::Box::new(#actor)};
+            live_insert = quote!{ std::boxed::Box::new(#live)};
+            actor_remove_expr = quote!{
+                let boxed_actor = collection.remove(&#debut)?;
+                boxed_actor.downcast::< #actor_ty >().ok().map(|boxed| *boxed)
+            };
+            live_remove_expr = quote!{
+                let boxed_live = collection.remove(&#name .to_string())?;
+                boxed_live.downcast::< #live_ty >().ok().map(|boxed| *boxed)
+            };
+
+        } else {
+            
+            actor_ty = quote!{ #actor_type };
+            live_ty = quote!{ #live_name };
+            actor_bt_ty = quote!{ #actor_type };
+            live_bt_ty = quote!{ #live_name };
+            actor_insert = quote!{ #actor };
+            live_insert = quote!{ #live };
+            actor_remove_expr = quote!{ collection.remove(&#debut) };
+            live_remove_expr = quote!{ collection.remove(& #name .to_string()) };
+        };
+
+
+        let live_ty = &live_ty;
         let replace_field  = | field: &Ident|{
-            // quote!{ let _ =  std::mem::replace(&mut self. #field. #sender, #sender.clone()) }
             quote!{ self. #field. #sender =  #sender.clone() ; }
         };
         let replace_fields = {
@@ -221,7 +258,6 @@ impl Debut {
             for f in fields {
                 loc.push(replace_field(f));
             } 
-            // loc.push(quote!{ let _ =  std::mem::replace(&mut self.#sender, #sender) });
             loc.push(quote!{ self. #sender =  #sender ; });
             loc
         };
@@ -229,18 +265,18 @@ impl Debut {
 
         script_mets.push((actor_legend.clone(),
             quote!{    
-                #new_vis fn #actor_legend(#debut: std::time::SystemTime, #actor: std::option::Option<#actor_type> ) -> std::option::Option<#actor_type>
+                #new_vis fn #actor_legend(#debut: std::time::SystemTime, #actor: std::option::Option<#actor_ty> ) -> std::option::Option<#actor_ty>
                 {
-                    static COLLECTION: std::sync::Mutex<std::collections::BTreeMap<std::time::SystemTime, #actor_type>> = 
+                    static COLLECTION: std::sync::Mutex<std::collections::BTreeMap<std::time::SystemTime, #actor_bt_ty>> = 
                     std::sync::Mutex::new(std::collections::BTreeMap::new());
          
                     let mut collection = COLLECTION.lock().unwrap();
                     if let std::option::Option::Some(#actor) = #actor {
          
-                        (*collection).insert(#debut, #actor);
+                        collection.insert(#debut, #actor_insert);
                         std::option::Option::None 
                     } else {
-                        (*collection).remove(&#debut)
+                        #actor_remove_expr
                     }
                 }
             }
@@ -250,19 +286,19 @@ impl Debut {
 
         script_mets.push((live_legend.clone(),
             quote!{    
-                #new_vis fn #live_legend <#intername:std::string::ToString>(#name : #intername, #live: std::option::Option<#live_name> ) -> std::option::Option<#live_name> {
+                #new_vis fn #live_legend <#intername:std::string::ToString>(#name : #intername, #live: std::option::Option<#live_ty> ) -> std::option::Option<#live_ty> {
 
-                    static COLLECTION: std::sync::Mutex<std::collections::BTreeMap<String, #live_name>> = 
+                    static COLLECTION: std::sync::Mutex<std::collections::BTreeMap<std::string::String, #live_bt_ty>> = 
                     std::sync::Mutex::new(std::collections::BTreeMap::new());
             
                     let mut collection = COLLECTION.lock().unwrap();
             
                     if let std::option::Option::Some(#live) = #live {
             
-                        (*collection).insert(#name .to_string(), #live);
+                        collection.insert(#name .to_string(), #live_insert);
                         std::option::Option::None
                     } else {
-                        (*collection).remove(& #name .to_string())
+                        #live_remove_expr
                     }
                 }
             }
@@ -273,7 +309,7 @@ impl Debut {
         live_trts.push((format_ident!("Drop"),
         quote!{
 
-            impl #ty_generics std::ops::Drop for #live_name #ty_generics #where_clause  {
+            impl #impl_generics std::ops::Drop for #live_name #ty_generics #where_clause  {
                 fn drop(&mut self) {
                 
                     if self. #inter_get_count () < 2 {
@@ -307,12 +343,12 @@ impl Debut {
 
         live_mets.push( (try_old.clone(),
             quote!{
-                #new_vis fn #try_old < #intername :std::string::ToString > (#name : #intername) -> std::option::Option< #live_name > {
+                #new_vis fn #try_old < #intername :std::string::ToString > (#name : #intername) -> std::option::Option< #live_ty > {
                     //get actor
-                    let mut #old_inst_live = #script_name :: #live_legend (#name, std::option::Option::None)?;
+                    let mut #old_inst_live = #script_name #s_turbofish :: #live_legend (#name, std::option::Option::None)?;
                     let #debut = #old_inst_live. #inter_get_debut();
                     let #debut_for_play = #debut .clone();
-                    let #actor = #script_name :: #actor_legend ( #debut, std::option::Option::None )?;
+                    let #actor = #script_name #s_turbofish :: #actor_legend ( #debut, std::option::Option::None )?;
                     #declaration
                     #old_inst_live . #inter_set_channel ( #sender );
 

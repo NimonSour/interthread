@@ -17,14 +17,14 @@ pub fn get_text (path: &PathBuf) -> io::Result<String>{
 
 fn example_remove( path: &PathBuf) -> Result<(),String>{
     if let Err(_) = std::fs::remove_dir_all(path){
-        format!("Internal Error.'show::example_remove'. Failed to remove directory - {:?}!", path); 
+        format!("Internal Error.'write::example_remove'. Failed to remove directory - {:?}!", path); 
     }
     Ok(())
 }
 
 fn example_create( path: &PathBuf) -> Result<(),String>{
     if let Err(_) = std::fs::create_dir(path){
-        format!("Internal Error.'show::example_create'. Failed to create directory - {:?}!", path);
+        format!("Internal Error.'write::example_create'. Failed to create directory - {:?}!", path);
     }
     Ok(())
 }
@@ -51,7 +51,7 @@ fn example_check_get() -> Result<PathBuf,String> {
         return Ok(curr_dir);
     }
     else {
-        return Err(format!("Internal Error.'show::example_check_get'. 'CARGO_MANIFEST_DIR' - Not Present"));
+        return Err(format!("Internal Error.'write::example_check_get'. 'CARGO_MANIFEST_DIR' - Not Present"));
     }
 }
 
@@ -63,7 +63,7 @@ pub fn example_path( file_path: &PathBuf ) -> Result<PathBuf,String> {
         return Ok(path)
     }
     else {
-        return Err(format!("Internal Error.'show::example_path'. Could not get file name!"));
+        return Err(format!("Internal Error.'write::example_path'. Could not get file name!"));
     }
 }
 
@@ -124,10 +124,10 @@ fn be_main( path: &PathBuf ,lib: Lib ) ->  Option<syn::File> {
             let main_file = crate::file::main_file(stem.into(),lib);
             return Some( main_file);
         }
-        let msg = "Internal Error.'show::be_main'. Could not cast OsStr to Str!";
+        let msg = "Internal Error.'write::be_main'. Could not cast OsStr to Str!";
         proc_macro_error::abort!(proc_macro2::Span::call_site(),msg);
     }
-    let msg = "Internal Error.'show::be_main'. Could not get 'file_stem' from provided path!";
+    let msg = "Internal Error.'write::be_main'. Could not get 'file_stem' from provided path!";
     proc_macro_error::abort!(proc_macro2::Span::call_site(),msg);
 }
 

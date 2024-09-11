@@ -21,32 +21,6 @@ use quote::{format_ident,quote};
 use std::collections::BTreeMap;
 
 
-
-
-// we don't need this function here ???
-pub fn get_channels_one_mpsc( 
-            aaa: &ActorAttributeArguments, 
-           vars: &Vars, 
-) -> ( OneshotChannel, MpscChannel ){
-
-    let Vars{  
-            inter_send,
-            inter_recv,
-            script_type,
-            impl_vars,.. } = vars;
-
-    let ImplVars{ group_script_type,..} = impl_vars;
-    let script_type = 
-    if let Some(group_script_type) = group_script_type {
-        group_script_type
-    } else { script_type };
-
-    (
-        OneshotChannel::new(inter_send,inter_recv,&aaa.lib),
-        MpscChannel::new(vars,aaa,script_type)   
-    )
-}
-
 pub struct Cont {
 
     script_mets  : Vec<(Ident,TokenStream)>,
@@ -141,7 +115,6 @@ impl Vars {
         let(_,ty_generics,_) = model_generics.split_for_impl();
         script_type = syn::parse_quote!{ #script_name #ty_generics };
 
-
         Self{
 
             actor,
@@ -167,7 +140,7 @@ impl Vars {
             intername:         format_ident!("InterName"),
             msg:               format_ident!("msg"),
             self_:             format_ident!("self"),
-            impl_vars:         impl_vars,
+            impl_vars, 
 
             cust_name,
             script_name,
@@ -206,6 +179,27 @@ impl Vars {
         } else { vec![] }
     }
 
+    pub fn get_channels_one_mpsc(&self, aaa: &ActorAttributeArguments ) 
+        -> ( OneshotChannel, MpscChannel ){
+
+        let Vars{  
+            inter_send,
+            inter_recv,
+            script_type,
+            impl_vars,.. } = &self;
+
+        let ImplVars{ group_script_type,..} = impl_vars;
+
+        let script_type = 
+        if let Some(group_script_type) = group_script_type {
+            group_script_type
+        } else { script_type };
+
+        (
+            OneshotChannel::new(inter_send,inter_recv,&aaa.lib),
+            MpscChannel::new(&self,aaa,script_type)   
+        )
+    }
 }
 
 pub struct ModelSdpl {
@@ -281,7 +275,6 @@ pub struct ActorModelSdpl {
     pub asyncness: Option<TokenStream>,
     pub mac:         Model,
     pub edit:    EditActor,
-    pub generics: Generics,
     pub vars:         Vars,
     pub show:         bool,
     pub script: ( Option<Item>, Vec<(Ident,Item)>, Vec<(Ident,Item)> ),

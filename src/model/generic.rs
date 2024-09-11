@@ -46,9 +46,10 @@ fn get_where_pred_bounds( pred: WherePredicate ) -> Option<(Type, Punctuated<Typ
     }
 }
 
-fn model_bounds() -> Punctuated<TypeParamBound, Token![+]>{
+fn model_bounds(is_legend: bool) -> Punctuated<TypeParamBound, Token![+]>{
+    let  clone = if is_legend { Some( quote!{ Clone + } )} else {None};
     let where_clause = match syn::parse2::<syn::WhereClause>(quote!{
-        where T : Send + Sync + 'static,
+        where T : #clone  Send + Sync + 'static,
     }) {
         Ok( v ) => v,
         Err(e)        => {
@@ -61,7 +62,6 @@ fn model_bounds() -> Punctuated<TypeParamBound, Token![+]>{
     let (_, bounds) = get_where_pred_bounds(pred).unwrap();
     bounds
 }
-
 
 fn include_set<T,P>(this: &mut Punctuated<T,P>, other: &Punctuated<T,P> )
     where 
@@ -147,7 +147,8 @@ fn push_include( this: &mut Vec<(Type,Punctuated<TypeParamBound, Token![+]>)> ,
 }
 
 pub fn include_bounds(gen: &mut Generics, 
-             other_bounds: Vec<(Type,Punctuated<TypeParamBound, Token![+]>)>) {
+             other_bounds: Vec<(Type,Punctuated<TypeParamBound, Token![+]>)>,
+                is_legend: bool ) {
     let this_bounds =  
     if let Some(mut bounds) = take_gen_param_ident_bounds(gen){
         push_include( &mut bounds, other_bounds);
@@ -165,7 +166,7 @@ pub fn include_bounds(gen: &mut Generics,
         }
     };
 
-    let model_bounds = model_bounds();
+    let model_bounds = model_bounds(is_legend);
     for (ty, mut bounds) in this_bounds {
         include_set(&mut bounds,&model_bounds);
         where_clause.predicates.push(syn::parse_quote! {
@@ -184,15 +185,16 @@ pub fn include_bounds(gen: &mut Generics,
 
 pub fn take_generic_parts( gen: &mut Generics, 
                        methods: Vec<&mut Signature>, 
-                     def_gen: Option<Generics> )
+                       def_gen: Option<Generics>,
+                     is_legend: bool )
 {
 
     let methods_bounds = take_generics_from_sig(methods);
-    include_bounds(gen, methods_bounds);
+    include_bounds(gen, methods_bounds,is_legend);
 
     if let Some(mut def_gen) = def_gen {
         if let Some(strct_def_bounds) =  take_gen_param_ident_bounds(&mut def_gen){
-            include_bounds(gen, strct_def_bounds); 
+            include_bounds(gen, strct_def_bounds,is_legend); 
         }
     }
 }
@@ -339,7 +341,8 @@ pub fn field_gen_rename( impl_vars: &mut ImplVars ) {
 
 pub fn group_generics( 
      slf: &mut ImplVars,
-    mems: &mut BTreeMap<&Ident,(AttributeArguments,ItemImpl,ImplVars)> )
+    mems: &mut BTreeMap<&Ident,(AttributeArguments,ItemImpl,ImplVars)> ,
+    is_legend: bool )
 {   
 
 
@@ -363,7 +366,7 @@ pub fn group_generics(
 
         if let Some(mem_gen_bounds) =  
             take_gen_param_ident_bounds(gen){
-            include_bounds(&mut slf_gen_model, mem_gen_bounds);  
+            include_bounds(&mut slf_gen_model, mem_gen_bounds,is_legend);  
         }
     }
 
@@ -372,7 +375,7 @@ pub fn group_generics(
    
     for (_, (_,_,impl_vars) ) in  mems.iter_mut(){
 
-        // give group_model_ generics value for group members
+        // give group_model_generics value for group members
         impl_vars.group_model_generics = Some(slf_gen_model.clone());
     }
 

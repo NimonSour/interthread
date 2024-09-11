@@ -7,7 +7,7 @@ pub use atp::ActiveTextParser;
 
 use crate::model::name::get_ident_type_generics;
 use crate::model::argument::EditAttribute;
-use crate::show::get_text;
+use crate::write::get_text;
 use crate::LINE_ENDING;
 
 use proc_macro_error::{abort, abort_call_site};
@@ -146,7 +146,7 @@ pub fn edit_write(
     prefix += &suffix;
 
 
-    if let Err(e) = crate::show::write(prefix, &edit_attr.path){
+    if let Err(e) = crate::write::write(prefix, &edit_attr.path){
         proc_macro_error::abort!(proc_macro2::Span::call_site(),e.to_string());
     }
 

@@ -23,6 +23,47 @@ fn actor_sync_unbound_default() {
     assert_eq!( live.add(5),    8); 
 }
 
+
+#[test]
+fn actor_sync_unbound_default_debut_plus_const_generic_param() {
+    pub struct Actor<T, const N: usize>([Option<T>;N]);
+    #[life(debut)]
+    impl <T, const N: usize> Actor <T,N> 
+    where
+        T: Copy + Default, 
+    {
+        pub fn new() -> Self { Self ([None; N])}
+
+        pub fn set_value_at(&mut self, index: usize, value: T) {
+            if index < N {
+                self.0[index] = Some(value);
+            } else {
+                panic!("Index out of bounds!");
+            }
+        }
+        pub fn get_value_at(&self, index: usize) -> Option<T> {
+            if index < N {
+                self.0[index]
+            } else {
+                panic!("Index out of bounds!");
+            }
+        }
+
+    }
+    
+    // Note the consts are allways moved to the left hs
+    // ( for Actor<T,const N>  ->  ActorLive<const N,T> )
+    // as a side effect not by design,
+    // probably something to deal with in the future.
+    // text editor will guide which is which 
+    let mut live = ActorLive::<10usize,i32>::new();
+    live.set_value_at(3, -3);
+    live.set_value_at(7, -7);
+    assert_eq!( live.get_value_at(3).unwrap(),  -3); 
+    assert_eq!( live.get_value_at(7).unwrap(),  -7); 
+}
+
+
 #[test]
 fn actor_sync_unbounded_int() {
     pub struct Actor<T>(T);

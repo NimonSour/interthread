@@ -70,7 +70,6 @@ pub struct ImplVars {
     pub vis:         Option<Visibility>,
     pub field:            Option<Ident>,
     pub ty:                Option<Type>,
-    pub def_gen:       Option<Generics>,
     pub group_script_type: Option<Type>,
     pub group_script_name: Option<Ident>,
 
@@ -140,7 +139,7 @@ pub fn get_impl_vars(
         sigs.push(met_new_sig);
     }
              
-    generic::take_generic_parts( &mut model_generics, sigs,def_gen);
+    generic::take_generic_parts( &mut model_generics, sigs,def_gen, aaa.debut.is_legend());
 
     let async_decl = 
 
@@ -167,7 +166,6 @@ pub fn get_impl_vars(
         vis:                  None,
         field:                None,
         ty:                   None,
-        def_gen:              None,
         group_script_type:    None,
         group_script_name:    None,
     }
@@ -219,7 +217,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: 
                 aaa = gaas.get_aaa(None);
                 let mut impl_vars = get_impl_vars(&item_impl, &aaa, Some(gaas.def_generics.clone()), mac, model);
 
-                crate::model::generic::group_generics(&mut impl_vars,&mut coll_impl_vars );
+                crate::model::generic::group_generics(&mut impl_vars,&mut coll_impl_vars, aaa.debut.is_legend());
 
                 let ImplVars{ actor_name,.. } = &impl_vars;
                 let cust_name    = &if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { actor_name.clone() };
@@ -263,8 +261,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: 
     };
 
     let vars = &Vars::new(&aaa,impl_vars, mac, model);
-    let (oneshot,mpsc) = &model::get_channels_one_mpsc(&aaa,vars);
-    
+    let (oneshot,mpsc) = &vars.get_channels_one_mpsc(&aaa);
 
     let Vars{
         actor, play, direct,
@@ -274,17 +271,17 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: 
         cust_name, .. } = vars;
 
     let ImplVars { 
-        vis,model_generics,
+        vis,
         async_decl,actor_type,
         actor_name, met_new, .. } = &impl_vars;
     
     
     let mut new_vis = vis.as_ref().map(|x| x.clone());
 
-    let (( _s_impl_generics,
+    let ((  s_impl_generics,
              s_ty_generics,
             s_where_clause ),
-         ( _l_impl_generics,
+         (  l_impl_generics,
              l_ty_generics,
             l_where_clause )) = impl_vars.get_split_model_generics();
 
@@ -360,13 +357,16 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: 
 
         // LIVE INTER METHODS AND TRAITS
         if aaa.debut.active(){
-            aaa.debut.impl_debut( &mut cont, vars, &new_vis, &l_ty_generics, &l_where_clause);
+            aaa.debut.impl_debut( &mut cont, vars, &new_vis, &l_impl_generics,&l_ty_generics, &l_where_clause);
 
             if aaa.debut.is_legend(){
                 aaa.debut.impl_legend( 
                     &mut cont, vars, &new_vis,mpsc, 
                     model_sdpl.fields.keys().collect::<Vec<_>>(), 
-                    &l_ty_generics, &l_where_clause,
+                    &s_ty_generics,
+                    &l_impl_generics,
+                    &l_ty_generics, 
+                    &l_where_clause,
                     &spawn
                 );
             }
@@ -378,7 +378,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: 
     let script_def = {
         let Cont{ script_fields,..} = &mut cont;
         quote! {
-            #new_vis enum #script_name #s_ty_generics #s_where_clause {
+            #new_vis enum #script_name #s_impl_generics #s_where_clause {
                 #(#script_fields),*
             }
         }
@@ -413,7 +413,8 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: 
 
         let legend_call = 
         if aaa.debut.is_legend(){
-            quote!{ let _ = #script_name :: #actor_legend ( #debut, std::option::Option::Some( #actor )); }
+            let turbofish = s_ty_generics.as_turbofish();
+            quote!{ let _ = #script_name #turbofish :: #actor_legend ( #debut, std::option::Option::Some( #actor )); }
         } else { quote!{} };
 
         let play_method = {
@@ -447,7 +448,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: 
         };
         script_trts.push((format_ident!("Debug"),
         quote! {
-            impl #s_ty_generics std::fmt::Debug for #script_name #s_ty_generics #s_where_clause {
+            impl #s_impl_generics std::fmt::Debug for #script_name #s_ty_generics #s_where_clause {
             
                 fn fmt( &self, f: &mut std::fmt::Formatter<'_> ) -> std::fmt::Result {
                     #body
@@ -470,7 +471,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: 
 
             quote!{
                 #[derive(Clone)]
-                #new_vis struct #live_name #l_ty_generics #l_where_clause {
+                #new_vis struct #live_name #l_impl_generics #l_where_clause {
                     #pat_type_sender
                     #debut_field
                     #name_field
@@ -481,7 +482,7 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: 
 
             quote!{
                 #[derive(Clone)]
-                #new_vis struct #live_name #l_ty_generics #l_where_clause {
+                #new_vis struct #live_name #l_impl_generics #l_where_clause {
                     #pat_type_sender
                 }
             }
@@ -500,7 +501,6 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: 
             asyncness:    async_decl.clone(),
             mac:                 mac.clone(),
             edit:                   aaa.edit,
-            generics: model_generics.clone(),
             vars:               vars.clone(),
             show:                   aaa.show,
 

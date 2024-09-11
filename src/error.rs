@@ -568,9 +568,6 @@ impl OriginVars {
     }
 }
 
-pub static LEGEND_LIMIT_GENERIC: &str = 
-"   The 'legend' option is not supported for generic objects.";
-
 pub static INTERACT_VARS_HELP: &str = "
     The `interact` option is designed to provide the model with \
 comprehensive non-blocking functionality, along with convenient \

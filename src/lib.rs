@@ -85,7 +85,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "2.0.1"
+//!interthread = "2.0.2"
 //!oneshot     = "0.1.6" 
 //!```
 //! 
@@ -417,7 +417,7 @@
 //! 
 
 mod use_macro;
-mod show;
+mod write;
 mod file;
 mod check;
 mod error;
@@ -658,7 +658,7 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 
     let some_lib = if eaa.main { Some(lib)} else { None };
 
-    let path = show::example_show(file, &eaa.get_path(), some_lib );
+    let path = write::example_show(file, &eaa.get_path(), some_lib );
 
     let msg = format!("The file has been SUCCESSFULLY created at {}",path.to_string_lossy());
     let note  = "To avoid potential issues and improve maintainability, it is recommended to comment out the macro after its successful execution. To proceed, please comment out the macro and re-run the compilation.";

@@ -474,7 +474,6 @@ pub fn clear_ref_mut(org_err: &OriginVars, pat: &mut syn::Pat ){
 
         _ => {
             let msg = "Unexpected pattern for function argument.";
-            // let msg = format!(" Pattern - {}",match_pat(pat));
             abort!(Span::call_site(),org_err.origin(msg);note=error::PARAMETERS_ALLOWED_PATTERN_NOTE); 
         },
     }
@@ -709,7 +708,6 @@ pub fn to_raw_parts (
                 add_arm(debug_arms, &script_field_name);
 
                 // Direct Arm
-
                 let arm_match    = quote! { 
                     #script_field_name {  #(#args_ident),* ,  #inter_send }
                 };
