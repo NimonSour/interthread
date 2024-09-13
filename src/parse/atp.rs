@@ -88,6 +88,26 @@ impl  ActiveTextParser {
             ss = &s[..pos];
             self.open = Some(open);
         }
+
+        // possible lifetime catch block 
+        if let Some(open) = &self.open {
+            if open.eq("'"){
+                let pos = ss.len();
+                for (i,c) in (&s[(pos+1)..]).chars().enumerate(){
+                    match c {
+                        ' ' | ',' => {
+                            self.open = Some("".into());
+                            let (new_ss,new_w)  = s.split_at(pos +i);
+                            ss = new_ss;
+                            work = new_w.into();
+                        },
+                        '\'' => break,
+                        _ => (),
+                    }
+                }
+            }
+        }
+
         if len == ss.len() { None } else { Some((ss, work)) }
     }
 
@@ -126,20 +146,23 @@ impl  ActiveTextParser {
         let mut code = String::new();
         loop {
             if let Some(cap) = &self.open {
-                if let Some((c,w)) = 
-                    self.close_multy_line(&work,&cap.clone()){
-                    if w.is_empty(){
-                        code += &c;
+                if !cap.is_empty() { 
+
+                    if let Some((c,w)) = 
+                        self.close_multy_line(&work,&cap.clone()){
+                        if w.is_empty(){
+                            code += &c;
+                            break;
+                        } else {
+                            code += &c;
+                            work = w.into();
+                        }   
+                    } else { 
+                        // if is not close than is w_space
+                        code += &pad(work.len(),"");
                         break;
-                    } else {
-                        code += &c;
-                        work = w.into();
-                    }   
-                } else { 
-                    // if is not close than is w_space
-                    code += &pad(work.len(),"");
-                    break;
-                }
+                    }
+                } else { self.open = None; }
                 
             } else {
                 if let Some((c, w)) = self.open_multy_line(&work){
@@ -148,8 +171,8 @@ impl  ActiveTextParser {
                         code += c;
                         code += &pad(w.len(),"");
                         break;
-                    }
-                    else {
+
+                    } else {
                         code += c;
                         work  = w; 
                     }
@@ -164,3 +187,220 @@ impl  ActiveTextParser {
     }
 }
 
+
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_lifetime() {
+
+        let inp = 
+r#"
+fn example❤️<'a,'b,'c>(x: &'a char, y: &'b char, z: &'c char ) -> String {
+    let mut s = String::new();
+    s.push(*x);
+    s.push(*y);
+    s.push(*z);
+    s
+}
+example❤️(&'a',&'\n',&'\u{2764}');
+"#;
+        let exp = 
+r#"
+fn example❤️<'a,'b,'c>(x: &'a char, y: &'b char, z: &'c char ) -> String {
+    let mut s = String::new();
+    s.push(*x);
+    s.push(*y);
+    s.push(*z);
+    s
+}
+example❤️(&   ,&    ,&          );
+"#;
+        
+        let mut atp = ActiveTextParser::new(0);
+        let (_,code) = atp.parse((0,inp.to_string()));
+
+        assert_eq!(exp,code);
+
+    }
+        
+
+   #[test]
+   fn explicit_chars_in_str(){
+       let mut atp = ActiveTextParser::new(0);
+
+       let s =r#"
+       let a = '#'  ;
+       let b = '\n' ;
+       let c = '"'  ;
+       let d = "foo";
+       let g ="'\"'";
+       let e =     1;
+       "#;
+       let r =r#"
+       let a =      ;
+       let b =      ;
+       let c =      ;
+       let d =      ;
+       let g =      ;
+       let e =     1;
+       "#;
+       
+       let mut loc = Vec::new();
+       for (index,line) in s.lines().enumerate(){
+
+           let code_line = atp.parse((index,line.to_string()));
+           loc.push(code_line);
+       }
+       let loc_new = 
+       loc.into_iter().map(|x| x.1).collect::<Vec<_>>();
+       let result = loc_new.join(LINE_ENDING);
+
+       assert_eq!(&result,r)
+   }
+
+
+   #[test]
+   fn  open_comment_test() { 
+       let mut atp = ActiveTextParser::new(0);
+       // let s = r###"br#"r##"r#"b""/*end"###;
+                         
+       if let Some((code,work)) = 
+           atp.open_multy_line(r###"0//br#"r##"r#"b""/*end"###){
+                   assert_eq!(code,"0");
+                   assert_eq!(work,r###"  br#"r##"r#"b""/*end"###.to_string());
+       }
+       if let Some((code,work)) = 
+           atp.open_multy_line(r###"1/*br#"r##"r#"b""end"###){
+                   assert_eq!(code,"1");
+                   assert_eq!(work,r###"  br#"r##"r#"b""end"###.to_string());
+       }
+       if let Some((code,work)) = 
+           atp.open_multy_line(r###"2"br#"r##"r#"b"end"###){
+                   assert_eq!(code,"2");
+                   assert_eq!(work,r###" br#"r##"r#"b"end"###.to_string());
+       }
+       if let Some((code,work)) = 
+           atp.open_multy_line(r###"3b"br#"r##"r#"end"###){
+                   assert_eq!(code,"3");
+                   assert_eq!(work,r###"  br#"r##"r#"end"###.to_string());
+       }
+       if let Some((code,work)) = 
+           atp.open_multy_line(r###"4r#"br#"r##"end"###){
+                   assert_eq!(code,"4");
+                   assert_eq!(work,r###"   br#"r##"end"###.to_string());
+       }
+       if let Some((code,work)) = 
+           atp.open_multy_line(r###"5r##"br#"end"###){
+                   assert_eq!(code,"5");
+                   assert_eq!(work,r###"    br#"end"###.to_string());
+       }
+       if let Some((code,work)) = 
+           atp.open_multy_line(r###"6br#"end"###){
+                   assert_eq!(code,"6");
+                   assert_eq!(work,r###"    end"###.to_string());
+       }
+   }
+
+   #[test]
+   fn  close_cap_test() { 
+       let mut atp = ActiveTextParser::new(0);
+       let s = r###"123\"#45"*\"##end"###;
+                         
+       if let Some((code,work)) = 
+           atp.close_multy_line(s, "\"#"){
+           //               123\"#45"*\"##end
+           assert_eq!(code,"      ".to_string());
+           assert_eq!(work,r###"45"*\"##end"###);
+       }
+       if let Some((code,work)) = 
+           atp.close_multy_line(s, "\""){
+           //               123\"#45"*\"##end
+           assert_eq!(code,"         ".to_string());
+           assert_eq!(work,r###"*\"##end"###);
+       }
+       if let Some((code,work)) = 
+           atp.close_multy_line(s, "*\\"){
+           //               123\"#45"*\"##end
+           assert_eq!(code,"           ".to_string());
+           assert_eq!(work,r###""##end"###);
+       }
+       if let Some((code,work)) = 
+           atp.close_multy_line(s, "\"##"){
+           //               123\"#45"*\"##end
+           assert_eq!(code,"              ".to_string());
+           assert_eq!(work,r###"end"###);
+       }
+   }
+
+   #[test]
+   fn  parser_close_open() { 
+
+       let mut atp = ActiveTextParser::new(0);
+       let s = r#"eprintln!("12345");"#;
+
+       let close = atp.close_multy_line(s, "\"");
+       let open = atp.open_multy_line(s);
+
+       let r_close = Some(("           ".to_string(),  "12345\");")) ;
+       let r_open  = Some(("eprintln!("             , " 12345\");".to_string())) ;
+       
+       assert_eq!(close, r_close);
+       assert_eq!(open ,  r_open);
+
+       let ( cc,cw) = close.unwrap();
+       let ( oc,ow) = open.unwrap();
+
+       assert!( s.len() == (cc.len() + cw.len()));
+       assert!( s.len() == (oc.len() + ow.len()));
+   }
+   
+
+   // Old test for text parser 
+
+
+  
+   #[test]
+   fn  parser_close_open_inline() { 
+       let mut atp = ActiveTextParser::new(0);
+
+       let s =r###"
+       println!(   "12\"34🌍"  );
+       println!(   "12🌍3\"4"  );
+       println!(   "12🌍34\""  );
+       println!(   "\"12🌍34"  );
+       println!(  b"12🌍3\"4"  );
+       println!(r##"1234\"🌍"##);
+       println!(r#"🌍1234\""#  );
+       println!(br#"\"1234🌍"# );
+       println!("\"");
+       println!("");
+       "###;
+
+       let r =r#"
+       println!(                 );
+       println!(                 );
+       println!(                 );
+       println!(                 );
+       println!(                 );
+       println!(                 );
+       println!(                 );
+       println!(                 );
+       println!(    );
+       println!(  );
+       "#;
+
+       let mut loc = Vec::new();
+       for (index,line) in s.lines().enumerate(){
+           loc.push(atp.parse((index,line.to_string())));
+       }
+       let loc_new = 
+       loc.into_iter().map(|x| x.1).collect::<Vec<_>>();
+       let result = loc_new.join(LINE_ENDING);
+
+       assert_eq!(&result,r)
+   }
+   
+}
