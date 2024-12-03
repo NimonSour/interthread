@@ -323,14 +323,14 @@ fn id_actor_sync_inter(){
 // ID STD
 #[test]
 fn id_actor_sync_bounded() {
-    pub struct Actor(u8);
+    pub struct Actor;
     #[life(channel=3,debut)]
     impl Actor {
-        pub fn new(v:u8) -> Self{Self(v)}
+        pub fn new() -> Self{Self}
     }
-    let actor1 = ActorLive::new(0);
-    let actor2 = ActorLive::new(0);
-    let actor3 = ActorLive::new(0);
+    let actor1 = ActorLive::new();
+    let actor2 = ActorLive::new();
+    let actor3 = ActorLive::new();
 
 
 

@@ -2,7 +2,7 @@ use tokio::time::{sleep,Duration};
 use std::sync::{Arc,Mutex};
 pub struct MyActor(Arc<Mutex<u8>>);
 
-#[interthread::actor(channel=2,lib="tokio")] 
+#[interthread::actor(lib="tokio")] 
 impl MyActor {
 
     pub fn new() -> Self {Self(Arc::new(Mutex::new(0)))}

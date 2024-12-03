@@ -58,12 +58,6 @@
 //! the core logic of the program.
 //! 
 //! 
-//! Moreover, existing libraries like [`actix`](https://docs.rs/actix/latest/actix/), [`axiom`](https://docs.rs/axiom/latest/axiom/), 
-//! designed to simplify working within the Actor Model,
-//! often employ specific concepts, vocabulary, traits and types that may
-//! be unfamiliar to users who are less experienced with 
-//! asynchronous programming and futures. 
-//! 
 //! ## Solution 
 //! 
 //! The [`actor`](./attr.actor.html) macro -  when applied to the 
@@ -85,7 +79,7 @@
 //! 
 //!```text
 //![dependencies]
-//!interthread = "2.0.2"
+//!interthread = "3.0.0"
 //!oneshot     = "0.1.6" 
 //!```
 //! 
@@ -265,19 +259,6 @@
 //! gives the flexibility to customize and modify 
 //! the behavior of the `play` to suit any requared logic.
 //! 
-//! In addition the Debug trait is implemented for the `script`struct.
-//!  
-//! ```rust no_run
-//!impl std::fmt::Debug for MyActorScript {
-//!    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//!        match self {
-//!            MyActorScript::Increment { .. } => write!(f, "MyActorScript::Increment"),
-//!            MyActorScript::AddNumber { .. } => write!(f, "MyActorScript::AddNumber"),
-//!            MyActorScript::GetValue { .. } => write!(f, "MyActorScript::GetValue"),
-//!        }
-//!    }
-//!}
-//! ```
 //! 
 //! 
 //! # live
@@ -288,7 +269,7 @@
 //! invocation of the corresponding method within the Actor. 
 //! 
 //! The special method of `live` method `new`  
-//! - declares a new channel
+//! - initiates a new channel
 //! - initiates an instace of the Actor
 //! - spawns the `play` component in a separate thread 
 //! - returns an instance of `Self`
@@ -350,8 +331,8 @@
 //! ```
 //! The methods of `live` type have same method signature
 //! as Actor's own methods 
-//! - declare a `oneshot` channel
-//! - declare a `msg` specific `script` variant
+//! - initiate a `oneshot` channel
+//! - create a `msg` specific `script` variant
 //! - send the `msg` via `live`'s channel 
 //! - receive and return the output if any   
 //! 
@@ -416,6 +397,7 @@
 //! Checkout `interthread` on [![GitHub](https://img.shields.io/badge/GitHub-%2312100E.svg?&style=plastic&logo=GitHub&logoColor=white)](https://github.com/NimonSour/interthread)
 //! 
 
+
 mod use_macro;
 mod write;
 mod file;
@@ -427,19 +409,25 @@ mod model;
 static INTERTHREAD: &'static str            = "interthread";
 static INTER_EXAMPLE_DIR_NAME: &'static str = "INTER_EXAMPLE_DIR_NAME";
 static INTER: &'static str                  = "inter";
-static GROUP: &'static str                  = "group";
+// static WEB_ACTOR: &'static str              = "web_actor";
+
 static ACTOR: &'static str                  = "actor";
+static FAMILY: &'static str                 = "family";
+
 static EXAMPLE: &'static str                = "example";
 static EXAMPLES: &'static str               = "examples";
 
+const RWLOCK: &str = "RwLock";
+const MUTEX: &str  = "Mutex";
+const ARC: &str    = "Arc";
 
 // vars
 static INTER_SEND: &'static str = "inter_send";
 static INTER_RECV: &'static str = "inter_recv";
 
 // Some of Attributes Arguments
-static EDIT: &'static str               = "edit";
-static FILE: &'static str               = "file";
+static EDIT: &'static str = "edit";
+static FILE: &'static str = "file";
 
 
 
@@ -450,51 +438,23 @@ const LINE_ENDING: &'static str = "\n";
 
 /// # Code transparency and exploration
 ///  
-/// The [`example`](./attr.example.html) macro serves as a 
-/// convenient tool for code transparency and exploration.
-/// Automatically generating an expanded code file,
-/// it provides developers with a tangible representation of
-/// the code produced by the `interthread` macros. 
-/// 
-/// Having the expanded code readily available in the `examples/inter`
-/// directory offers a few key advantages:
-///  
-/// - It provides a clear reference point for developers to inspect 
-/// and understand the underlying code structure.
-/// 
-/// - The generated code file serves as a starting point for 
-/// customization. Developers can copy and paste the generated code 
-/// into their own project files and make custom changes as needed. 
-/// This allows for easy customization of the generated actor 
-/// implementation to fit specific requirements or to add additional 
-/// functionality.
-/// 
-/// - Helps maintain a clean and focused project structure, 
-/// with the `examples` directory serving as a dedicated location for 
-/// exploring and experimenting with the generated code.
-/// 
-/// [`example`](./attr.example.html) macro helps developers to 
-/// actively engage with the generated code 
-/// and facilitates a smooth transition from the generated code to a 
-/// customized implementation. This approach promotes code transparency,
-/// customization, and a better understanding of the generated code's 
-/// inner workings, ultimately enhancing the development experience 
-/// when working with the `interthread` macros.
+/// [`example`](./attr.example.html) simplifies exploring and interacting with 
+/// expanded macro-generated code. It generates example files with expanded 
+/// content of `interthread` macros, making it easy for developers to debug, test, and experiment.
 /// 
 /// Consider a macro [`actor`](./attr.actor.html)  inside the project 
 /// in `src/my_file.rs`.
 /// 
 ///Filename: my_file.rs 
 ///```rust no_run
-///use interthread::{actor,example};
-///
-///pub struct Number;
+/// 
+///pub struct MyActor;
 ///
 /// // you can have "example" macro in the same file
-/// // #[example(path="src/my_file.rs")]
+/// // #[interthread::example(path="src/my_file.rs")]
 ///
-///#[actor]
-///impl Number {
+///#[interthread::actor]
+///impl MyActor {
 ///    pub fn new(value: u32) -> Self {Self}
 ///}
 ///
@@ -502,8 +462,7 @@ const LINE_ENDING: &'static str = "\n";
 /// 
 ///Filename: main.rs 
 ///```rust no_run
-///use interthread::example;
-///#[example(path="src/my_file.rs")]
+///#[interthread::example(path="src/my_file.rs")]
 ///fn main(){
 ///}
 ///
@@ -527,50 +486,17 @@ const LINE_ENDING: &'static str = "\n";
 ///      ├── my_file.rs   <--- expanded "src/my_file.rs"  
 ///```
 ///
-/// [`example`](./attr.example.html) macro can be placed on any 
-/// item in any file within your `src` directory, providing 
-/// flexibility in generating example code for/from different 
-/// parts of your project.
-///
-/// It provides two options for generating example code files: 
-///  - [`mod`](##mod)  (default)
-///  - [`main`](##main) 
-///
-/// ## mod 
-/// The macro generates an example code file within the 
-/// `examples/inter` directory. For example:
-///
-///```rust no_run
-///#[example(path="my_file.rs")]
-///```
-///
-/// This is equivalent to:
-///
-///```rust no_run
-///#[example(mod(path="my_file.rs"))]
-///```
-///
-/// The generated example code file will be located at 
-/// `examples/inter/my_file.rs`.
-///
-/// This option provides developers with an easy way to 
-/// view and analyze the generated code, facilitating code 
-/// inspection and potential code reuse.
-///
-/// ## main 
-///
-/// This option is used when specifying the `main` argument 
+/// When specifying the `main` argument 
 /// in the `example` macro. It generates two files within 
 /// the `examples/inter` directory: the expanded code file 
 /// and an additional `main.rs` file. 
 ///
 ///```rust no_run
-///#[example(main(path="my_file.rs"))]
+///#[example(main,path="my_file.rs")]
 ///```
 ///
-/// This option is particularly useful for testing and 
-/// experimentation. It allows developers to quickly 
-/// run and interact with the generated code by executing:
+/// This option is particularly useful for debugging and experimentation. 
+/// It allows developers to quickly run and interact with the generated code by executing:
 ///
 ///```terminal
 ///$ cargo run --example inter
@@ -584,31 +510,25 @@ const LINE_ENDING: &'static str = "\n";
 ///```text 
 /// 
 ///#[interthread::example( 
-///   
-///    mod ✔
-///    main 
 ///
-///    (   
-///        path = "path/to/file.rs" ❗️ 
+///        main | mod *
+/// 
+///        path = "path/to/file.rs"  
 ///
-///        expand(actor,group) ✔
-///    )
+///        expand(actor,family) *
 /// )]
 /// 
-/// 
-/// default:    ✔
-/// required:   ❗️
-/// 
+/// * - default   
 /// 
 ///```
 /// 
 /// # Arguments
 /// 
 /// - [`path`](#path)
+/// 
 /// - [`expand`](#expand) (default)
 /// 
 /// # path
-/// 
 /// 
 /// The `path` argument is a required parameter of the [`example`](./attr.example.html) macro.
 /// It expects the path to the file that needs to be expanded.
@@ -616,7 +536,7 @@ const LINE_ENDING: &'static str = "\n";
 /// This argument is essential as it specifies the target file 
 /// for code expansion.
 /// 
-/// ! One more time [`example`](./attr.example.html) macro can be 
+/// [`example`](./attr.example.html) macro can be 
 /// placed on any item in any file within your `src` directory.
 /// 
 ///  
@@ -627,7 +547,7 @@ const LINE_ENDING: &'static str = "\n";
 /// 
 /// By default, the value of `expand` includes 
 /// the [`actor`](./attr.actor.html) and 
-/// [`group`](./attr.group.html) macros.
+/// [`family`](./attr.family.html) macros.
 /// 
 /// For example, if you want to expand only the
 /// [`actor`](./attr.actor.html) macro in generated 
@@ -639,7 +559,7 @@ const LINE_ENDING: &'static str = "\n";
 /// This will generate an example code file that includes 
 /// the expanded code of the [`actor`](./attr.actor.html) macro,
 /// while excluding other macros like 
-/// [`group`](./attr.group.html).
+/// [`family`](./attr.family.html).
 /// 
  
 
@@ -647,12 +567,8 @@ const LINE_ENDING: &'static str = "\n";
 #[proc_macro_attribute]
 pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
 
-    let mut eaa   = model::attribute::ExampleAttributeArguments::default();
-
-    let aaa_parser = 
-    syn::meta::parser(|meta| eaa.parse(meta));
-    syn::parse_macro_input!(attr with aaa_parser);
-
+    let nested  = syn::parse_macro_input!(attr with syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated); 
+    let mut eaa   = model::attribute::ExampleAttributeArguments::from(nested);
 
     let (file, lib)  = file::expand_macros(&eaa.get_path(),&eaa.expand);
 
@@ -667,11 +583,11 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
     
 }
 
- 
+
 /// ## Evolves a regular object into an actor
 /// 
 /// The macro is placed upon an implement block of an object
-///  (`struct` or `enum`),
+/// (`struct` or `enum`),
 /// which has a public or restricted method named `new` returning  `Self`.
 ///
 /// In case if the initialization could potentially fail, 
@@ -679,10 +595,13 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// and return `Option<Self>` or `Result<Self>`.
 /// 
 /// The macro will copy method signatures from all 
-/// public methods that do not consume the receiver, excluding 
-/// methods like `pub fn foo(self, val: u8) -> ()` where `self` 
-/// is consumed. Please ensure that the 
-/// receiver is defined as `&mut self` or `&self`. 
+/// public methods with receivers `&self` or `&mut self`
+/// and static methods.
+/// 
+/// The model is primarily designed to work for public methods with 
+/// borrowed receivers (e.g., `&self` or `&mut self`) however
+/// `Self`-consuming receiver (e.g., `self`) can be incorporated
+/// see [`What Does a Self-Consuming Method Mean for the Model`](#self-consuming-methods)
 /// 
 /// If only a subset of methods is required to be 
 /// accessible across threads, split the `impl` block 
@@ -716,9 +635,8 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///       
 ///       include | exclude  
 ///        
-///       debut(
-///             legend
-///            ) 
+///       debut
+/// 
 ///    interact
 ///)]
 ///
@@ -971,7 +889,6 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///```
 /// 
 /// 
-/// 
 /// # show 
 /// 
 /// The `show` option is particularly useful for users who are just starting to 
@@ -1183,10 +1100,6 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 4. `inter_get_count() -> usize`: Provides the strong 
 /// reference count for the debut field.
 ///  
-/// > **Note:** Additional generated methods prefixed with `inter`
-///  will have the same visibility as the initiating
-///  method `new` or `try_new`. 
-/// 
 ///This convention allows 
 ///- easy identification in text editor methods that 
 ///solely manipulate the internal state of the live struct and/or 
@@ -1196,62 +1109,6 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 ///-  helps the macro  identify methods that are intended 
 ///to be used within its context (see [`interact`](#interact))
 ///
-/// 
-/// While `debut` can be declared as a standalone option, 
-/// it can also be enhanced by adding the `legend` sub-option. 
-/// This sub-option introduces extra `inter` methods, 
-/// enabling the model to be saved on the heap upon the 
-/// last instance being dropped.
-///
-/// > **Note:** Unfortunately, while we've established a 
-/// consistent `inter` prefix method convention, the 
-/// `legend` functionality introduces an exception. 
-/// To maintain a coherent and orderly pattern `try_new` -> `try_old` 
-/// 
-/// 
-///# Examples
-///
-///```rust no_run
-/// pub struct MyActor(u8);
-///
-///
-///#[interthread::actor( debut(legend) )] 
-///impl MyActor {
-///
-///    pub fn new() -> Self { Self(0) }
-///
-///    pub fn set(&mut self, v: u8){
-///        self.0 = v;
-///    } 
-///
-///    pub fn get_value(&self) -> u8 {
-///        self.0
-///    }
-///}
-///
-///
-///fn main() {
-///
-///    let h = std::thread::spawn( || {
-///        let mut act = MyActorLive::new();
-///        act.inter_set_name("Zombie"); 
-///        act.set(121);
-///    });
-///    
-///    let _ = h.join();
-///
-///    let old_act = MyActorLive::try_old("Zombie").unwrap();
-///
-///    assert_eq!("Zombie".to_string(), old_act.inter_get_name());
-///    assert_eq!(121u8, old_act.get_value());
-///}
-///
-///```
-/// When the thread scope ends, objects are dropped. Simply using 
-/// `drop(..)` won't suffice. To conclude the thread scope correctly, 
-/// use `join()`. Then, you can call `try_old` on the live struct 
-/// to reinitialize the old model.
-/// 
 /// # interact
 /// 
 /// The `interact` option is designed to provide the model with 
@@ -1402,9 +1259,59 @@ pub fn example( attr: proc_macro::TokenStream, _item: proc_macro::TokenStream ) 
 /// 
 /// 
 /// 
+/// # Self Consuming Methods
 /// 
+/// For every method in an `Actor` object that consumes `Actor`, the model generates
+/// a corresponding method in the `ActorLive` interface object that consumes both itself and the associated `Actor`. 
 /// 
-
+/// However, this design introduces challenges. The model inherently allows 
+/// multiple `ActorLive` instances to send messages to a single `Actor` instance 
+/// running in a separate thread. When an `ActorLive` instance consumes itself and 
+/// its associated `Actor`, it effectively leaves other `ActorLive` instances without 
+/// a functional `Actor`, disrupting the model operation.
+/// 
+/// To safely implement such self-consuming methods, the following conditions must be met:
+/// 
+/// ### Safety Conditions for Self-Consuming Methods
+/// 
+/// 1. **Enable the `debut` Option**
+///    The model must have the `debut` option enabled (e.g., ```interthread::actor(debut)```), 
+///    which allows it to track the number of active `ActorLive` instances.
+/// 
+/// 2. **Return a Valid Result Type**
+///    Self-consuming methods must return one of the following types:
+///    - `Option<T>`
+///    - `Result<T, String>`
+///    - `Result<T, &'static str>`
+/// 
+///    This requirement enables the model to inject a reference count check for `ActorLive`. 
+///    If there are multiple active `ActorLive` instances, the method will return `Option::None` 
+///    or `Result::Err`, indicating that the operation cannot proceed safely.
+/// 
+/// ### Limitations for Non-Compliant Methods
+/// 
+/// If a self-consuming method deviates from the above rules, the model enforces the following restrictions:
+/// 
+/// 1. **No Cloning**
+///    The model will disallow the `Clone` trait for `ActorLive` object.
+/// 
+/// 2. **Private Visibility**
+///    Self-consuming methods will be restricted to private visibility, making them inaccessible outside the module. 
+/// 
+/// ## Examples
+/// 
+/// Some examples of compliant self-consuming methods:
+/// 
+/// ```rust no_run
+/// pub fn method(self, args, ...) -> Option<T>;
+/// 
+/// pub fn method(self, args, ...) -> Result<T, String>;
+/// 
+/// pub fn method(self, args, ...) -> Result<T, &'static str>;
+/// ```
+/// 
+/// These examples illustrate the required return types and demonstrate how 
+/// `self`-consuming methods can be safely integrated into the actor model.
 
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_attribute]
@@ -1412,392 +1319,193 @@ pub fn actor( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     
     let item_impl = syn::parse_macro_input!(item as syn::ItemImpl);
 
-    let mut aaa = model::attribute::ActorAttributeArguments::default();
     let nested  = syn::parse_macro_input!(attr with syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated); 
-    aaa.parse_nested(nested);
+    let mut aaa = model::attribute::ActorAttributeArguments::from(nested, crate::model::Mac::Actor);
     aaa.cross_check();
 
     check::channels_import( &aaa.lib );
 
     let edit_attr = aaa.edit.attr.clone();
-
-    let aa = crate::model::AttributeArguments::Actor(aaa);
-
-    let model_sdpl = crate::model::generate_model( aa, &item_impl,None );
-    
-    let (_,edit_sdpl) = model_sdpl.split();
-
+    let mut model_sdpl = crate::model::generate_model( aaa, &item_impl);
+    let (code,edit_sdpl) = model_sdpl.get_code_edit();
     if let Some( edit_attr ) = edit_attr {
 
         parse::edit_write( &edit_attr, &item_impl, edit_sdpl);
     }
-
-    let (code,_) = model_sdpl.get_code_edit();
 
     quote::quote!{
         #item_impl
         #code
     }.into()
 
-
 }
 
 
-/// ## A set of actors sharing  a single thread
-///
-/// In the realm of concurrent programming, creating a separate thread 
-/// for each individual actor can sometimes incur a significant overhead. 
-/// In such scenarios, developers may opt to populate an `actor`'s 
-/// definition with complex encapsulations (potential actors), 
-/// effectively creating a collection of objects running within 
-/// a single thread. While this approach proves resource-efficient, 
-/// it does come with a trade-off: accessing the methods of field 
-/// types must be explicitly written within the main `actor` 
-/// implementation block.
+
+/// ## A Wrapper for Managing Parallel ActorLive Instances
 /// 
-/// This is where the `group` macro comes into play. A `group` is a 
-/// set of `actors` that share a single thread, consisting of 
-/// a `main-actor` and `group-actors` contained within the 
-/// `main-actor`'s fields. Developers can now bypass the need to rewrite 
-/// method wrappers, gaining direct access to `group-actor` methods via 
-/// dot notation, as seamlessly as if these `group-actors` were `actors` 
-/// in their own right.
+/// The `family` macro is designed as a convenient wrapper for initializing a 
+/// set of `ActorLive` instances that operate in parallel, all serving the same Actor. 
+/// The core idea behind the `family` concept can be summarized as `Exclusive Access to the Actor`.
 /// 
-/// In this scenario, the methods of the `main-actor` take on the responsibility 
-/// for interaction within and between `group-actors`, while the latter primarily 
-/// serve to export their functionality. 
-/// 
-/// Before delving into further details, let's explore an example of a `group`. 
-/// Assuming there is a good understanding of how an `actor` operates, once the 
-/// `Live` instance is returned after invoking the `new` method, the `actor` is 
-/// already running in a separate thread. Therefore, there’s no need to 
-/// complicate the example with extra thread spawning just for visual clarity. 
-/// 
-/// 
-/// ## Examples
-///  
-///```rust no_run
-///
-///// We have `Aa` and `Bb`
-///pub struct Aa(u8);
-///impl Aa {
-///    pub fn add(&mut self, v: u8){
-///        self.0 += v;
-///    }
-///}
-///
-///pub struct Bb(u8);
-///impl Bb {
-///    pub fn add(&mut self, v: u8){
-///        self.0 += v;
-///    }
-///}
-///
-///// Definition of group
-///pub struct AaBb {
-///    pub a: Aa,
-///    pub b: Bb,
-///}
-///
-///#[interthread::group( file= "path/to/file.rs")]
-///impl AaBb {
-///
-///    pub fn new( ) -> Self {
-///        let a = Aa(0);
-///        let b = Bb(0);
-///        Self{ a,b}
-///    }
-///
-///    pub fn add(&mut self, v:u8){
-///        self.a.0 += v;
-///        self.b.0 += v;
-///    }
-///
-///    pub fn get_value(&mut self) -> (u8,u8) {
-///        (self.a.0,self.b.0)
-///    }
-///}
-///
-///
-///pub fn main(){
-///
-///    let mut group = AaBbGroupLive::new();
-///    
-///    // access to group method
-///    group.add(1);
-///    assert_eq!((1,1),group.get_value());
-///
-///    // access to field `a` method
-///    group.a.add(10);
-///    assert_eq!((11,1),group.get_value());
-///
-///    // access to field `b` method
-///    group.b.add(100);
-///    assert_eq!((11,101),group.get_value());
-///}
-///
-///```
-///
-/// Behind the scenes, the macro will generate some additional types 
-/// very similar to `actor`'s types, for `group-actor` 
-/// `NameScriptGroup` and  `NameLiveGroup`:
-///
-///- `Aa` -       `AaScriptGroup`, `AaLiveGroup`
-///- `Bb` -       `BbScriptGroup`, `BbLiveGroup`
-///
-/// For `main-actor` itself: `NameGroupScript` and  `NameGroupLive`:
-///- `AaBb` -     `AaBbGroupScript`, `AaBbGroupLive` 
-///
-/// In the context of the `SDPL` framework, `group-actors` are designated as `SDL`
-/// (Script, Direct, Live) and will share the `play` method with the `main-actor`,
-/// which is full `SDPL`.
-/// The following is a type schema of the `group` model in relation 
-/// to the above example:
-///  
-/// ```rust no_run
-/// 
-/// struct Aa;
-/// struct Bb;
-/// 
-/// enum AaScriptGroup;
-/// struct AaLiveGroup;
-/// 
-/// enum BbScriptGroup;
-/// struct BbLiveGroup;
-/// 
-/// struct AaBb {
-///     pub a: Aa,
-///     pub b: Bb,
-/// }
-/// 
-/// enum AaBbGroupScript;
-/// struct AaBbGroupLive {
-///     pub a: AaLiveGroup,
-///     pub b: BbLiveGroup,
-/// }
-/// 
-/// ```
-///
-/// To view all the generated code by `group`, you can either utilize 
-/// the [`example`](attr.example.html) macro or employ the 
-/// [`edit`](attr.actor.html#edit) option within the `group` macro. 
-/// For a convenient shortcut to see the full example using `edit`,
-/// simply use `edit(file)`."
-/// 
-/// ```rust no_run
-/// #[interthread::group( file="path/to/file.rs",edit(file))]
-/// ```
-/// To inspect the generated code for field `a` type from the 
-/// above example, utilize the [`edit`](attr.actor.html#edit)
-/// option as `edit(a::edit(file))`, for struct `AaBb` itself
-/// use `edit(self::edit(file))`. 
-/// 
-/// ## Requirements for Using the `group` Macro
-/// 
-/// Much like individual actors, the `group` macro enables a 
-/// set of actors to run collectively within a shared thread. 
-/// While many requirements align with those of individual actors, 
-/// there are some distinctions to be aware of. Below are the 
-/// crucial conditions that need to be satisfied for the `group` 
-/// macro to operate :
-/// 
-///- The object must be a struct with named fields.
-///- As an `actor` impl block must contain a method named `new` 
-///  returning a self-instance or `try_new` if it may fail to return.
-///- The macro requires a `file` field with a file path to the 
-///  current file at all times.
-///- Fields in the definition block that are intended to act as 
-///  `group-actor`s should have non-private visibility (public or restricted).
-///  Private fields will not be considered as `group-actors` by the macro.
-///
 /// 
 /// ## Configuration Options
-/// The configuration options for a `group` are slightly different, 
-/// but consist of the same arguments as those used for an `actor`
-/// except couple of them.
-/// In some cases (see notation `(AA)` in the table below), 
-/// the argument is a list of the same arguments, specified as 
-/// `argument(field_name::argument,..)`. 
-/// In context of the example code from above, if we wanted to 
-/// include any hypothetical static (associated) methods of struct `Aa`,
-/// we would use the `show` argument, like so: 
-/// ```rust 
-/// show(a::show)
-/// ```
-/// To include the same argument for `main-actor` itself, we would write 
-/// ```rust 
-/// show(a::show, self::show)
-/// ```
+/// The `family` macro provides the same configuration options as the `actor` macro, 
+/// ( with few exceptions ) and are inherited by `actor`'s declared within its body (e.g., `actor(first_name = "User", ...)`) which behaves exactly like the standalone `actor` macro. It allows defining individual `actor`s within the `family`. 
 /// 
-/// The following is the full table of configuration options:
+/// Options not explicitly specified in the `actor` configuration will be inherited from the `family` macro. For example, if `channel` is defined in family but omitted in `actor`, the channel value from `family` will be applied to the `actor`.
+/// 
+/// If the same-named options are present in both `family` and `actor`, they are treated independently.
 /// 
 /// ```text
-///
-/// #[interthread::group( 
-///    
-/// AA  channel = 0 * 
-///              n (usize)
-///
-/// AA      lib = "std" *
-///               "smol"
-///               "tokio"
-///               "async_std"
-///
-/// AA     file = "path/to/current/file.rs"
-///
-/// AA     debut(
-///             legend
-///             )
-///    
-/// AA      skip(
-///             field_name
-///             ..
-///             )
-///  
-/// (AA)   show(
-///             self::show,
-///             ..
-///             )
+/// #[interthread::family( 
+///     
+///   ~ channel = 0 * 
+///               n (usize)
 /// 
-/// (AA) include(
-///             self::include(
-///                           method_name,
-///                           ..
-///                          ),
-///             ..
-///             )
+///         lib = std *
+///               tokio
+///               async_std
 /// 
-/// (AA) exclude(
-///             self::exclude(
-///                           method_name,
-///                           ..
-///                          ),
-///             ..
-///             )
-///
-/// (AA)    edit( 
-///             self::edit(
-///                       script(..)
-///                       live(..)
-///                       ),
-///             ..
+///         edit( 
+///              def,
+///              imp(..),
+///              trt(..),
 ///             ) 
-///
-/// (AA)    name(
-///             self::name = "",
-///             ..
+/// 
+///         Mutex | RwLock *
+///                
+///         file = path/to/current/file.rs
+///         
+///         name = "" 
+/// 
+///         show
+/// 
+///         debut
+/// 
+///         actor(  
+///                 first_name = "" 
+/// 
+///                 edit( 
+///                     script(..)
+///                     live(..)
+///                     ) 
+/// 
+///                 include|exclude 
+/// 
+///                 show
+/// 
+///                 interact
 ///             )
-///
-/// (AA)    path(
-///             a::path = "path/to/type.rs",
-///             ..
-///             )      
-///    )
-/// ]
-///
-///   *     -  default 
-///   AA    -  similar to `actor` attribute argument.
-///  (AA)   -  a list of similar to `actor` attribute arguments.
-///
-/// ```
-/// All `group` configuration options (arguments) are the same as `actor`'s arguments, 
-/// except for `path` and `skip`, which are unique to `group`.
-
-/// # Arguments
-///  
-/// - [`channel`](attr.actor.html#channel)
-/// - [`lib`](attr.actor.html#lib) 
-/// - [`edit`](attr.actor.html#edit)
-/// - [`file`](attr.actor.html#file)
-/// - [`name`](attr.actor.html#name)
-/// - [`show`](attr.actor.html#show)
-/// - [`include|exclude`](attr.actor.html#include|exclude)
-/// - [`debut`](attr.actor.html#debut)
-/// - [`path`](#path)
-/// - [`skip`](#skip)
-
-/// # `path`
-/// Argument `path` is used when a `group-actor` is defined in a file different from the `group` itself.
-
-/// # `skip`
-/// Argument `skip` is used when a non-private field of the `group` is necessary but should not be included 
-/// as a `group-actor`.
-///
 /// 
-/// 
-/// # Handling Identical Types in the `group` Model
-/// 
-/// In certain situations, the `group` model may encounter a scenario where the `main-actor` 
-/// possesses multiple fields of the same type. Let's consider an example:
-/// 
-/// ```rust
-/// struct AaBb {
-///     pub a:  Aa,
-///     pub a1: Aa,
-///     pub b:  Bb,
-/// }
-/// ```
-/// 
-/// Due to the model naming convention which is based on type names, both fields `a` and `a1` generate 
-/// identical model names for both the `Script` and `Live` components. This leads to a 
-/// compilation error:
-/// 
-/// ```text
-/// the name `AaScriptGroup` is defined multiple times
-/// `AaScriptGroup` must be defined only once in the type namespace of this module
-/// ``` 
-/// 
-/// To resolve this scenario, adjust the names for identical types as follows:
-/// 
-///```rust no_run
-/// struct AaBb {
-///     pub a:  Aa,
-///     pub a1: Aa,
-///     pub b:  Bb,
-/// }
-/// 
-/// // Usage of the macro may be as follows:
-/// 
-/// #[interthread::group(
-///     file="path/to/file.rs",
-///     name( a1::name="Aa1" )
 /// )]
-/// impl AaBb {
-///     // ...
-/// }
 /// 
+/// ~  -  override 
+/// *  -  default 
 /// ```
 /// 
+/// Options marked with `~` in the schema are inherited by default but can be overridden in the `actor` configuration.
+/// 
+/// The original `actor`'s  option `name` is different (`first_name` mandatory ) whereas `name` is 
+/// optional part of `family`. The naming convention for an object named Actor is:
+///     - for family  `Actor + Family` ( if not `name` specified )
+///     - for actors `FirstName + Actor + Live|Script`
+/// 
+/// Consider the following example of a `family` macro:
+/// ```text
+/// #[interthread::family(
+///     name = "MyActor",
+///     Mutex, 
+///     edit(file),
+///     lib, 
+///     channel,
+///     debut,
+/// 
+///     actor(first_name = "User", include(foo)),  
+///     actor(first_name = "Admin", include(foo, bar)),
+/// )]
+/// 
+/// ```
+/// will generate types named:
+/// 
+/// ```rust no_run
+/// 
+/// struct MyActorFamily {
+///     pub user: UserMyActorLive,
+///     pub admin: AdminMyActorLive,
+/// }
+/// // the script parts
+/// UserMyActorScript 
+/// AdminMyActorScript
+/// 
+/// ```
+/// Behind the scenes, individual Actor Models are created for each member of the `family`,
+/// sharing the same `Actor` object which is wrapped in either an `Arc<Mutex<Actor>>` 
+/// or an `Arc<RwLock<Actor>>`, depending on the specified lock type.
+/// 
+/// Within the `Script::direct` method, immediately after the `Script` variant match, 
+/// the `Actor` object is locked, and the corresponding method is invoked.
+/// 
+/// For developers seeking full control over the locking mechanism, the `family` 
+/// macro provides a convention for defining static methods with a specific receiver. 
+/// 
+/// If a static method in the `Actor` implementation body uses a receiver 
+/// named `actor` and its type matches the shared model type (`Arc<Mutex<Actor>>` or `Arc<RwLock<Actor>>`), 
+/// the macro interprets this as a custom model method rather than a standard static method.
+/// 
+/// For example, consider the following method inside an Actor implementation:
+/// ```rust no_run
+/// impl Actor {
+///     pub fn method(actor: &Arc<RwLock<Self>>, s: Type) -> Type {
+///         let actor = actor.read().unwrap();
+///         // Perform operations using the actor
+///     }
+/// }
+/// ```
+/// When processed by the macro, this method will be interpreted in `ActorLive` instance as:
+/// 
+/// ```rust no_run
+/// impl ActorLive {
+///     pub fn method(&self, s: Type) -> Type {
+///         ...
+///     }
+/// }
+/// ```
+/// and processed correspondingly in `ActorScript`.
+/// 
+/// ### Supported Runtimes
+/// The macro supports the following runtimes, each using its respective `Mutex` implementation:
 /// 
 /// 
+/// |   Runtime  |    Mutex   |  RwLock |  
+/// |:------------------------:|:----------:|:----------:|
+/// | `std` (standard library) | `std::sync::Mutex`|`std::sync::RwLock` | 
+/// | `tokio` | `tokio::sync::Mutex`|`tokio::sync::RwLock` | 
+/// | `async-std` | `async_std::sync::Mutex`|`async_std::sync::RwLock` | 
+/// 
+/// The `smol` runtime does not support the `family` macro.
+
 
 #[proc_macro_error::proc_macro_error]
 #[proc_macro_attribute]
-pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
-
+pub fn family( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> proc_macro::TokenStream {
+    
     let item_impl = syn::parse_macro_input!(item as syn::ItemImpl);
 
-    let mut gaa = model::attribute::GroupAttributeArguments::default();
     let nested  = syn::parse_macro_input!(attr with syn::punctuated::Punctuated::<syn::Meta,syn::Token![,]>::parse_terminated); 
-    gaa.parse_nested(nested);
-    gaa.cross_check(&item_impl);
-    
-    
-    check::channels_import( &gaa.lib );
+    let mut aaa = model::attribute::ActorAttributeArguments::from(nested, crate::model::Mac::Family);
+    aaa.cross_check();
 
-     let edit_attr = gaa.edit.attr.clone();
+    check::channels_import( &aaa.lib );
 
-    let aa = crate::model::AttributeArguments::Group(gaa);
-
-    let model_sdpl = crate::model::generate_model( aa,&item_impl,None );
-
-    let (_,edit_sdpl) = model_sdpl.split();
+    let edit_attr = aaa.edit.attr.clone();
+    let mut model_sdpl = crate::model::generate_model( aaa, &item_impl);
+    let (code,edit_sdpl) = model_sdpl.get_code_edit();
 
     if let Some( edit_attr ) = edit_attr {
+
         parse::edit_write( &edit_attr, &item_impl, edit_sdpl);
     }
-
-    let (code,_) = model_sdpl.get_code_edit();
 
     quote::quote!{
         #item_impl
@@ -1805,6 +1513,9 @@ pub fn group( attr: proc_macro::TokenStream, item: proc_macro::TokenStream ) -> 
     }.into()
 
 }
+
+
+
 
 
 

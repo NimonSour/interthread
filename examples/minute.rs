@@ -98,7 +98,7 @@ Task 55 awake now!
 
 
 
-//setting the duration to `1.00`
+//setting the duration to `1.00`s
 //outputs ( on my machine )
 /*
 Task 57 awake now!

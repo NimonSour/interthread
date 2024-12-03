@@ -1,384 +1,274 @@
-use crate::error;
-use crate::model::{
-    self,get_ident_type_generics,ModelSdpl,AttributeArguments,
-    MpscChannel,Cont,Vars,method,generic,ShowComment,
-    ActorAttributeArguments,Lib,Model};
-use super::{ActorMethodNew,ActorMethod};
 
-use proc_macro_error::abort;
-use syn::{
-    Ident,Type,Signature,WhereClause,Generics,
-    ItemImpl,Visibility, ImplGenerics, TypeGenerics };
-use quote::{quote,format_ident};
-use proc_macro2::TokenStream;
-use proc_macro::Span;
-use std::collections::BTreeMap;
+use crate::model::{generics::turbofish, name, ActorAttributeArguments as AAA, ActorModelSdpl,
+    ConstVars, Cont, ImplVars, Lib, Mac, ModelPart, ModelSdpl, MpscChannel };
 
-fn group_direct_add_fields(cont: &mut Cont, vars: &Vars, model_sdpl: &ModelSdpl ){
+use syn::{parse_quote, Generics, ItemImpl, Visibility };
+use quote::{format_ident,quote};
+use super::{FamilyModelSdpl, MethodNew, ModelPhantomData, ModelReceiver};
 
-    // ADD FIELDS MEMBERS
-    let Cont{ direct_arms, 
-            script_fields,
-               debug_arms,..} = cont;
 
-    let Vars{script_name,.. } = vars;
+pub fn generate_model( aaa: AAA, item_impl: &ItemImpl) -> ModelSdpl {
+
+    if aaa.mac == Mac::Family { 
+        generate_family(aaa,item_impl)
+    } else {
+        generate_actor(aaa,item_impl)
+    }
+}
+
+pub fn generate_family(mut aaa: AAA, item_impl: &ItemImpl) -> ModelSdpl {
+    let const_vars = &ConstVars::new();
+    let ConstVars{ actor, debut, ..} = const_vars;
+
+    let mut member_idents_args = vec![ actor ];
+    let mut debut_invoke = None;
+
+    if aaa.debut.active {
+        member_idents_args.push(&debut);
+        debut_invoke = Some( quote!{ 
+
+            let #debut  = Self :: #debut () ; 
+        });
+    }
     
-    for (field,ams) in model_sdpl.fields.iter(){
+    let mut met_new = None;
 
-        let variant_name = crate::model::name::script_field(field);
-        let field_struct_variant_name = &ams.vars.script_name;
-        let mem_model_generics = &ams.vars.impl_vars.model_generics;
-        let await_call = ams.asyncness.as_ref().map(|_|quote!{.await});
+    let mut member_fields  = vec![];
+    let mut member_invoks  = vec![];
+    let mut member_init_vars     = vec![];
+
+    let mut actor_mems = vec![];
+
+    for (ident, aaa) in std::mem::take(&mut aaa.members) {
+
+        if let ModelSdpl::Actor(ams) = generate_actor( aaa, item_impl ){
+
+            if met_new.is_none() { met_new = ams.met_new.clone()}
+
+            let field = &name::family_field_name(&ident);
+
+            let (_, member_live_type ) = ams.get_script_live_type();
+
+            member_fields.push( quote!{
+                #field : #member_live_type 
+            });
+
+            let member_live_turbo = turbofish::from_type_path(&member_live_type);
+
+            member_invoks.push(quote!{
+                let #field = #member_live_turbo :: new( #(#member_idents_args .clone()),* ); 
+            });
+
+            member_init_vars.push( field.clone() );
+
+            actor_mems.push(ams);
+        }
+    }
+
+    let MethodNew{ ref args_idents,mod_output,mut met,
+        turbo_gen,..} = met_new.unwrap();
+    let vis = met.vis.clone();
+    
+    let(actor_name,type_path,mut gen) = crate::model::get_ident_type_generics(item_impl);
+    
+    let actor_turbo = turbofish::from_type_path(&type_path);
+    let family_name  = &if let Some(name) = &aaa.name { name.clone() } else { actor_name }; 
+    let family_name = &name::family(family_name);
+    
+
+    crate::model::generics::add_model_bounds(&mut gen);
+    let (  f_impl_generics,
+           f_ty_generics,
+           f_where_clause ) = gen.split_for_impl();
+
+    let family_impl_block: ItemImpl  = parse_quote!( impl #f_impl_generics  #family_name #f_ty_generics #f_where_clause {} );
+
+    // Defenition 
+    let family_def = 
         
-        // Direct Arm
-        let arm_match = quote! { 
-            #variant_name ( msg )
-        };
-        let direct_arm = quote! {
-            #script_name :: #arm_match => { msg.direct( &mut group. #field )#await_call;} 
-        };
-        direct_arms.push(direct_arm);
-
-
-        // Script Struct
-        let script_field = quote! { 
-            #variant_name ( #field_struct_variant_name #mem_model_generics )
-        };
-        script_fields.push(script_field);
-
-        // Debug arm
-        let str_field_name = format!("{}::{}",script_name.to_string() ,field.to_string());
-
-        let debug_arm = quote! {
-            #script_name :: #variant_name (_) => write!(f, #str_field_name),
-        };
-        debug_arms.push(debug_arm);
-    }
-}
-
-#[derive(Clone)]
-pub struct ImplVars {
-
-    pub actor_name:               Ident,
-    pub actor_type:                Type,
-    pub generics:              Generics,
-    pub async_decl: Option<TokenStream>,
-    pub actor_methods: Vec<ActorMethod>,
-    pub met_new: Option<ActorMethodNew>,
-    pub model_generics:        Generics,
-    pub group_model_generics: Option<Generics>,
-    pub vis:         Option<Visibility>,
-    pub field:            Option<Ident>,
-    pub ty:                Option<Type>,
-    pub group_script_type: Option<Type>,
-    pub group_script_name: Option<Ident>,
-
-
-}
-
-impl ImplVars {
-
-    pub fn get_mut_sigs(&mut self) -> Vec<&mut Signature>{
-
-        let mut sigs = self.actor_methods.iter_mut().map(|m| m.get_mut_sig()).collect::<Vec<_>>();
-        if let Some(met_new_sig) = self.met_new.as_mut().map(|x| x.get_mut_sig()){
-            sigs.push(met_new_sig);
+    &quote!{ 
+        #vis struct #family_name #f_impl_generics #f_where_clause {
+            #( pub #member_fields),*
         }
-        sigs
-    }
-
-    pub fn get_split_model_generics(&self) 
-        -> ((ImplGenerics,TypeGenerics,Option<&WhereClause>),
-            (ImplGenerics,TypeGenerics,Option<&WhereClause>)){
-
-        if let Some(gmg) = &self.group_model_generics{
-            (self.model_generics.split_for_impl(), gmg.split_for_impl())
-        } else {
-            (self.model_generics.split_for_impl(), self.model_generics.split_for_impl())
-        }
-    }
-
-    pub fn get_group_script_wrapper(&self) -> Box<dyn Fn(TokenStream) -> TokenStream> {
-    
-        if let Some(gs_name)  = self.group_script_name.clone(){
-            if let Some(field) = &self.field{
-                let field_var = crate::model::name::script_field(field);
-                return Box::new( move |ts:TokenStream| 
-                    quote::quote!{ 
-                        #gs_name :: #field_var ( #ts )
-                    }
-                );
-            }
-        }
-        Box::new( |ts:TokenStream| ts)
-    }
-}
-
-pub fn get_impl_vars(
-    item_impl: &ItemImpl, 
-          aaa: &ActorAttributeArguments,
-      def_gen: Option<Generics>,
-          mac: Model,
-        model: Model) -> ImplVars 
-        
- {
-    let (actor_name,
-        actor_type,
-        generics) = get_ident_type_generics(item_impl);
-    
-
-    let ( mut actor_methods, 
-          mut met_new) =
-         method::get_methods( &actor_type,item_impl.clone(),&aaa ,mac.eq(&model));
-
-
-    let mut model_generics = generics.clone();
-
-    let mut sigs = actor_methods.iter_mut().filter(|x| !x.is_static()).map(|m| m.get_mut_sig()).collect::<Vec<_>>();
-    if let Some(met_new_sig) = met_new.as_mut().map(|x| x.get_mut_sig()){
-        sigs.push(met_new_sig);
-    }
-             
-    generic::take_generic_parts( &mut model_generics, sigs,def_gen, aaa.debut.is_legend());
-
-    let async_decl = 
-
-        match &aaa.lib {
-
-            Lib::Std => {
-                if let Some(pos) = actor_methods.iter().position(|x| x.is_async()){
-                    error::abort_async_no_lib(&actor_name,&actor_methods[pos]);
-                }
-                None
-            },
-            _ => { Some(quote!{async}) },
-        };
-
-    ImplVars {
-        actor_name,
-        actor_type,
-        generics,
-        async_decl,
-        actor_methods,
-        met_new,
-        model_generics,
-        group_model_generics: None,
-        vis:                  None,
-        field:                None,
-        ty:                   None,
-        group_script_type:    None,
-        group_script_name:    None,
-    }
-}
-
-pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: Option<ImplVars> ) 
-    -> ModelSdpl {
-
-    // mac model values 
-    let mut cont = model::Cont::new();
-    let mut model_sdpl = ModelSdpl::new();
-    let aaa;
-
-    let mac = aa.get_mac();
-    let model = if impl_vars.is_some(){ mac.get_invers() } else { mac };
-
-
-    let impl_vars = 
-    //AA
-    if mac.eq(&model) {
-        match &aa {
-            //AA
-            AttributeArguments::Actor(aaas) => {
-                aaa = aaas.clone();
-                get_impl_vars(item_impl, &aaa, None, mac, model)
-            },
-            //GG
-            AttributeArguments::Group(gaas) => {
-
-                // herre goes calculation for all group members
-                let mut coll_impl_vars = BTreeMap::new();
-
-                for key in gaas.members.keys(){
-                
-                    let aaa = gaas.get_aaa(Some(key));
-                    let ( item_impl,vis,ty,def_gen ) = gaas.members[key].clone();
-                
-                    let mut impl_vars = get_impl_vars(&item_impl, &aaa, Some(def_gen),mac, model);
-
-                    impl_vars.vis     = Some(vis);
-                    impl_vars.field   = Some(key.clone());
-                    impl_vars.ty      = Some(ty.clone());
-
-                    let aa = AttributeArguments::Actor(aaa);
-                
-                    coll_impl_vars.insert(key,(aa,item_impl,impl_vars));
-                }
- 
-                aaa = gaas.get_aaa(None);
-                let mut impl_vars = get_impl_vars(&item_impl, &aaa, Some(gaas.def_generics.clone()), mac, model);
-
-                crate::model::generic::group_generics(&mut impl_vars,&mut coll_impl_vars, aaa.debut.is_legend());
-
-                let ImplVars{ actor_name,.. } = &impl_vars;
-                let cust_name    = &if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { actor_name.clone() };
-                let group_script = &crate::model::name::group_script(cust_name);
-                let (_,( _, ty_generics, _ )) = impl_vars.get_split_model_generics();
-
-                // create the type of groupt script enum
-                let group_script_type: Type = syn::parse_quote!{ #group_script #ty_generics };
-
-                let field_names = aaa.get_inter_field_names();
-
-                for (key,(aa,item_impl, mut impl_vars)) in coll_impl_vars {
-                    
-                    if field_names.contains(key){
-                        let msg = error::var_name_conflict(key,"field");
-                        abort!(Span::call_site(),msg);
-                    }
-                    impl_vars.group_script_type = Some(group_script_type.clone());
-                    impl_vars.group_script_name = Some(group_script.clone());
-
-                    let btm_sdpl = 
-                    generate_model(aa,&item_impl,Some(impl_vars.clone()));
-                    model_sdpl.extend(btm_sdpl);
-                }
-
-                impl_vars
-            }    
-        }
-    }
-
-    //AG
-    else {
-        match &aa {
-
-            AttributeArguments::Actor(aaas) => { aaa = aaas.clone();},
-            AttributeArguments::Group(_) => {
-                abort!(Span::call_site(),"Internal Error 'model::actor_group::generate_model' . Unexpected configuration of AttributeArguments.");
-            },
-        }
-        impl_vars.unwrap() 
     };
 
-    let vars = &Vars::new(&aaa,impl_vars, mac, model);
-    let (oneshot,mpsc) = &vars.get_channels_one_mpsc(&aaa);
+    // Method new 
+    let met_new_ident          = &met.sig.ident;
+    let unwrapped = mod_output.unwrap_sign();
+    let arc_wraped_actor  = aaa.mod_receiver.get_model_wrap(&quote!{#actor}, &aaa.lib);
+    let init_live         = quote!{  Self { #(#member_init_vars),* } };
+    let return_statement  = mod_output.return_ok(&init_live);
 
-    let Vars{
-        actor, play, direct,
-        debut, msg,  debut_for_play,
-        sender,receiver,name,
-        impl_vars,script_name,live_name,
-        cust_name, .. } = vars;
+    met.block = parse_quote! {
+        {
+            let #actor = #actor_turbo :: #met_new_ident #turbo_gen (#(#args_idents),*) #unwrapped;
+            let #actor = #arc_wraped_actor ;
+            #debut_invoke
+
+            #(#member_invoks);*;
+            #return_statement
+        } 
+    };
+
+    let mut family_mets = vec![]; 
+
+    family_mets.push((met_new_ident.clone(),aaa.show.parse_method(&met)));
+
+    // generate method debut 
+    if aaa.debut.active { 
+        family_mets.push((debut.clone(),aaa.show.parse_method(&aaa.debut.get_method_debut(const_vars))));
+    }
+
+    let mod_part = 
+    ModelPart::new(
+        Some(aaa.show.parse_model_part( family_def, &family_mets, &vec![])),
+        family_mets.clone(),
+        vec![],
+        family_impl_block.clone(),
+    );
+
+    ModelSdpl::Family(
+        FamilyModelSdpl {
+            aaa,
+            live: mod_part,
+            actors: actor_mems,
+        }
+    )
+}
+
+pub fn generate_actor( aaa: AAA, item_impl: &ItemImpl) -> ModelSdpl {
+
+    // mac model values 
+    let mut impl_vars = ImplVars::new(&aaa, &item_impl);
+    let met_new = impl_vars.met_new.take();
+    let mut cont = super::Cont::new(&aaa, &impl_vars);
+
+    // generate raw model parts 
+    cont.to_raw_parts( &impl_vars, &aaa);
+
 
     let ImplVars { 
         vis,
-        async_decl,actor_type,
-        actor_name, met_new, .. } = &impl_vars;
+        async_decl, actor_turbo,const_vars, model_actor_type,
+        script_name, script_turbo, live_name, mod_gen,
+        direct_play_mut_token,.. } = &impl_vars;
     
+    let ConstVars{
+        actor, play, direct,
+        debut, msg,
+        sender,receiver,name, .. } = const_vars;
+
+
+    let (  s_impl_generics,
+           s_ty_generics,
+           _s_where_clause  ) =  mod_gen.script_gen.split_for_impl();
+
+    let (  p_impl_generics,
+           p_ty_generics,
+           _p_where_clause  ) =  mod_gen.private_gen.split_for_impl();
+
+    let (  l_impl_generics,
+           _l_ty_generics,
+           l_where_clause  ) = mod_gen.live_gen.split_for_impl();
     
-    let mut new_vis = vis.as_ref().map(|x| x.clone());
+    let ModelPhantomData{ phantom_fields,phantom_invoks,phantom_init_vars} = &mod_gen.phantom_data;
 
-    let ((  s_impl_generics,
-             s_ty_generics,
-            s_where_clause ),
-         (  l_impl_generics,
-             l_ty_generics,
-            l_where_clause )) = impl_vars.get_split_model_generics();
-
-    // generate raw parts of model   
-    method::to_raw_parts( vars,&mut cont,&aaa,oneshot,mpsc,l_ty_generics.clone() );
+    // Call for method new 
+    {   
+        if aaa.mac == Mac::Actor {
     
+            let MethodNew{ ref args_idents,mod_output,mut met,
+                turbo_gen,..} = met_new.clone().unwrap();
+            let met_new_ident       = &met.sig.ident;
+            let unwrapped      = mod_output.unwrap_sign();
+            let mut debut_decl_call = None;
+            let mut debut_decls = None;
+            let mut debut_ident = None;
 
-    // condition if is Group ONLY!!!
-    if mac.eq(&model) && Model::Group.eq(&mac) {
-        group_direct_add_fields(&mut cont,vars,&model_sdpl);
-    }
+            // debut variables 
+            if aaa.debut.active {
         
-    if mac.eq(&model) { 
-
-        if met_new.is_none() {
-
-            let msg = format!("Can not find public/restricted  method `new` or `try_new` for {:?} object.",actor_name.to_string());
-            let (note,help) = error::met_new_note_help(&actor_name);
-            abort!(item_impl,msg;note=note;help=help);
-        }
-
+                if aaa.mod_receiver == ModelReceiver::Slf {
+                    debut_decl_call = Some( quote!{
+                        let #debut = #script_turbo ::#debut();
+                    });
+                }
+            
+                debut_ident = Some( quote!{
+                    #debut
+                });
+            
+                debut_decls = Some( quote!{
+                    #debut : ::std::sync::Arc::new( #debut ),
+                    #name  : ::std::string::String::new(),
+                });
+            }
         
-        // Change visibility for `model methods` 
-        new_vis = met_new.as_ref().map(|m| m.vis.clone());
+            let init_live = quote!{
+                Self { #sender ,  #debut_decls #phantom_init_vars  }
+            };
+        
+            let play_args = quote!{ #receiver, #actor, #debut_ident };
+            let spawn = aaa.lib.method_new_spawn(&play_args,script_turbo, &p_ty_generics );
+            let return_statement   = mod_output.return_ok(&init_live);
+            let channel_decl = &impl_vars.mpsc.declaration;
 
-        let met_new         = met_new.clone().unwrap();
 
-        let new_sig             = &met_new.sig;
-        let func_new_name           = &new_sig.ident;
-        let (args_ident, _ ) = method::args_to_pat_type(&met_new.arguments);
-        let unwrapped          = met_new.unwrap_sign();
-        let doc_attrs      = &met_new.doc_attrs;
-        let vis                = &met_new.vis.clone();
-        let group_fields_init = model_sdpl.get_fields_init();
-        let (init_live, play_args) = {
-            if aaa.debut.active() {
-                (quote!{ Self { #group_fields_init #debut: std::sync::Arc::clone(&#debut), #name : format!("{:?}",* #debut),#sender  }} ,
-                    quote!{ #receiver, #actor, #debut_for_play})
+            if aaa.mod_receiver.is_slf(){
+            
+                met.block = syn::parse_quote!{
+                    {
+                        let #actor = #actor_turbo :: #met_new_ident #turbo_gen (#(#args_idents),*) #unwrapped;
+                        #debut_decl_call
+                        #phantom_invoks
+                        #channel_decl
+                        #spawn
+                        #return_statement
+                    }
+                };
+            
             } else {
-
-                (quote!{ Self{ #group_fields_init #sender  } }, 
-                    quote!{ #receiver, #actor } )
-            }
-        };
-
-        let spawn = aaa.lib.method_new_spawn(&play_args,script_name);
-        let turbofish = s_ty_generics.as_turbofish();
-
-        let vars_debut = 
-        if aaa.debut.active() {
-            quote!{let #debut =  #script_name #turbofish ::#debut();
-                   let #debut_for_play = *std::sync::Arc::clone(&#debut); }
-        } else {quote!{}};
-
-        let return_statement   = met_new.live_ret_statement(&init_live);
         
-        let MpscChannel{declaration, ..} = mpsc;
-        let Cont{live_mets,..} = &mut cont;
-        
-        let func_new_body = quote!{
+                met.block = syn::parse_quote!{
+            
+                    {
+                        #phantom_invoks
+                        #channel_decl
+                        #spawn
+                        #return_statement
+                    }
+                };
+            
+                // change vis
+                met.vis = Visibility::Inherited;
+            
+                met.sig.inputs.clear();
+                met.sig.inputs.push( parse_quote!( #actor : #model_actor_type ) );
+            
+                if aaa.debut.active {
+                    met.sig.inputs.push( parse_quote!( #debut: ::std::time::SystemTime ) );
+                }
 
-            #vis #new_sig {
-                let #actor = #actor_name:: #func_new_name (#(#args_ident),*) #unwrapped;
-                #declaration
-                #vars_debut
-                #spawn
-                #return_statement
+                met.sig.generics = Generics::default();
             }
-        };
-
-        live_mets.insert(0,(new_sig.ident.clone(),func_new_body,doc_attrs.clone()));
-
-
-        // LIVE INTER METHODS AND TRAITS
-        if aaa.debut.active(){
-            aaa.debut.impl_debut( &mut cont, vars, &new_vis, &l_impl_generics,&l_ty_generics, &l_where_clause);
-
-            if aaa.debut.is_legend(){
-                aaa.debut.impl_legend( 
-                    &mut cont, vars, &new_vis,mpsc, 
-                    model_sdpl.fields.keys().collect::<Vec<_>>(), 
-                    &s_ty_generics,
-                    &l_impl_generics,
-                    &l_ty_generics, 
-                    &l_where_clause,
-                    &spawn
-                );
-            }
+    
+        cont.insert_live_met(met_new_ident,&met);
+    
         }
-    };
+    }
 
+
+    // LIVE INTER METHODS AND TRAITS
+    if aaa.debut.active(){
+        aaa.debut.impl_debut(&mut cont, &impl_vars,&aaa);
+    }
+    
 
     // SCRIPT DEFINITION
     let script_def = {
-        let Cont{ script_fields,..} = &mut cont;
+        let Cont{ script_fields,..} = &cont;
         quote! {
-            #new_vis enum #script_name #s_impl_generics #s_where_clause {
+            enum #script_name #s_impl_generics {
                 #(#script_fields),*
             }
         }
@@ -387,136 +277,102 @@ pub fn generate_model( aa: AttributeArguments, item_impl: &ItemImpl, impl_vars: 
 
     // DIRECT
     {
-        let Cont{script_mets,direct_arms,..} = &mut cont;
-        script_mets.push((direct.clone(),
-        quote!{
-            #new_vis #async_decl fn #direct (self, #actor: &mut #actor_type ) {
+        let Cont{direct_arms,..} = &cont;
+
+        let mut_token = if aaa.mod_receiver.is_slf(){ quote!{ mut } } else { quote!{} };
+
+        cont.push_script_met(direct,
+        & quote!{
+            #async_decl fn #direct #p_impl_generics (self, #actor: & #mut_token #model_actor_type ) {
                 match self {
-                    #(#direct_arms)*
+                    #(#direct_arms),*
                 }
             }
-        }));
+        });
     }
 
 
     // PLAY
-    if mac.eq(&model) {
+    {
+        let debut_pat_type = if aaa.debut.active {quote!{,#debut: ::std::time::SystemTime }} else { quote!{} };
 
-        let await_call  = async_decl.as_ref().map(|_| quote!{.await});
-        let end_of_play = error::end_of_life( &actor_name, &aaa.debut.clone() );  
-        
-        let debut_pat_type = if aaa.debut.active(){quote!{,#debut: std::time::SystemTime }} else { quote!{} };
-
-        let MpscChannel{pat_type_receiver,..}      = mpsc;
-        let Cont{script_mets,..} = &mut cont;
-        let Vars{ actor_legend,..} = &vars;
-
-        let legend_call = 
-        if aaa.debut.is_legend(){
-            let turbofish = s_ty_generics.as_turbofish();
-            quote!{ let _ = #script_name #turbofish :: #actor_legend ( #debut, std::option::Option::Some( #actor )); }
-        } else { quote!{} };
-
+        let Cont{ play_while_block,..} = &cont;
+        let ImplVars{ async_decl,mpsc, model_actor_type,..} = &impl_vars;
+        let MpscChannel{pat_type_receiver,..} = mpsc;
+        let await_call  = impl_vars.get_await_call();
         let play_method = {
         
             let ok_or_some = match aaa.lib {
-                Lib::Tokio => quote!{std::option::Option::Some},
-                _ => quote!{std::result::Result::Ok}, 
+                Lib::Tokio => quote!{::std::option::Option::Some},
+                _ => quote!{::std::result::Result::Ok}, 
             };
+            let msg_direct_call = quote!{ #msg.#direct ( & #direct_play_mut_token #actor ) #await_call; };
+            let while_block_code = (*play_while_block)(msg_direct_call);
             quote! {
-                #new_vis #async_decl fn #play ( #pat_type_receiver mut #actor: #actor_type #debut_pat_type ) {
+                #async_decl fn #play #p_impl_generics( #pat_type_receiver #direct_play_mut_token #actor: #model_actor_type #debut_pat_type ) {
                     while let #ok_or_some (#msg) = #receiver.recv() #await_call {
-                        #msg.#direct ( &mut #actor ) #await_call;
+                        #while_block_code
                     }
-                    #legend_call
-                    #end_of_play
                 }
             }
         };
-        script_mets.push(( play.clone(), play_method ));
+        cont.push_script_met( play, &play_method );
     }
 
-    // SCRIPT TRAIT (Debug)
-    {   
-        let Cont{ script_trts,debug_arms,..} = &mut cont;
+    // TRAIT DEBUG for Script
+    if aaa.trait_debug {   
+
         let str_script_name = script_name.to_string();
         let body = 
-        if debug_arms.is_empty() { 
+        if cont.debug_arms.is_empty() { 
             quote!{ write!(f, #str_script_name )} 
         } else {
+            let debug_arms = &cont.debug_arms;
             quote!{ match self { #(#debug_arms)* } }
         };
-        script_trts.push((format_ident!("Debug"),
-        quote! {
-            impl #s_impl_generics std::fmt::Debug for #script_name #s_ty_generics #s_where_clause {
+        cont.push_script_trt(&format_ident!("Debug"),
+        &quote! {
+            impl #s_impl_generics std::fmt::Debug for #script_name #s_ty_generics {
             
                 fn fmt( &self, f: &mut std::fmt::Formatter<'_> ) -> std::fmt::Result {
                     #body
                 }
             }
-        }));
+        });
     }
-
 
     // LIVE DEFINITION
     let live_def = {
 
-    let MpscChannel{pat_type_sender,..} = &mpsc;
-    let group_pat_type_fields = model_sdpl.get_pat_type_fields();
-        if mac.eq(&model) {
-            let (debut_field, name_field) = if aaa.debut.active() {
-                ( quote!{ pub #debut: std::sync::Arc<std::time::SystemTime>,},
-                  quote!{ pub #name: String,} )
-            } else { (quote!{}, quote!{})};   
+        let MpscChannel{pat_type_sender,..} = &impl_vars.mpsc;
+        let Cont{ live_clone_attr,..} = &cont;
 
+        let debut_fields = if aaa.debut.active {
             quote!{
-                #[derive(Clone)]
-                #new_vis struct #live_name #l_impl_generics #l_where_clause {
-                    #pat_type_sender
-                    #debut_field
-                    #name_field
-                    #group_pat_type_fields
-                }
+                debut : ::std::sync::Arc<::std::time::SystemTime>,
+                name  : ::std::string::String,
             }
-        } else { 
+        } else { quote!{} };
 
-            quote!{
-                #[derive(Clone)]
-                #new_vis struct #live_name #l_impl_generics #l_where_clause {
-                    #pat_type_sender
-                }
+
+        quote!{
+            #live_clone_attr
+            #vis struct #live_name #l_impl_generics #l_where_clause {
+                #pat_type_sender
+                #debut_fields
+                #phantom_fields
             }
         }
     };
 
-    let Cont { script_mets, script_trts,
-               live_mets,   live_trts,..} = cont;
-    
-
-    let script_mets = script_mets.into_iter().map(|(ident,token)| (ident,token,vec![])).collect();
-    let sdpl =  
-    crate::model::ActorModelSdpl {
-
-            name:          cust_name.clone(),
-            asyncness:    async_decl.clone(),
-            mac:                 mac.clone(),
-            edit:                   aaa.edit,
-            vars:               vars.clone(),
-            show:                   aaa.show,
-
-            script: ShowComment::parse_model_part( script_def, script_mets, script_trts, aaa.show,true ),
-            live:   ShowComment::parse_model_part(   live_def,   live_mets,   live_trts, aaa.show, false),
-    };
-
-    let ImplVars{ field,..} = impl_vars;
-
-    if let Some(field)  = field {
-        model_sdpl.insert(field.clone(), sdpl);
-    } else {
-        let Vars{self_,..} = vars;
-        model_sdpl.insert(self_.clone(), sdpl);
-    }
-
-    model_sdpl
-
+   
+    ModelSdpl::Actor(
+        ActorModelSdpl{
+            aaa,
+            met_new,
+            script: cont.get_script_part(&script_def),
+            live: cont.get_live_part(&live_def),
+        }
+    )
 }
+

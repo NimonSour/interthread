@@ -1,5 +1,4 @@
 use super::{ActiveTextParser,pad,set_attrs,parse_attr};
-use crate::model::get_ident_type_generics;
 use crate::LINE_ENDING;
 
 use syn::{Attribute,ItemImpl};
@@ -81,8 +80,34 @@ impl ItemCodeBlock {
     }
     
     fn check_name(&self, item_impl: &ItemImpl) -> bool {
-        let (name,_,_) = get_ident_type_generics(item_impl);
-        self.code_block.contains(&name.to_string()) 
+        let ItemImpl {trait_,self_ty,.. } = item_impl;
+
+        // get any identification name
+        // just in case we'll ever work with trait impls
+        let name  = {
+            if let Some((_,trt_path,_)) = trait_ {
+
+                if let syn::Type::Path( syn::TypePath{path,qself}) = &**self_ty{
+                    if let Some(q_self) = qself{
+                        
+                        Some(&path.segments[q_self.position].ident)
+
+                    } else {
+                        path.segments.last().as_ref().map(|&s| &s.ident)
+                    }
+                } else {
+                    trt_path.segments.last().as_ref().map(|&s| &s.ident)
+                }   
+            } else {
+                if let syn::Type::Path( syn::TypePath{path,..}) = &**self_ty {
+
+                    path.segments.last().as_ref().map(|&s| &s.ident)
+
+                } else { None }
+            } 
+        };
+        if let Some(name) = name { self.code_block.contains(&name.to_string()) } else { return false;}
+
     }
 
     fn first_index(&self, done_attrs: &mut Vec<(usize,Attribute,String)>) -> usize {
@@ -102,7 +127,9 @@ impl ItemCodeBlock {
     }
 
     pub fn get_item_code(&mut self, mut attrs: Vec<Attribute>, item_impl: &ItemImpl ) -> Result<Vec<(usize, Attribute, String)>,String> {
-
+        let item_impl = &mut item_impl.clone();
+        item_impl.attrs = vec![];
+        // let item_impl_clean = { ;item_impl.clone();
         let org_item = set_attrs(&attrs, item_impl);
         if attrs.is_empty(){ 
             self.reset(None,Some(&item_impl))?; 
@@ -200,7 +227,7 @@ impl ItemCodeBlock {
                                     } else {
 
                                         if let Ok(out_item) = self.parse_item_impl(None){
-                                            if out_item.eq(item_impl) {
+                                            if out_item.eq(&item_impl) {
 
                                                 let first_index    = self.first_index(&mut done_attrs);
                                                 let full_str        = &self.src[first_index..=self.end.unwrap()];

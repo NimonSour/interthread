@@ -4,6 +4,7 @@ mod edit;
 mod interact;
 mod include_exclude;
 mod show;
+mod receiver;
 
 pub use channel::*;
 pub use debut::*;
@@ -11,13 +12,14 @@ pub use edit::*;
 pub use interact::*;
 pub use include_exclude::*;
 pub use show::ShowComment;
+pub use receiver::*;
 
 use crate::error;
 
 use proc_macro2::TokenStream;
 use proc_macro_error::abort;
 use quote::quote;
-use syn::{Ident,Meta};
+use syn::{TypeGenerics, TypePath};
 
 use std::path::PathBuf;
 
@@ -26,26 +28,17 @@ use std::path::PathBuf;
 
 //-----------------------  EXAMPLE EXPAND
 #[derive(Debug,Copy, Eq, PartialEq, Clone)]
-pub enum Model {
+pub enum Mac {
     Actor,
-    Group,
-}
-impl Model {
-
-    pub fn get_invers(&self) -> Self {
-        match self {
-            Self::Actor => Self::Group,
-            Self::Group => Self::Actor,
-        }
-    }
+    Family,
 }
 
-impl std::fmt::Display for Model {
+impl std::fmt::Display for Mac {
 
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Actor => write!(f,"{}",crate::ACTOR),
-            Self::Group => write!(f,"{}",crate::GROUP),
+            Self::Actor            => write!(f,"{}",crate::ACTOR),
+            Self::Family           => write!(f,"{}",crate::FAMILY),
         }
     }
 }
@@ -65,7 +58,6 @@ impl Lib {
     pub fn from( s: &str  ) -> Self {
 
         match s {
-
             val if val == "std"       =>  Lib::Std,
             val if val == "smol"      =>  Lib::Smol,
             val if val == "tokio"     =>  Lib::Tokio,
@@ -75,30 +67,48 @@ impl Lib {
                 abort!( s, msg; help=error::AVAIL_LIB );   
             } 
         }
-        
-
     }
     
-    pub fn method_new_spawn(&self, play_args: &TokenStream, script_name: &Ident) -> TokenStream {
-
+    pub fn method_new_spawn(&self, play_args: &TokenStream, script_turbo: &TypePath, pub_gen_ty: &TypeGenerics) -> TokenStream {
+        let pub_turbo = pub_gen_ty.as_turbofish();
         match &self {
             Lib::Std      => {
-                quote!{ std::thread::spawn(move|| { #script_name :: play(#play_args) } );}
+                quote!{ std::thread::spawn(move|| { #script_turbo :: play #pub_turbo (#play_args) } );}
             },
             Lib::Smol     => {
-                quote!{ smol::spawn( #script_name :: play(#play_args) ).detach();} 
+                quote!{ smol::spawn( #script_turbo :: play #pub_turbo (#play_args) ).detach();} 
             },
             Lib::Tokio    => {
-                quote!{ tokio::spawn( #script_name :: play(#play_args) );}
+                quote!{ tokio::spawn( #script_turbo :: play #pub_turbo (#play_args) );}
             },
             Lib::AsyncStd => {
-                quote!{ async_std::task::spawn( #script_name :: play(#play_args) );}
+                quote!{ async_std::task::spawn( #script_turbo :: play #pub_turbo (#play_args) );}
             },
         }
     }
 
+    pub fn is_std(&self) -> bool {
+        if let Self::Std = self {
+            return true;
+        }
+        false
+    }
+
 
 }
+
+impl std::fmt::Display for Lib {
+
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Std => write!(f,"std"),
+            Self::Smol => write!(f,"smol"),
+            Self::Tokio => write!(f,"tokio"),
+            Self::AsyncStd => write!(f,"async_std"),
+        }
+    }
+}
+
 
 impl Default for Lib {
     fn default() -> Self {
@@ -115,9 +125,7 @@ pub struct EditAttribute {
     pub attr:       syn::Attribute,
     pub attrs: Vec<syn::Attribute>,
     pub remove:               bool,
-    pub idents: Option<Vec<Ident>>,
 }
-
 
 impl EditAttribute {
 
@@ -129,58 +137,6 @@ impl EditAttribute {
         return attr_str;
     }
 }
-
-pub enum Edit{
-    Actor(EditActor),
-    Group(EditGroup),
-}
-
-impl Edit {
-
-    pub fn new(model:&Model) -> Self {
-
-        match model {
-            Model::Actor      => Self::Actor(EditActor::default()),
-            Model::Group      => Self::Group(EditGroup::default()),
-        }
-    }
-
-    pub fn parse(&mut self, meta: &Meta ) {
-        match self {
-            Self::Actor(edit_actor) => edit_actor.parse(meta), 
-            Self::Group(edit_group) => edit_group.parse(meta), 
-        }
-    }
-
-    pub fn is_any_active(&self) -> bool {
-        match &self {
-            Self::Actor(edit_actor) => edit_actor.is_any_active(), 
-            Self::Group(edit_group) => edit_group.is_any_active(), 
-        }
-    }
-    pub fn get_remove(&self) -> bool {
-        match &self {
-            Self::Actor(edit_actor) => edit_actor.remove, 
-            Self::Group(edit_group) => edit_group.remove, 
-        }
-    }
-
-    pub fn get_some_ident_list(&self) -> Option<Vec<Ident>> { 
-
-        match &self {
-            Self::Actor(_) => None, 
-            Self::Group(edit_group) => {
-                edit_group.edits
-                .as_ref()
-                .map(|x| 
-                    x.iter()
-                     .map(|i|i.0.clone())
-                     .collect::<Vec<_>>())
-            }, 
-        }
-    }
-}
-
 
 
 

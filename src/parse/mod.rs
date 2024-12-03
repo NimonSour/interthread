@@ -5,16 +5,10 @@ pub mod nested;
 pub use icb::ItemCodeBlock;
 pub use atp::ActiveTextParser;
 
-use crate::model::name::get_ident_type_generics;
-use crate::model::argument::EditAttribute;
-use crate::write::get_text;
-use crate::LINE_ENDING;
-
-use proc_macro_error::{abort, abort_call_site};
-use proc_macro2::{TokenStream,Span};
-use syn::{Attribute,Ident,ItemImpl};
-use std::collections::BTreeMap;
-
+use crate::{LINE_ENDING, write::get_text,model::EditAttribute};
+use proc_macro_error::abort_call_site;
+use syn::{File,Attribute,ItemImpl};
+use quote::quote;
 
 fn set_attrs( attrs: &Vec<Attribute>, item_impl: &ItemImpl ) -> ItemImpl {
     let mut item_impl = item_impl.clone();
@@ -89,25 +83,25 @@ pub fn split_file(
                         } else {
 
                             let end = index + s.len();
-                            let new_attr_str = nested::edit_remove_active_file_args(s,&prefix[index..=end], &edit_attr.idents);
+                            let new_attr_str = nested::edit_remove_active_file_args(s,&prefix[index..=end]);
                             prefix.replace_range(index..=end, &new_attr_str);
 
                         }
                         return (prefix,suffix.into());
                     }
                     // no position internal error
-                    abort!(Span::call_site(),"Internal Error. 'parse::split_file'. No matching Attribute found in the list of Attributes.");
+                    abort_call_site!("Internal Error. 'parse::split_file'. No matching Attribute found in the list of Attributes.");
 
                 },
                 Err(e) => {
                     // didn't find the attribute
-                    abort!(Span::call_site(),e.to_string()); 
+                    abort_call_site!(e.to_string()); 
                 },
             }
         },
         Err(e) => { 
             // could not get text from file 
-            abort!(Span::call_site(),e.to_string());
+            abort_call_site!(e.to_string());
         },
     }
 } 
@@ -117,15 +111,18 @@ pub fn split_file(
 pub fn edit_write(  
                    edit_attr: &EditAttribute, 
                    item_impl: &ItemImpl, 
-                   edit_sdpl: BTreeMap<Ident,TokenStream> ) {
+                   edit_sdpl: File ) {
 
-    let (name, _, _)     =  get_ident_type_generics(&item_impl);
-    let edifix = create_edifix( edit_sdpl);
+    let obj_ty = {
+        let ItemImpl{self_ty,..} = &item_impl;
+        quote!{#self_ty}.to_string().replace(" ","")
+    };
+    let edifix = prettyplease::unparse(&edit_sdpl);
 
     let (mut prefix, suffix) = split_file( &edit_attr, item_impl );
     let attr_str = edit_attr.get_attr_str();
     
-    let obj_name = format!("// Object Name   : {}  {LINE_ENDING}", name.to_string() );
+    let obj_name = format!("// Object        : {obj_ty}  {LINE_ENDING}");
     let init_by  = format!("// Initiated By  : {}  {LINE_ENDING}", attr_str );
 
 
@@ -146,39 +143,62 @@ pub fn edit_write(
 
 
     if let Err(e) = crate::write::write(prefix, &edit_attr.path){
-        proc_macro_error::abort!(proc_macro2::Span::call_site(),e.to_string());
+        let msg = format!("Internal Error 'parse::mod::create_edifix'. {}",e.to_string());
+        abort_call_site!(msg);
     }
 
 }  
 
 
-fn create_edifix(edit_sdpl: BTreeMap<Ident,TokenStream>) -> String {
-
-    let mut edifix = String::new();
-    let len = edit_sdpl.len();
-    let pin = | ident: &Ident | {
-        if len == 1 { "".to_string() } 
-        else { format!("{LINE_ENDING}//---({ident})") }
-    };
-
-    for (field, edit_code ) in edit_sdpl{
-        if !edit_code.is_empty(){
-            if let Ok(edifile) =  syn::parse2::<syn::File>(edit_code){
-                edifix += &pin(&field);
-                edifix += LINE_ENDING;
-                edifix += &prettyplease::unparse(&edifile);
-            } else {
-                let msg = "Internal Error 'parse::mod::create_edifix'. Failed to parse TokenStream to syn::File.";
-                abort!(Span::call_site(),msg)
-            }
-        }
-    }
-    edifix 
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    #[test]
+    fn test_for_family_edit_special_case_for_member() {
+        let attr_str = r#"
+
+    #[interthread::family( file="file.rs", name = "MyApp", lock="Mutex",edit(file(imp)),lib, channel, debut,
+    actor( name ="User" ,include( bla,pla) , edit(script( file(imp)))),
+    actor( name ="Admin" ,exclude( method ), edit(file),
+)]"#;
+
+    let new_attr_str = nested::edit_remove_active_file_args(attr_str,attr_str);
+
+    let expect_attr_str = r#"
+
+    #[interthread::family( file="file.rs", name = "MyApp", lock="Mutex",edit(imp),lib, channel, debut,
+    actor( name ="User" ,include( bla,pla) , edit(script( imp))),
+    actor( name ="Admin" ,exclude( method ), edit,
+)]"#;
+    
+    assert_eq!(expect_attr_str,new_attr_str);
+
+    }
+    #[test]
+    fn test_for_family() {
+        // in 'trt' file is an ident
+        let attr_str = r#"
+
+    #[interthread::family( file="file.rs", name = "MyApp", lock="Mutex",edit(file),lib, channel, debut,
+    actor( name ="User" ,include( bla,pla) , edit(script( file(imp)))),
+    actor( name ="Admin" ,exclude( method ), edit(script( file(imp(new))))),
+)]"#;
+
+    let new_attr_str = nested::edit_remove_active_file_args(attr_str,attr_str);
+
+    let expect_attr_str = r#"
+
+    #[interthread::family( file="file.rs", name = "MyApp", lock="Mutex",edit,lib, channel, debut,
+    actor( name ="User" ,include( bla,pla) , edit(script( imp))),
+    actor( name ="Admin" ,exclude( method ), edit(script( imp(new)))),
+)]"#;
+
+    assert_eq!(expect_attr_str,new_attr_str);
+
+    }
+
 
     #[test]
     fn test_for_attr_inside_impl() {
@@ -202,47 +222,6 @@ mod tests {
         assert_eq!(res_attr,org_attr);
     }
 
-    #[test]
-    fn test_func_group_edit(){
-        let attr_str = r#"
-#[interthread::group(
-    file="path/to/abc.rs",
-    edit(
-        a::edit( script( def, file(imp(bla,file)), trt(file)),
-        live(file(def), imp, trt ), 
-     ),
-        c::edit(file) , 
-        b::edit(file(live), script( def, imp),
-        live(file(def, imp(file), trt)), 
-     ),
-      
-    )
-)]"#;
-
-    let a = quote::format_ident!("a");
-    let b = quote::format_ident!("b");
-    let c = quote::format_ident!("c");
-    let new_attr_str = 
-    nested::edit_remove_active_file_args(attr_str,attr_str,&Some(vec![a,b,c]));
-
-    let expect_attr_str = r#"
-#[interthread::group(
-    file="path/to/abc.rs",
-    edit(
-        a::edit( script( def, imp(bla,file), trt(file)),
-        live(def, imp, trt ), 
-     ),
-        c::edit , 
-        b::edit(live, script( def, imp),
-        live(def, imp(file), trt), 
-     ),
-      
-    )
-)]"#;
-
-    assert_eq!(expect_attr_str,new_attr_str);
-    }
-
 
     #[test]
     fn test_func_actor_edit(){
@@ -256,7 +235,7 @@ mod tests {
     )
 )]"#;
 
-    let new_attr_str = nested::edit_remove_active_file_args(attr_str,attr_str,&None);
+    let new_attr_str = nested::edit_remove_active_file_args(attr_str,attr_str);
 
     let expect_attr_str = r#"
 #[interthread::actor(
@@ -284,7 +263,7 @@ mod tests {
     )
 )]"#;
 
-    let new_attr_str = nested::edit_remove_active_file_args(attr_str,attr_str,&None);
+    let new_attr_str = nested::edit_remove_active_file_args(attr_str,attr_str);
 
     let expect_attr_str = r#"
 #[interthread::actor(
@@ -299,4 +278,5 @@ mod tests {
     assert_eq!(expect_attr_str,new_attr_str);
     }
     
+
 }

@@ -31,7 +31,7 @@ impl MyActor {
     }
 }
 
-// #[interthread::example(main(path="examples/send_actor_tokio.rs"))]
+// #[interthread::example(main,path="examples/send_actor_tokio.rs")]
 #[tokio::main]
 async fn main() {
     

@@ -1,465 +1,220 @@
 
 pub mod argument;
 pub mod attribute;
-pub mod generic;
+pub mod generics;
 pub mod method;
 pub mod name;
 pub mod generate;
 
 pub use argument::*;
 pub use attribute::*;
-pub use generic::*;
+pub use generics::*;
 pub use method::*;
-pub use name::*;
 pub use generate::*;
 
 
-use proc_macro2::TokenStream;
-use proc_macro_error::abort;
-use syn::{Item,Generics,Type,Ident,Attribute};
-use quote::{format_ident,quote};
-use std::collections::BTreeMap;
 
-
-pub struct Cont {
-
-    script_mets  : Vec<(Ident,TokenStream)>,
-    script_trts  : Vec<(Ident,TokenStream)>,
-    live_mets    : Vec<(Ident,TokenStream, Vec<Attribute>)>,
-    live_trts    : Vec<(Ident,TokenStream)>,
-
-    script_fields: Vec<TokenStream>,
-    direct_arms  : Vec<TokenStream>,
-    debug_arms   : Vec<TokenStream>,
-
-}
-
-impl Cont {
-
-    pub fn new() -> Self{
-        Self{
-            script_mets  : vec![],
-            script_trts  : vec![],
-            live_mets    : vec![],
-            live_trts    : vec![],
-            script_fields: vec![],
-            direct_arms  : vec![],
-            debug_arms   : vec![],
-        }
-    }
-}
+use proc_macro_error::{abort_call_site, abort};
+use syn::{File, Generics, Ident, ImplItem, ImplItemFn, Item, ItemImpl, Pat, Type, TypePath};
+use quote::quote;
 
 #[derive(Clone)]
-pub struct Vars {
+pub struct ModelPart{
 
-    pub actor:             Ident,
-    pub name:              Ident,
-    pub debut:             Ident,
-    pub debut_for_play:    Ident,
-    pub sender:            Ident,
-    pub receiver:          Ident,
-    pub play:              Ident,
-    pub direct:            Ident,
-    pub live:              Ident,
-    pub inter_send:        Ident,
-    pub inter_recv:        Ident,
-    pub actor_legend:      Ident,
-    pub live_legend:       Ident,
-    pub try_old:           Ident,
-    pub inter_get_debut:   Ident,
-    pub inter_get_count:   Ident,
-    pub inter_set_name:    Ident,
-    pub inter_get_name:    Ident,
-    pub inter_get_channel: Ident,
-    pub inter_set_channel: Ident,
-    pub intername:         Ident,
-    pub msg:               Ident,
-    pub self_:             Ident,
-    pub impl_vars:      ImplVars,
-
-    pub cust_name:         Ident,
-    pub script_name:       Ident,
-    pub live_name:         Ident,
-    pub script_type:        Type,
+    pub def:  Option<Item>,
+    pub mets: Vec<(Ident,ImplItemFn)>,
+    pub trts: Vec<(Ident,Item)>, 
+    pub impl_block: ItemImpl,
+    edit: bool,
 }
 
 
-impl Vars {
+impl ModelPart {
 
-    pub fn new( aaa: &ActorAttributeArguments, impl_vars:ImplVars, mac: Model,model: Model )  -> Self {
-        
-        let ImplVars{actor_name,model_generics,..}= &impl_vars;
-        let cust_name  = if aaa.name.is_some(){ aaa.name.clone().unwrap() } else { actor_name.clone() }; 
-        let script_type: Type;
-        let script_name;
-        let live_name;
-        let actor;
-
-        match (mac,model){
-            (Model::Actor,Model::Actor) => {
-                actor = format_ident!("actor");
-                script_name = name::script(&cust_name);
-                live_name   = name::live(&cust_name);
-            },
-            (Model::Group,Model::Group) => { 
-                actor = format_ident!("group");
-                script_name = name::group_script(&cust_name);
-                live_name   = name::group_live(&cust_name);
-            },
-                                      _ => { 
-                actor = format_ident!("actor");
-                script_name = name::script_group(&cust_name);
-                live_name   = name::live_group(&cust_name);
-            },
-        }
-        let(_,ty_generics,_) = model_generics.split_for_impl();
-        script_type = syn::parse_quote!{ #script_name #ty_generics };
-
-        Self{
-
-            actor,
-            name:              format_ident!("name"),
-            debut:             format_ident!("debut"),
-            debut_for_play:    format_ident!("debut_for_play"),
-            sender:            format_ident!("sender"),
-            receiver:          format_ident!("receiver"),
-            play:              format_ident!("play"),
-            direct:            format_ident!("direct"),
-            live:              format_ident!("live"),
-            inter_send:        format_ident!("inter_send"),
-            inter_recv:        format_ident!("inter_recv"),
-            actor_legend:      format_ident!("actor_legend"),
-            live_legend:       format_ident!("live_legend"),
-            try_old:           format_ident!("try_old"),
-            inter_get_debut:   format_ident!("inter_get_debut"),
-            inter_get_count:   format_ident!("inter_get_count"),
-            inter_set_name:    format_ident!("inter_set_name"),
-            inter_get_name:    format_ident!("inter_get_name"),
-            inter_get_channel: format_ident!("inter_get_channel"),
-            inter_set_channel: format_ident!("inter_set_channel"),
-            intername:         format_ident!("InterName"),
-            msg:               format_ident!("msg"),
-            self_:             format_ident!("self"),
-            impl_vars, 
-
-            cust_name,
-            script_name,
-            live_name,
-            script_type,
-        }
+    /// this method should take the right 'live and 'script' edits and definitions
+    pub fn new(
+        def:  Option<Item>,
+        mets: Vec<(Ident,ImplItemFn)>,
+        trts: Vec<(Ident,Item)>, 
+        impl_block: ItemImpl,
+        ) -> Self { 
+        Self { def,mets,trts,impl_block, edit:false }
     }
 
-    pub fn get_inter_live_methods(&self,aaa: &ActorAttributeArguments) 
-        -> Vec<&Ident> {
+    fn new_empty(&self) -> Self {
+        Self { def: None, mets: vec![], trts: vec![], impl_block: self.impl_block.clone(), edit: true } 
+    }
 
-        if aaa.debut.active(){
-            let Vars{         
-                inter_get_debut,
-                inter_get_count,
-                inter_set_name,
-                inter_get_name,.. } = &self;
+    pub fn split_edit(&mut self,((def,scope_def),mets,trts): &( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) )) -> Self {
+        let mut other = self.new_empty();
 
-            let mut mets = vec![
-                inter_get_debut,
-                inter_get_count,
-                inter_set_name,
-                inter_get_name,
-            ];
-            if aaa.debut.is_legend(){
-                let Vars{
-                    inter_get_channel,
-                    inter_set_channel,
-                    try_old,..} = &self;
-                mets.push(inter_get_channel);
-                mets.push(inter_set_channel);
-                mets.push(try_old);
+        if *def {
+            let temp_def = self.def.take();
+            if *scope_def {
+                other.def = temp_def;
             }
-            mets
+        }
+        // original 
+        other.mets = select(mets,&mut self.mets);
+        other.trts = select(trts,&mut self.trts);
 
-        } else { vec![] }
+        other
     }
 
-    pub fn get_channels_one_mpsc(&self, aaa: &ActorAttributeArguments ) 
-        -> ( OneshotChannel, MpscChannel ){
+    pub fn is_live(&self) -> bool {
+        if let Some(Item::Struct(_)) = self.def {
+            return true;
+        }
+        false
+    }
 
-        let Vars{  
-            inter_send,
-            inter_recv,
-            script_type,
-            impl_vars,.. } = &self;
+    pub fn get_met_new_args(&self) -> Vec<Box<Pat>> {
 
-        let ImplVars{ group_script_type,..} = impl_vars;
-
-        let script_type = 
-        if let Some(group_script_type) = group_script_type {
-            group_script_type
-        } else { script_type };
-
-        (
-            OneshotChannel::new(inter_send,inter_recv,&aaa.lib),
-            MpscChannel::new(&self,aaa,script_type)   
-        )
+        if let Some(pos) = self.mets.iter().position(|x| x.0 == "new" || x.0 == "try_new"){
+            args_to_pat_type(&ident_arguments_output(&self.mets[pos].1.sig).1).0
+        } else {
+            abort_call_site!(" InternalError `ModelPart` expected method `new` to be present ")
+        }
     }
 }
 
-pub struct ModelSdpl {
-    pub fields: BTreeMap<Ident,ActorModelSdpl>,
+impl From<ModelPart> for Vec<Item> {
+    fn from(value: ModelPart) -> Self {
+        let mut items = vec![];
+        let ModelPart{def,mets,trts,mut impl_block, edit } = value;
+
+        if let Some(def) = def { items.push(def); }
+
+        if !mets.is_empty() {
+            for (_,met) in mets {
+                impl_block.items.push(ImplItem::Fn(met));
+            }
+            items.push(Item::Impl(impl_block));
+        }
+
+        items.extend( trts.into_iter().map(|(_,t)|t));
+
+        if edit == true {
+            for item in items.iter_mut() { remove_doc_comment(item)}
+        }
+        items
+    }
+} 
+
+#[derive(Clone)]
+pub enum ModelSdpl {
+    Actor(ActorModelSdpl),
+    Family(FamilyModelSdpl),
 }
 
 impl ModelSdpl {
 
-    pub fn new()-> Self {
-        Self{ fields:BTreeMap::new() }
-    }
-
-    pub fn insert(&mut self, field: Ident, ams:ActorModelSdpl){
-        self.fields.insert(field,ams);
-    }
-
-    pub fn extend(&mut self, model_sdpl: Self ){
-        self.fields.extend(model_sdpl.fields.into_iter());
-    }
-
-    pub fn get_pat_type_fields(&self) -> Option<TokenStream> {
-        let mut loc = Vec::new();
-
-        for (field, ams ) in self.fields.iter(){
-            let live_type =  ams.get_live_type();
-            loc.push( quote!{ pub #field : #live_type });
+    pub fn get_code_edit(&mut self) -> (File, File){
+        match self {
+            Self::Actor(ams) => ams.get_code_edit(),
+            Self::Family(fms) => fms.get_code_edit(),
         }
-        if loc.is_empty() { return None }
-        Some(quote!{ #(#loc),*})
-    }
-
-    pub fn get_fields_init (&self) -> Option<TokenStream> {
-        let mut loc = Vec::new();
-
-        for (field, ams ) in self.fields.iter(){
-            let Vars{live_name,sender,..} = &ams.vars;
-            loc.push( quote!{ #field: #live_name{ #sender : #sender.clone() } });
-        }
-        if loc.is_empty() { return None }
-        Some(quote!{ #(#loc,)*})
-    }
-
-    pub fn split(&self) -> (BTreeMap<Ident,TokenStream>,BTreeMap<Ident,TokenStream>){
-    
-        let mut code_sdpl = BTreeMap::new();
-        let mut edit_sdpl = BTreeMap::new();
-        
-
-        for (i,mut m) in self.fields.clone() {
-            let (code,edit) = m.split_edit();
-            code_sdpl.insert(i.clone(),code);
-            edit_sdpl.insert(i.clone(),edit);
-        }
-        (code_sdpl,edit_sdpl)
-    }
-
-    pub fn get_code_edit(&self) -> (TokenStream,TokenStream){
-
-        let(code_sdpl,edit_sdpl) = self.split();
-        let code = code_sdpl.iter().map(|x| x.1).collect::<Vec<_>>();
-        let edit = edit_sdpl.iter().map(|x| x.1).collect::<Vec<_>>();
-        
-        let code = quote!{#(#code)*};
-        let edit = quote!{#(#edit)*};
-        (code,edit)
     }
 }
 
 
 #[derive(Clone)]
-pub struct ActorModelSdpl {
-    pub name:        Ident,
-    pub asyncness: Option<TokenStream>,
-    pub mac:         Model,
-    pub edit:    EditActor,
-    pub vars:         Vars,
-    pub show:         bool,
-    pub script: ( Option<Item>, Vec<(Ident,Item)>, Vec<(Ident,Item)> ),
-    pub live:   ( Option<Item>, Vec<(Ident,Item)>, Vec<(Ident,Item)> ),
+pub struct FamilyModelSdpl {
+
+    pub aaa: ActorAttributeArguments,
+    pub live:              ModelPart,
+    pub actors:  Vec<ActorModelSdpl>,
 }
 
+impl FamilyModelSdpl {
+
+    pub fn get_code_edit(&mut self) -> (File, File){
+        let mut code_file = File { shebang: None,attrs: vec![],items: vec![] };
+        let mut edit_file = code_file.clone();
+
+        let EditActor{ live,..  } = &self.aaa.edit;
+        edit_file.items.extend(<Vec<Item>>::from(self.live.split_edit(live)).into_iter());
+        code_file.items.extend(<Vec<Item>>::from(self.live.clone()).into_iter());
+
+        for act in &mut self.actors {
+            let(c,e) = act.get_code_edit();
+            code_file.items.extend(c.items.into_iter());
+            edit_file.items.extend(e.items.into_iter());
+        }
+
+        (code_file,edit_file)
+    }
+}
+
+#[derive(Clone)]
+pub struct ActorModelSdpl {
+    pub aaa: ActorAttributeArguments,
+    pub met_new:  Option<MethodNew>,
+
+    pub script:  ModelPart,
+    pub live:    ModelPart,
+
+}
 
 impl ActorModelSdpl {
 
-    pub fn get_live_type(&self) -> Type {
-        let Vars{ live_name,impl_vars,..} = &self.vars;
-        let (_,(_,ty_gen,_)) = impl_vars.get_split_model_generics();
-        let live_type: Type = syn::parse_quote!{ #live_name #ty_gen };
-        live_type
+    pub fn get_script_live_type(&self) -> (TypePath,TypePath) {
+
+        let (_,script,_) = get_ident_type_generics(&self.script.impl_block);
+        let (_,live,_) = get_ident_type_generics(&self.live.impl_block);
+
+        (script,live)
     }
 
-    pub fn split_edit(&mut self) -> (TokenStream,TokenStream){
+    pub fn get_code_edit(&mut self) -> (File, File){
 
-        let mut edit_script_def  = None;
-        let mut edit_script_mets   = None;
-        let mut edit_script_trts  = None;
-    
-        let mut edit_live_def  = None;
-        let mut edit_live_mets  = None;
-        let mut edit_live_trts  = None;
+        let mut code_file = File { shebang: None,attrs: vec![],items: vec![] };
+        let mut edit_file = code_file.clone();
+        let EditActor{ script, live, ..  } = &self.aaa.edit;
 
-        let EditActor{ script, live, ..  } = &self.edit;
+        edit_file.items.extend(<Vec<Item>>::from(self.script.split_edit(script)).into_iter());
+        edit_file.items.extend(<Vec<Item>>::from(self.live.split_edit(live)).into_iter());
 
-        let diff = 
-        | ((def,scope_def),mets,trts): &( (bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) ),
-          model_def:  &mut Option<Item>,
-          model_mets: &mut Vec<(Ident,Item)>,
-          model_trts: &mut Vec<(Ident,Item)>,
-          edit_def:   &mut Option<Item>,
-          edit_mets:  &mut Option<Vec<Item>>,
-          edit_trts:  &mut Option<Vec<Item>>,
-        |{
-            if *def {
-                let temp_def = model_def.take();
-                if *scope_def {
-                    *edit_def = temp_def;
-                }
-            }
-            // original 
-            *edit_mets = select(mets,model_mets);
-            *edit_trts = select(trts,model_trts);
-        };
+        code_file.items.extend(<Vec<Item>>::from(self.script.clone()).into_iter());
+        code_file.items.extend(<Vec<Item>>::from(self.live.clone()).into_iter());
 
-        diff(
-            script,
-             &mut self.script.0,
-            &mut self.script.1,
-            &mut self.script.2,
-              &mut edit_script_def,
-             &mut edit_script_mets,
-             &mut edit_script_trts 
-        );
-
-        diff(
-            live,
-             &mut self.live.0,
-            &mut self.live.1,
-            &mut self.live.2,
-              &mut edit_live_def,
-             &mut edit_live_mets,
-             &mut edit_live_trts 
-        );
-        
-        let collect_items = 
-        |coll: &Vec<(Ident,Item)>| -> Vec<Item> 
-        { coll.iter().map(|x| x.1.clone()).collect::<Vec<_>>() };
-        
-        // Prepare Token Stream Vecs
-        let script_def = &self.script.0;
-        let script_methods = collect_items(&self.script.1);
-        let script_traits  = collect_items(&self.script.2);
-
-        let live_def   = &self.live.0;
-        let live_methods   = collect_items(&self.live.1);
-        let live_traits    = collect_items(&self.live.2);
-
-        let (( s_impl_generics,
-            s_ty_generics,
-           s_where_clause ),
-        ( l_impl_generics,
-            l_ty_generics,
-           l_where_clause )) = self.vars.impl_vars.get_split_model_generics();
-
-        let Vars{script_name,live_name,..} = &self.vars;
-
-        let res_code = quote! {
-    
-            #script_def
-            impl #s_impl_generics #script_name #s_ty_generics #s_where_clause {
-                #(#script_methods)*
-            }
-            #(#script_traits)*
-    
-            #live_def
-            impl #l_impl_generics #live_name #l_ty_generics #l_where_clause {
-                #(#live_methods)*
-            }
-            #(#live_traits)*
-    
-        };
-
-        if self.show {
-            // remove_doc_comments 
-            edit_script_def.as_mut().map(|item| remove_doc_comment(item));
-            edit_script_mets .as_mut().map(|items| for item in items { remove_doc_comment(item);});
-            edit_live_def.as_mut().map(|item| remove_doc_comment(item));
-            edit_live_mets.as_mut().map(|items| for item in items { remove_doc_comment(item);});
-        }
-    
-    
-        let res_edit_script_mets =  
-            edit_script_mets.as_ref().map(|mets| 
-                quote!{ 
-                    impl #s_impl_generics #script_name #s_ty_generics #s_where_clause {
-                        #(#mets)* 
-                    }
-                }
-            );
-
-        let res_edit_script_trts = 
-            edit_script_trts.as_ref().map(|trts| 
-                quote!{ #(#trts)* }
-            );
-
-        let res_edit_live_mets = 
-
-            edit_live_mets.as_ref().map(|mets| 
-                quote!{ 
-                    impl #l_impl_generics #live_name #l_ty_generics #l_where_clause {
-                        #(#mets)* 
-                    }
-                }
-            ); 
-
-        let res_edit_live_trts = 
-            edit_live_trts.as_ref().map(|trts| 
-                quote!{ #(#trts)* }
-            );
-
-        let res_edit = quote!{
-    
-            #edit_script_def
-            #res_edit_script_mets
-            #res_edit_script_trts
-    
-            #edit_live_def
-            #res_edit_live_mets
-            #res_edit_live_trts
-        };
-
-        (res_code, res_edit)
-    
+        (code_file,edit_file)
     }
-
-}    
+}
 
 fn remove_doc_comment( item: &mut Item ){
 
     let attrs = 
     match item {
 
-        Item::Fn(item_fn) => &mut item_fn.attrs,
-        Item::Enum(item_enum) => &mut item_enum.attrs,
-        Item::Struct(item_struct) =>  &mut item_struct.attrs,
+        Item::Enum(item_enum) => vec![ &mut item_enum.attrs],
+        Item::Struct(item_struct) =>  vec![ &mut item_struct.attrs],
+        Item::Impl(item_impl)  => {
+            let mut col = vec![ &mut item_impl.attrs];
+            for impl_item in item_impl.items.iter_mut(){
+                if let ImplItem::Fn(ImplItemFn{ attrs,..}) = impl_item{
+                    col.push(attrs);
+                }
+            }
+            col 
+        },
         _ =>{ return ();}
     };
-    let new_attrs= 
-        attrs.clone()
-            .into_iter()
-            .filter(|x|  !x.path().is_ident("doc"))
-            .map(|x|x.clone())
-            .collect::<Vec<_>>();
-    *attrs = new_attrs;
+    for attr in attrs {
+        let new_attr = 
+            attr.iter()
+                .cloned()
+                .filter(|x|  !x.path().is_ident("doc"))
+                .collect::<Vec<_>>();
+        *attr = new_attr;
+    }
 }
 
 
-pub fn select(
+pub fn select<T>(
     (   edit_idents,scope): &(Option<Vec<(Ident,bool)>>,bool), 
-        ident_mets: &mut Vec<(Ident,Item)> 
-    ) -> Option<Vec<Item>> {
+        ident_mets: &mut Vec<(Ident,T)> 
+    ) -> Vec<(Ident,T)> {
 
     let mut res = Vec::new();
 
@@ -469,22 +224,84 @@ pub fn select(
 
             let temp_ident_mets = std::mem::replace(ident_mets,Vec::new());
             if *scope {
-                res = temp_ident_mets.into_iter().map(|x| x.1).collect::<Vec<_>>();
+                res = temp_ident_mets;
             }
         }
-
         for (ident,scp) in idents {
             if let Some(pos) = ident_mets.iter().position(|x| x.0 == *ident){
-                let (_,met)  = ident_mets.remove(pos);
+                let value  = ident_mets.remove(pos);
                 if *scope || *scp {
-                    res.push(met);
+                    res.push(value);
                 }
             } else {
                 abort!(ident,"Unknown ident.");
             }
         }
     } 
-    if res.is_empty() { None } else { Some(res) }
+    res
+
+}
+
+
+pub const CHAR_SET: [char;7] = ['}','{',']','[',')','(',','];
+
+pub fn space_around_chars( mut s: String, char_set: &[char]) -> String {
+    for c in char_set{
+        s = s.replace(*c, &format!(" {c} "));
+    }
+    s
+}
+
+pub fn to_string_wide<T>(ty: &T) -> String 
+where T: quote::ToTokens,
+{
+    let mut type_str = quote! {#ty}.to_string();
+    type_str = space_around_chars(type_str, &CHAR_SET);
+    format!(" {type_str} ")
+}
+
+pub fn replace<T, O, N>(ty: &T, old: &O, new: &N) -> T
+where
+    T: syn::parse::Parse + quote::ToTokens,
+    O: quote::ToTokens,
+    N: quote::ToTokens,
+{   
+    let type_str = to_string_wide(&ty);
+    let old = to_string_wide(&old);
+    let new = format!(" {} ",quote!{#new}.to_string());
+    let str_type = type_str.replace(&old, &new);
+    if let Ok(ty) = syn::parse_str::<T>(&str_type) {
+        return ty;
+    }
+    let msg = format!("Internal Error. 'model::replace'. Could not parse &str to provided type! str_type - '{}'",str_type);
+    abort_call_site!(msg);
+}
+
+
+pub fn includes<T,Y>(ty: &T, item: &Y) -> bool
+where
+    T: quote::ToTokens,
+    Y: quote::ToTokens,
+{   
+    let type_str = to_string_wide(ty);
+    let item = to_string_wide(item);
+    type_str.contains(&item)
+}
+
+pub fn get_ident_type_generics(item_impl: &ItemImpl) -> (Ident,TypePath,Generics) {
+
+    match &*item_impl.self_ty {
+        Type::Path(tp) => {
+            let ident = tp.path.segments.last().unwrap().ident.clone();
+            let generics = item_impl.generics.clone();
+            (ident,tp.clone(),generics)
+        },
+        _ => {
+            let msg ="Internal Error.'model::mod::impl_get_ident_type_generics'. expected a path!";
+            abort!(item_impl,msg);
+        } 
+    }
+
 }
 
 

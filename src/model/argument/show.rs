@@ -1,137 +1,49 @@
 
 
-use syn::{ parse2, Attribute, ItemFn, Item, File, ItemStruct, ItemEnum, Ident};
-use proc_macro2::TokenStream;
+use syn::{ parse2, Attribute, File, Ident, ImplItemFn, Item, ItemEnum, ItemStruct};
 use proc_macro_error::abort_call_site;
-use quote::quote;
+use quote::{ToTokens,quote};
 use crate::LINE_ENDING;
 
-pub struct ShowComment;
+#[derive(Debug,Clone)]
+pub struct ShowComment{
+    pub show: bool,
+}
 
 impl ShowComment {
 
-    pub fn parse_model_part(  def: TokenStream,  mets: Vec<(Ident,TokenStream,Vec<Attribute>)>,  trts: Vec<(Ident,TokenStream)>,  show: bool, sol: bool ) 
-        -> ( Option<Item>, Vec<(Ident,Item)>, Vec<(Ident,Item)> )
-    {
-
-        let trts = 
-            trts.into_iter()
-                .map(|(ident,tokens)| (ident,Self::parse_item(tokens)))
-                .collect::<Vec<_>>();
-        let mets = 
-            mets.into_iter()
-                .map(|(ident,tokens ,attrs)| (ident,Self::parse_method(tokens,attrs,show)))
-                .collect::<Vec<_>>();
-
-        let attr = if show { Some(Self::model_part_doc_comment(def.clone(),&mets,&trts))} else { None };
-
-        let mets = mets.into_iter().map(|(ident,item_fn)| (ident,Item::Fn(item_fn))).collect::<Vec<_>>();
-        
-        if sol {
-            //script
-            let mut item_enum = Self::parse_enum(def);
-            if let Some(attr) = attr {
-                item_enum.attrs.push(attr);
+    pub fn parse_model_part<T:ToTokens>(&self, def: &T, mets: &Vec<(Ident,ImplItemFn)>,trts: &Vec<(Ident,Item)>) -> Item {
+        let mut item = Self::parse_item(def);
+        if self.show {
+            let attr = Self::model_part_doc_comment(def,mets,trts);
+            match &mut item {
+                Item::Struct(ItemStruct{attrs,..})|
+                Item::Enum(ItemEnum{attrs,..}) => {attrs.push(attr)},
+                _ => abort_call_site!("Internal Error. 'show::parse_model_part'. unexpected syn::Item.")
             }
-            (Some(Item::Enum(item_enum)), mets, trts )
-        } else {
-            //live
-            let mut item_struct = Self::parse_struct(def);
-            if let Some(attr) = attr {
-                item_struct.attrs.push(attr);
-            }
-            (Some(Item::Struct(item_struct)), mets, trts )
         }
-        
+        item
     }
 
-    pub fn parse_item( item: TokenStream ) -> Item {
-        if let Ok(item) =  parse2::<syn::Item>(item){
-            return item;
-        } 
-        abort_call_site!( "Internal Error. 'show::parse_item'. Failed to parse TokenStream to syn::Item.");   
-    }
+    pub fn parse_method<T: ToTokens>(&self, tokens: &T) -> ImplItemFn {
 
-    pub fn parse_fn( item: TokenStream ) -> ItemFn {
-        if let Ok(item) =  parse2::<ItemFn>(item){
-            return item;
-        } 
-        abort_call_site!( "Internal Error. 'show::parse_fn'. Failed to parse TokenStream to syn::ItemFn.");   
-    }
-
-    pub fn parse_file( item: TokenStream ) -> File { 
-        if let Ok(file) =  parse2::<File>(item){
-            return file;
-        } 
-        abort_call_site!( "Internal Error. 'show::parse_file'. Failed to parse TokenStream to syn::File.");
-    }
-
-    pub fn parse_enum( item: TokenStream ) -> ItemEnum {
-        if let Ok(file) =  parse2::<ItemEnum>(item){
-            return file;
-        } 
-        abort_call_site!( "Internal Error. 'show::parse_enum'. Failed to parse TokenStream to syn::ItemEnum.");
-    }
-
-    pub fn parse_struct( item: TokenStream ) -> ItemStruct {
-        if let Ok(file) =  parse2::<ItemStruct>(item){
-            return file;
-        } 
-        abort_call_site!( "Internal Error. 'show::parse_struct'. Failed to parse TokenStream to syn::ItemStruct.");
-    }
-
-
-
-    fn parse_doc_attr( msg: &str ) -> Attribute {
-
-        let code = quote!{
-            #[doc = #msg]
-            fn foo (){{}}
-        };
-    
-        match parse2::<syn::ItemFn>(code) {
-    
-            Ok(item_fn) => {
-                if let Some(attr) = item_fn.attrs.into_iter().next(){ return attr; } 
-                else { abort_call_site!("Internal Error.`show::parse_doc_attr`. Function `attrs` is empty."); }
-            },
-            Err(_) => abort_call_site!("Internal Error.`show::parse_doc_attr`. Could not parse the Attribute."),
-        }
-    }
-
-    fn code_format( item: TokenStream ) -> String {
-
-        let file = Self::parse_file(item);
-        let mut msg_code =  "```rust ignore".to_string();
-        msg_code += LINE_ENDING;            
-        msg_code += &prettyplease::unparse(&file);
-        msg_code += LINE_ENDING; 
-        msg_code += "```";
-        msg_code += LINE_ENDING; 
-        msg_code 
-
-    }
-
-    pub fn parse_method( item: TokenStream, mut attrs: Vec<Attribute>, show: bool ) -> ItemFn {
-
-        let mut item_fn = Self::parse_fn(item.clone());
-
-        if show {
+        let mut impl_item_fn = Self::parse_fn(tokens);
+        let mut attrs = std::mem::take(&mut impl_item_fn.attrs); 
+        if self.show {
             
             let mut msg = "### Interthread Generated Code".to_string();
             msg += LINE_ENDING;
-            msg += & Self::code_format(item);
+            msg += & Self::code_format(&impl_item_fn);
             msg += LINE_ENDING;
 
-            let attr = Self::parse_doc_attr(&msg); 
-            attrs.push(attr);
+            attrs.push( Self::parse_doc_attr(&msg) );
         } 
 
-        item_fn.attrs = attrs;
-        item_fn
+        impl_item_fn.attrs = attrs;
+        impl_item_fn
     }
 
-    fn model_part_doc_comment( def: TokenStream, mets: &Vec<(Ident,ItemFn)>,trts: &Vec<(Ident,Item)>) -> Attribute {
+    fn model_part_doc_comment<T: ToTokens>( def: &T, mets: &Vec<(Ident,ImplItemFn)>,trts: &Vec<(Ident,Item)>) -> Attribute {
         let sigs = mets.iter().map(|(_,met)| met.sig.clone()).collect::<Vec<_>>();
 
         let mut msg_mets =  "```rust ignore".to_string(); 
@@ -166,6 +78,57 @@ impl ShowComment {
         msg += LINE_ENDING;
 
         Self::parse_doc_attr(&msg)
+    }
 
+    fn code_format<T: ToTokens>( tokens: &T ) -> String {
+
+        let file = Self::parse_file(tokens);
+        let mut msg_code =  "```rust ignore".to_string();
+        msg_code += LINE_ENDING;            
+        msg_code += &prettyplease::unparse(&file);
+        msg_code += LINE_ENDING; 
+        msg_code += "```";
+        msg_code += LINE_ENDING; 
+        msg_code 
+
+    }
+
+    pub fn parse_item<T: ToTokens>( tokens: &T) -> Item {
+        if let Ok(item) =  parse2::<syn::Item>(quote!{#tokens}){
+            return item;
+        } 
+        abort_call_site!( "Internal Error. 'show::parse_item'. Failed to parse TokenStream to syn::Item.");   
+    }
+
+    pub fn parse_fn<T: ToTokens>( tokens: &T) -> ImplItemFn {
+        if let Ok(item) =  parse2::<ImplItemFn>(quote!{#tokens}){
+            return item;
+        } 
+        abort_call_site!( "Internal Error. 'show::parse_fn'. Failed to parse TokenStream to syn::ItemFn.");   
+    }
+
+    fn parse_file<T: ToTokens>( tokens: &T) -> File { 
+        if let Ok(file) =  parse2::<File>(quote!{#tokens}){
+            return file;
+        } 
+        abort_call_site!( "Internal Error. 'show::parse_file'. Failed to parse TokenStream to syn::File.");
+    }
+    fn parse_doc_attr( msg: &str ) -> Attribute {
+
+        let code = quote!{
+            #[doc = #msg]
+            fn foo (){{}}
+        };
+    
+        if let Ok(item_fn) =  parse2::<syn::ItemFn>(code) {
+            if let Some(attr) = item_fn.attrs.into_iter().next(){ return attr; } 
+        }
+        abort_call_site!("Internal Error.`show::parse_doc_attr`. Could not parse the Attribute.")
+    }
+}
+
+impl Default for ShowComment {
+    fn default() -> ShowComment {
+        Self { show: false } 
     }
 }

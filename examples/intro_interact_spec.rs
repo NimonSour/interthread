@@ -2,7 +2,7 @@
 pub struct MyActor;
 
 // opt `interact`
-#[interthread::actor(channel=2,interact)] 
+#[interthread::actor(show,interact)] 
 impl MyActor {
 
     pub fn new() -> Self { Self{} } 
@@ -19,11 +19,12 @@ impl MyActor {
     }
 }
 
-//  #[interthread::example(main(path="examples/intro_interact_spec.rs"))] 
+//  #[interthread::example(main,path="examples/intro_interact_spec.rs")] 
 fn main () {
 
     let actor = MyActorLive::new();
     
+    // hover over `heavy_work` to see the generated code
     let recv: oneshot::Receiver<u8> = actor.heavy_work(); 
     let int = recv.recv().unwrap();
 

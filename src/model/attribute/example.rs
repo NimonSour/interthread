@@ -1,17 +1,17 @@
 use crate::error;
-use crate::model::argument::Model;
-
-
-use proc_macro2::Span;
-use proc_macro_error::abort;
+use crate::model::Mac;
+use syn::{punctuated::Punctuated,Meta,Token,Ident};
+use std::path::PathBuf;
+// use proc_macro2::Span;
+use proc_macro_error::{abort,abort_call_site};
 
 //-----------------------  EXAMPLE 
 #[derive(Debug, Eq, PartialEq)]
 pub struct ExampleAttributeArguments {
 
-    pub path     : Option<std::path::PathBuf>,
-    pub main     :                       bool,
-    pub expand   :              Vec<Model>,  
+    pub path     : Option<PathBuf>,
+    pub main     :            bool,
+    pub expand   :        Vec<Mac>,  
     /* ADD NEW OPTION */ 
 }
 
@@ -21,7 +21,7 @@ impl Default for ExampleAttributeArguments {
 
         let path  = None ;
         let main             = false;
-        let expand  = vec![Model::Actor, Model::Group];
+        let expand       = vec![Mac::Actor, Mac::Family] ;
         /* ADD NEW OPTION */ 
 
         Self { path, main, expand }
@@ -30,100 +30,62 @@ impl Default for ExampleAttributeArguments {
 
 impl ExampleAttributeArguments {
 
-    pub fn parse(&mut self, meta: syn::meta::ParseNestedMeta) -> Result<(), syn::Error> {
 
-        let mut parse_macro_arguments = |meta: syn::meta::ParseNestedMeta| { 
-            
+    pub fn from( nested: Punctuated::<Meta,Token![,]> ) -> Self 
+    {
+        let mut eaa = ExampleAttributeArguments::default();
+        eaa.parse_nested(&nested);
+        eaa.arguments_cross_check();
+        eaa
+
+    }
+
+    pub fn parse_nested(&mut self, nested: &Punctuated::<Meta,Token![,]>){
+        super::check_path_set(nested,None); 
+
+        for meta in nested.into_iter(){
+
+            //MAIN
+            if meta.path().is_ident("main"){
+                self.main = true;
+            }
             // PATH
-            if meta.path.is_ident("path") {
-
-                let value = meta.value()?.parse::<syn::Lit>()?;
-
-                match value.clone() {
-                    syn::Lit::Str(val) => {
-
-                        // the path needs to be checked first 
-                        let path = std::path::PathBuf::from(val.value());
-
-                        if path.exists() {
-                            self.path = Some(path);
-                            return Ok(());
-                        }
-                        else {
-                            abort!(val, format!("Path - {:?} does not exists.",val.value())); 
-                        } 
-                    },
-                    _ => {
-                        let name = meta.path.get_ident().unwrap();
-                        return Err( meta.error(format!("Expected a  'str'  value for argument '{}'.", name.to_string() )));
-                    },
-                }
+            else if meta.path().is_ident("path") { 
+                self.path = Some(super::meta_get_path(meta));
             }
 
             // EXPAND
-            else if meta.path.is_ident("expand") {
-                self.expand = vec![];
-                return meta.parse_nested_meta(|meta| {
-
-                    if meta.path.is_ident("actor"){
-                        self.expand.push(Model::Actor);
-                        Ok(())
+            else if meta.path().is_ident("expand") {
+                if let Some(meta_list) = super::get_list( meta,None ){
+                    self.expand = vec![];
+                    for ident in super::get_idents(&meta_list){
+                        if let Some(mac) = Self::mac_from_ident(&ident){
+                            self.expand.push(mac);
+                        } else {
+                            abort!(ident,"expected arguments: actor | group | group_actor | family ");
+                        }
                     }
-                    else if meta.path.is_ident("group"){
-                        self.expand.push(Model::Group);
-                        Ok(())
-                    }
-                    else {
-                        let arg  = meta.path.get_ident().unwrap();
-                        let msg  = format!("Unknown 'expand' option  -  {:?} .", arg.to_string());
-                        abort!(arg, msg; help=error::AVAIL_EXPAND);
-                    }
-                });
+                } else {
+                    abort!(meta,error::EXPECT_LIST)
+                }
             }
- 
-            else {
-                error::unknown_attr_arg("example", &meta.path.clone());
-                Ok(())
-            }
-        };
-
-
-        //MAIN
-        if meta.path.is_ident("main"){
-            self.main = true;
-            if let Err(e) = meta.parse_nested_meta(parse_macro_arguments ){
-                return Err(e);
-            }
-            self.arguments_cross_check()
-        }
-
-        //MOD
-        else if meta.path.is_ident("mod") {
-            if let Err(e) = meta.parse_nested_meta(parse_macro_arguments ){
-                return Err(e);
-            }
-            self.arguments_cross_check()
-        }
-
-        // NONE or UNKNOWN
-        else {
-            if let Err(e) = parse_macro_arguments(meta){
-                return Err(e);
-            }
-            self.arguments_cross_check()
         }
     }
 
-    pub fn arguments_cross_check(&self) -> Result<(),syn::Error>{
+    pub fn arguments_cross_check(&self){
 
         if  self.path.is_none() {
-            let msg = "Expected a 'path' argument with a path to a file.  file=\"path/to/file.rs\"";
-            abort!(Span::call_site(), msg )
+            abort_call_site!( "Expected a 'path' argument with a path to a file.  file=\"path/to/file.rs\"" )
         }
-        Ok(())
     }
 
     pub fn get_path(&mut self) -> std::path::PathBuf {
         self.path.clone().unwrap()
+    }
+
+    pub fn mac_from_ident( ident: &Ident ) -> Option<Mac> {
+        if *ident == crate::ACTOR           { Some(Mac::Actor) }
+        else if ident == crate::FAMILY      { Some(Mac::Family) }
+        else { None }
     }
 }

@@ -6,8 +6,8 @@
 fn interact_simple(){
     /*
         Usually we need  "inter_send" and "inter_recv" if we 
-        spawn athread inside the method, but this is not 
-        reason for this test
+        spawn a thread inside the method, but this is not 
+        the reason for this test
     */
 
     pub struct Actor;

@@ -2,11 +2,11 @@ use crate::error;
 
 use proc_macro2::TokenStream;
 use crate::model::{OneshotChannel,to_string_wide};
-use syn::{Type,Ident,Signature,FnArg};
+use syn::{punctuated::Punctuated,Token,Pat,Type,Ident,Signature,FnArg};
 use quote::{quote,format_ident};
 
 use proc_macro_error::abort;
-use proc_macro2::Span;
+
 
 
 
@@ -61,7 +61,7 @@ pub enum InterVar {
 
 
 
-pub fn some_inter_var( org_err: &error::OriginVars, ident_ty:Vec<(&Ident, &Type)>, ret: bool ) -> Option<Vec<InterVar>> {
+pub fn some_inter_var( ident_ty:Vec<(&Ident, &Type)>, ret: bool ) -> Option<Vec<InterVar>> {
 
     let mut inter_vars = Vec::new();
     for (ident,ty) in ident_ty {
@@ -72,26 +72,24 @@ pub fn some_inter_var( org_err: &error::OriginVars, ident_ty:Vec<(&Ident, &Type)
     
             if second.eq("send"){
                 if ret { 
-                    let msg =org_err.origin(error::NOT_ACCESSIBLE_CHANNEL_END);
-                    abort!(Span::call_site(),msg;help=error::INTERACT_VARS_HELP);
+                    abort!(ident,error::NOT_ACCESSIBLE_CHANNEL_END;help=error::INTERACT_VARS_HELP);
                 }
                 // check if is sender and extract the Type it sends 
                 match oneshot_get_type( ty, "Sender"){
                     Ok(new_ty) => { inter_vars.push(InterVar::Oneshot(InterOneshot::Send(new_ty.clone()))) },
-                    Err(e)   => { abort!(Span::call_site(),org_err.origin(e);help=error::INTERACT_VARS_HELP); },
+                    Err(e)   => { abort!(ty,e;help=error::INTERACT_VARS_HELP); },
                 }
             }
     
             else if second.eq("recv"){
     
                 if ret { 
-                    let msg =org_err.origin(error::NOT_ACCESSIBLE_CHANNEL_END);
-                    abort!(Span::call_site(),msg;help=error::INTERACT_VARS_HELP);
+                    abort!(ident,error::NOT_ACCESSIBLE_CHANNEL_END;help=error::INTERACT_VARS_HELP);
                 }
     
                 match oneshot_get_type( ty, "Receiver"){
                     Ok(new_ty) => { inter_vars.push(InterVar::Oneshot(InterOneshot::Recv(new_ty.clone()))) },
-                    Err(e)   => { abort!(Span::call_site(),org_err.origin(e);help=error::INTERACT_VARS_HELP); },
+                    Err(e)   => { abort!(ty,e;help=error::INTERACT_VARS_HELP); },
                 }
             } 
             else { 
@@ -99,8 +97,8 @@ pub fn some_inter_var( org_err: &error::OriginVars, ident_ty:Vec<(&Ident, &Type)
                 inter_vars.push(InterVar::Getter(InterGetter{ name:ident.clone(), _ty:ty.clone(), method_name })) 
             }
         } else { 
-            let msg = org_err.origin("Unexpected usage of `inter variables` mixed identifiers.");
-            abort!(Span::call_site(), msg; note=error::INTER_VARIABLE_SUPPORTED_PATTERN_NOTE);
+            let msg = "Unexpected usage of `inter variables` mixed identifiers.";
+            abort!(ident, msg; note=error::INTER_VARIABLE_SUPPORTED_PATTERN_NOTE);
         }
     }
     Some(inter_vars)
@@ -139,7 +137,7 @@ pub fn oneshot_get_type( ty: &Type, target: &str ) -> Result<Type,String> {
 
 
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub struct InterVars{
 
     pub channel:  Option<InterOneshot>,
@@ -147,12 +145,12 @@ pub struct InterVars{
     pub new_sig:             Signature,
     pub new_args:           Vec<FnArg>,
     pub one:    Option<OneshotChannel>,
-    pub org_err:     error::OriginVars,
 }
 
 impl InterVars {
-    pub fn from( org_err: error::OriginVars, new_sig: Signature, 
-                new_args: Vec<FnArg>, one: Option<OneshotChannel> ) -> Self {
+    pub fn from( new_sig: Signature, 
+                new_args: Vec<FnArg>, 
+                     one: Option<OneshotChannel> ) -> Self {
 
         Self{
             channel: None,
@@ -160,12 +158,15 @@ impl InterVars {
             new_sig,
             new_args,
             one,
-            org_err,
         }
     }
 
-    pub fn some_ret_name(&self) -> Option<Ident> {
-        self.channel.as_ref().map(|x| x.get_invers_name())
+    pub fn some_ret_name(&self) -> Option<TokenStream> {
+        if let Some(inter_one) = self.channel.as_ref(){
+            let channel_ident = inter_one.get_invers_name();
+            return Some(quote!{#channel_ident});
+        }
+        None
     }
 
     pub fn insert(&mut self,  vars: Vec<InterVar>){
@@ -175,8 +176,8 @@ impl InterVars {
                     if self.channel.is_none() { self.channel = Some(ch); }
 
                     else {
-                        let msg = self.org_err.origin(error::CONCURRENT_INTER_SEND_RECV);
-                        abort!(Span::call_site(),msg;help=error::INTERACT_VARS_HELP);
+
+                        abort!(ch.get_type(),error::CONCURRENT_INTER_SEND_RECV;help=error::INTERACT_VARS_HELP);
                     }
                 },
                 InterVar::Getter(gt) => { self.getters.push(gt); },
@@ -186,9 +187,9 @@ impl InterVars {
 
     pub fn check (&self) {
 
-        if let Some(var) = check_send_recv( &self.new_args, None){
-        let msg = self.org_err.origin(format!("Unexpected. `inter variable` - {}, within function parameter pattern. ",var));
-            abort!(Span::call_site(),msg;note=error::INTER_VARIABLE_SUPPORTED_PATTERN_NOTE);
+        if let Some((var, pat)) = check_send_recv( &self.new_args, None){
+            let msg = format!("Unexpected. `inter variable` - {var}, within function parameter pattern. ");
+            abort!(pat,msg;note=error::INTER_VARIABLE_SUPPORTED_PATTERN_NOTE);
         }
     }
 
@@ -217,14 +218,13 @@ impl InterVars {
 }
 
 
-pub fn get_variables( org_err: &error::OriginVars, sig: & Signature, 
-                         args: & Vec<FnArg>, one: Option<&OneshotChannel> ) 
-    -> Option<InterVars> {
+
+pub fn get_variables( sig: &Signature, one: Option<&OneshotChannel> ) -> Option<InterVars> {
     let ret = one.is_none();
     let mut new_args = Vec::new() ;
     let mut inter_vars = Vec::new() ;
 
-    for arg in args {
+    for arg in &sig.inputs {
         if let FnArg::Typed(pat_ty) = arg { 
 
             if let syn::Pat::Ident(pat_ident) = &*pat_ty.pat {
@@ -232,7 +232,7 @@ pub fn get_variables( org_err: &error::OriginVars, sig: & Signature,
                 if ident.to_string().contains("inter_") {
                     let ty = &*pat_ty.ty;
                     if let Some(inter_var) = 
-                        some_inter_var( &org_err,vec![(ident,ty)],ret){
+                        some_inter_var(vec![(ident,ty)],ret){
                         inter_vars.extend(inter_var.into_iter());
                         continue;
                     } 
@@ -248,17 +248,25 @@ pub fn get_variables( org_err: &error::OriginVars, sig: & Signature,
     }
 
     // change signature input
-    let (live_arguments,live_sig) = crate::model::method::live_args_and_sig( &new_args, &sig );
+    let mut sig = sig.clone();
+    sig.inputs = new_args.into_iter().collect::<Punctuated::<FnArg,Token![,]>>();
+    let (live_arguments,live_sig) = crate::model::method::get_live_args_and_sig(&sig );
     
-    let mut vars = InterVars::from(org_err.clone(),live_sig,live_arguments,one.cloned());
+    let mut vars = InterVars::from(live_sig,live_arguments,one.cloned());
+    
     vars.insert(inter_vars);
     vars.check();
+    // just to change the ouput
+    // of method if required
+    let _ = vars.get_getters_decl();
 
     Some(vars)
 }
 
 
-pub fn check_send_recv( args: &Vec<FnArg>, vars: Option<Vec<Ident>> ) -> Option<String> {
+pub fn check_send_recv<'a,I>( args: I, vars: Option<Vec<Ident>> ) -> Option<(String, Pat)> 
+where I: IntoIterator<Item = &'a FnArg>,
+{
 
     let mut words = vec![crate::INTER_SEND.to_string(), crate::INTER_RECV.to_string()];
     
@@ -273,7 +281,7 @@ pub fn check_send_recv( args: &Vec<FnArg>, vars: Option<Vec<Ident>> ) -> Option<
             for word in words.iter(){
 
                 if pat_str.contains(&format!(" {word} ")){
-                    return Some(word.to_string());
+                    return Some((word.to_string(),*arg.pat.clone()));
                 }
             }
         }

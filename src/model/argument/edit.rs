@@ -1,9 +1,8 @@
 
 use crate::model::{ EditAttribute,get_list};
 use crate::error;
-use syn::{punctuated::Punctuated,Ident};
+use syn::punctuated::Punctuated;
 use proc_macro_error::abort;
-use std::collections::BTreeMap;
 
 #[derive(Debug, Eq, PartialEq, Clone)]
 pub struct EditActor {
@@ -26,6 +25,39 @@ impl EditActor {
         if let Some(meta_list) = get_list( meta,Some(error::AVAIL_EDIT) ) { 
             return meta_list; 
         } else { abort!(meta,"Expected a list!"; note=error::NOTE_SPECIAL_FILE_EDIT; help=error::HELP_SPECIAL_FILE_EDIT); }
+    }
+    
+    /// the family `edit`'s will be located in 'live' part of EditActor 
+    /// remove is `false` and could be true if all members of the `family` are `remove`
+    pub fn parse_family(&mut self, meta: &syn::Meta ){ 
+        if let Some(meta_list) = get_list( meta,Some(error::AVAIL_EDIT) ) { 
+            if meta_list.len() == 1 {
+    
+                if let Some(meta_value) = meta_list.first(){
+    
+                    if meta_value.path().is_ident( crate::FILE ){
+    
+                        if let Some(list) = get_list( meta_value,Some(error::AVAIL_EDIT) ) {
+    
+                            for m in list.iter(){
+                                Self::abort_if_is_file(m);
+                                self.parse_sol_nested( m, false, true);
+                            }
+    
+                        } else { 
+                            self.set_live_all();
+                            self.set_live_all_active();
+                        }
+    
+                    } else { self.parse_sol_nested( meta_value, false, false); }
+                } 
+            } else { 
+                self.parse_sol_nested( meta, false, false);
+            }
+        } else {
+            self.set_live_all();
+        }
+
     }
 
     pub fn parse(&mut self,  meta: &syn::Meta ){
@@ -214,7 +246,7 @@ impl EditActor {
     }
 
     pub fn is_any_active(&self) -> bool {
-
+        if self.remove { return true;}
         let any_active = 
         | 
             tuples: &((bool,bool), (Option<Vec<(syn::Ident,bool)>>,bool), (Option<Vec<(syn::Ident,bool)>>,bool) )
@@ -339,99 +371,6 @@ impl Default for EditActor {
         let live   = 
         ((false,false),(None,false),(None,false));
         Self { attr,remove: false, script, live }
-    } 
-}
-
-
-
-
-
-#[derive(Debug, Eq, PartialEq, Clone)]
-pub struct EditGroup {
-    pub attr:      Option<EditAttribute>,
-    pub remove:                     bool,
-    pub edits: Option<BTreeMap<Ident,EditActor>>, 
-}
-
-impl EditGroup {
-
-    pub fn parse(&mut self, meta: &syn::Meta ) {
-
-
-        if let Some(meta_list) = get_list( meta,Some(error::AVAIL_EDIT_GROUP) ) {
-            
-            if meta_list.len() == 1 { 
-                if let Some(meta_value) = meta_list.first(){
-
-                    // check for `file`
-                    if meta_value.path().is_ident(crate::FILE){ 
-                        if let Some(_) = get_list( meta_value,Some(error::AVAIL_EDIT_GROUP) ) {
-                            // if is a list raise an error
-                            abort!(meta_value,error::EDIT_GROUP_FILE_OUTSIDE;note=error::AVAIL_EDIT_GROUP);
-                        } else {
-
-                            self.edits = Some(BTreeMap::new());
-                            self.remove = true;
-                        }
-                    } else {
-                        /* check if is valid, parse  */
-                        self.parse_meta(meta_value);
-                    }
-
-                } else { abort!(proc_macro2::Span::call_site(), " Internal Error. 'model::edit::EditGroup::parse' Failed to get 'meta_value'.")}
-
-            } else {
-                // check for ..::edit
-                crate::model::check_path_set(&meta_list);
-                for m in meta_list.iter() {
-                    if m.path().is_ident(crate::FILE){ 
-                        abort!(m,error::EDIT_GROUP_FILE_OUTSIDE;note=error::AVAIL_EDIT_GROUP);
-                    } else {
-                        self.parse_meta(m);
-                    }
-                }
-            }
-
-        } else { self.edits = Some(BTreeMap::new()); }
-
-    }
-
-
-    pub fn parse_meta(&mut self, meta: &syn::Meta ){
-
-        let ident = crate::model::get_ident_group(&meta,"edit");
-        let mut new_edit = EditActor::default();
-        new_edit.parse(meta);
-        if self.edits.is_some() {
-            self.edits.as_mut().map(|x| x.insert(ident,new_edit));
-        } else { 
-            self.edits = Some(BTreeMap::from([(ident,new_edit)]));
-        }
-    } 
-
-    pub fn is_any_active(&self) -> bool {
-        let mut bol = false;
-        self.edits
-            .as_ref()
-            .map(|v| {
-                bol = v.iter()
-                       .any(|e| e.1.is_any_active() == true );
-                }
-            );
-        bol
-    }
-
-
-}
-
-impl Default for EditGroup {
-
-    fn default() -> Self {
-
-        let attr = None;
-        let edits = None;
-        let remove = false;
-        Self { attr,remove, edits}
     } 
 }
 

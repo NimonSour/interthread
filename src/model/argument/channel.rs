@@ -1,11 +1,11 @@
-use crate::model::{ Lib,Vars,ActorAttributeArguments};
+use crate::model::{ Lib,ConstVars,ActorAttributeArguments};
 
 use syn::{ Ident,Type };
 use quote::quote;
 use proc_macro2::TokenStream;
 
 
-#[derive(Clone)]
+#[derive(Debug,Clone)]
 pub struct OneshotChannel {
 
     send: Ident,
@@ -78,13 +78,12 @@ impl OneshotChannel {
     //     quote!{ #send .send( #load ).unwrap_or_else(|_error| core::panic!( #error )) }
     // }
 }
-
+#[derive(Clone)]
 pub struct MpscChannel {
     pub type_sender:       TokenStream,    
     pub type_receiver:     TokenStream,     
     pub pat_type_sender:   TokenStream,    
-    pub pat_type_receiver: TokenStream,
-    pub declaration_call:  TokenStream,    
+    pub pat_type_receiver: TokenStream,   
     pub declaration:       TokenStream,    
     pub sender_call:       TokenStream,    
 }
@@ -92,18 +91,10 @@ pub struct MpscChannel {
 impl MpscChannel {
 
     pub fn new(
-            Vars{
-                sender,
-              receiver,
-             live_name,
-                   msg,..
-            } : &Vars,
-            ActorAttributeArguments{
-                channel,
-                lib,..
-            } : &ActorAttributeArguments,
- 
-           script_type: &Type ) -> Self {
+            ConstVars{ sender,receiver,msg,..} : &ConstVars,
+            ActorAttributeArguments{ channel, lib,..} : &ActorAttributeArguments,
+            script_type: &Type,
+            live_name: &Ident ) -> Self {
 
         let error = format!("'{live_name}::method.send'. Channel is closed!");
         let type_sender:       TokenStream;    
@@ -207,7 +198,6 @@ impl MpscChannel {
             type_receiver,
             pat_type_sender,
             pat_type_receiver,
-            declaration_call,
             declaration,  
             sender_call, 
         }

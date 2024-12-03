@@ -3,7 +3,7 @@ pub struct MyActor {
     value: i8,
 }
 
-#[interthread::actor] // <-  this is it 
+#[interthread::actor(show)] // <-  this is it 
 impl MyActor {
 
     pub fn new( v: i8 ) -> Self {
@@ -25,7 +25,7 @@ impl MyActor {
 //  uncomment to see the generated code
 //  #[interthread::example(path="src/main.rs")] 
 //   in examples 
-//  #[interthread::example(main(path="examples/intro_std.rs"))] 
+//  #[interthread::example(main,path="examples/intro_std.rs")] 
  
 fn main() {
 

@@ -3,7 +3,7 @@
 pub struct MyActor(String);
 
 // opt `interact`
-#[interthread::actor(channel=2, debut, interact)] 
+#[interthread::actor(show, debut, interact)] 
 impl MyActor {
 
     pub fn new() -> Self { Self("".to_string()) } 
@@ -19,7 +19,7 @@ impl MyActor {
     }
 }
 
-//  #[interthread::example(main(path="examples/intro_interact.rs"))] 
+//  #[interthread::example(main,path="examples/intro_interact.rs")] 
 fn main () {
 
     let mut actor = MyActorLive::new();

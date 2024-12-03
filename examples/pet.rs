@@ -25,7 +25,7 @@ pub enum Pet {
     Cat(Cat),
 }
 
-#[interthread::actor(channel=2)]
+#[interthread::actor]
 impl Pet {
 
     pub fn new( pet: Self) -> Self {

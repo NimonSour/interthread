@@ -1,15 +1,13 @@
-// use crate::name;
-use crate::model::{Debut,ActorMethod};
 
+use crate::model::{method::ModelMethod, method::ModelOutput};
 use quote::{quote,ToTokens};
-use syn::{Type,Path,Ident,Signature};
+use syn::{Path,Signature};
 use proc_macro_error::abort;
 use proc_macro2::TokenStream;
-use proc_macro::Span;
 
 
 pub fn met_new_note_help<T: ToTokens>(name: &T) -> (String,String) {
-    let name = quote!{#name}.to_string();
+    let name = quote!{#name}.to_string().replace(" ","");
 
     let note = format!(
         "The object {name:?} must implement a public or restricted method named 'new' \
@@ -21,7 +19,7 @@ pub fn met_new_note_help<T: ToTokens>(name: &T) -> (String,String) {
     );
 
     let help = format!("
-    The flowing are possible method signatures:
+    the following are possible method signatures:
     
     - returning Type
     
@@ -49,7 +47,7 @@ pub fn met_new_note_help<T: ToTokens>(name: &T) -> (String,String) {
 }
 
 
-pub fn met_new_found<T: ToTokens>(sig: &Signature, name: &T, bit: TokenStream, res_opt: Option<bool>) -> (String,String,String){
+pub fn met_new_found<T: ToTokens>(sig: &Signature, name: &T, bit: TokenStream, res_opt: ModelOutput) -> (String,String,String){
     let sig_name      = sig.ident.to_string();
     let act_name      = quote!{ #name }.to_string();
     let mut bit_str   = bit.to_string();
@@ -70,7 +68,7 @@ pub fn met_new_found<T: ToTokens>(sig: &Signature, name: &T, bit: TokenStream, r
     }
     else {
         //result 
-        if res_opt.unwrap(){
+        if res_opt.is_result(){
             format!("'{act_name}::{sig_name}' expected to return \
             'Self' or '{act_name}' wrapped in a 'Result' type. \nFound: {bit_str:?} .")
         }
@@ -86,14 +84,14 @@ pub fn met_new_found<T: ToTokens>(sig: &Signature, name: &T, bit: TokenStream, r
     (msg,note,help)
 }
 
-pub fn met_new_not_instance<T: ToTokens>(sig: &Signature, name: &T, bit: TokenStream, res_opt: Option<bool>) -> (String,String,String){
+pub fn met_new_not_instance<T: ToTokens>(sig: &Signature, name: &T, bit: TokenStream, res_opt: ModelOutput) -> (String,String,String){
     let sig_name = sig.ident.to_string();
     let act_name = quote!{#name}.to_string();
     let bit_str  = bit.to_string();
     
     let msg = {
         //result 
-        if res_opt.unwrap(){
+        if res_opt.is_result(){
             format!("'{act_name}::{sig_name}' expected to return \
             Result<'{act_name}'>. \nFound: {bit_str:?} .")
         }
@@ -108,13 +106,9 @@ pub fn met_new_not_instance<T: ToTokens>(sig: &Signature, name: &T, bit: TokenSt
     (msg,note,help)
 } 
 
-pub fn abort_async_no_lib(name: &Ident, met: &ActorMethod){
-
-    let (sig,_ ) = met.get_sig_and_field_name();
-    let sig = quote!{#sig}.to_string();
-    let msg = format!("Actor {name} has 'async' methods but the runtime (lib) is not specified. \
-    Method signature - '{sig}'.");
-    abort!( Span::call_site(), msg; help=crate::error::AVAIL_LIB );
+pub fn abort_async_no_lib(met: &ModelMethod){
+    let msg = format!("'async' methods present but the runtime (lib) is not specified.");
+    abort!( &met.get_met().sig.asyncness, msg; help=crate::error::AVAIL_LIB );
 }
 
 
@@ -129,7 +123,7 @@ pub fn unknown_attr_arg( aa: &str, path: &Path ){
         val if val == "expand"  => abort!(path, msg ;help = AVAIL_EXPAND ),
         val if val == "example" => abort!(path, msg ;help = AVAIL_EXAMPLE),
         val if val == "edit"    => abort!(path, msg ;help = AVAIL_EDIT   ),
-        val if val == "group"   => abort!(path, msg ;help = AVAIL_GROUP  ),
+        val if val == "family"  => abort!(path, msg ;help = AVAIL_FAMILY ),
 
         _ => (),
     }
@@ -145,13 +139,12 @@ pub static AVAIL_EXAMPLE: &'static str = "
 
 #[interthread::example( 
    
-    mod *
-    main 
-
     (   
+        main
+
         path = \"path/to/file.rs\" 
 
-        expand(actor,group) *
+        expand(actor,family) *
     )
 )]
 
@@ -165,13 +158,13 @@ Argument 'expand' takes a tuple of ident options.
 Available ident options are: 
 
                         actor 
-                        group 
+                        family 
 
 Examples of expected usage:
 
     expand(actor), 
-    expand(group), 
-*   expand(actor,group) 
+    expand(family), 
+*   expand(actor,family) 
 
 
 * - default 
@@ -217,65 +210,21 @@ the macro interprets it as a request to include all method/trait names.
 a statement just `edit` implies `edit(live,script)` !
 ";
 
-
-pub static AVAIL_EDIT_GROUP: &'static str = "
-
-The 'edit' option for `group` accepts a list of `actor` edits, \
-prefixed with the field's name, like 'field_name::edit(..)'.\
-Special case being `self::edit` referring to itself.
-
-
-For instance, given a struct `AB`:
-
-struct AB {
-    pub a: Type,
-    pub b: Type,
-}
-
-impl AB {
-    pub fn new() -> Self {
-        // Implementation
-    }
-}
-
-To edit the model parts include in the 'edit' list:
-
-edit(
-    a::edit(..),
-    b::edit(..), 
-    self::edit( live(imp(new)) )
-)
-
-Special case: `edit(file)` is similar to \
-`edit(a::edit(file), b::edit(file), self::edit(file))`, \
-but the former entirely writes to the file and excludes the macro,\
-while the latter only writes to the file, persisting in the form of \
-`edit(a::edit, b::edit, self::edit)`.
-
-
-";
-
 pub static AVAIL_DEBUT: &'static str = "
 \navailable 'debut' options:
-    debut
-        (
-         legend
-        )
-    
-    When using the `legend` option, the model is stored on the heap and \
-    saved upon the last instance being dropped.
+    `debut`
 ";
 
 pub static AVAIL_ACTOR: &'static str = "
 #[interthread::actor( 
     
-    channel = 0 * 
-              n (usize)
+     channel = 0 * 
+               n (usize)
 
-        lib = \"std\" *
-              \"smol\"
-              \"tokio\"
-              \"async_std\"
+         lib = \"std\" *
+               \"smol\"
+               \"tokio\"
+               \"async_std\"
 
         edit( 
              script(..)
@@ -286,102 +235,17 @@ pub static AVAIL_ACTOR: &'static str = "
         
         name = \"\" 
 
-       show
+        show
 
-       include|exclude 
+     include|exclude 
         
-       debut(
-             legend
-            ) 
+       debut
+
     interact
 )]
 
 *  -  default 
 ";
-
-
-pub static AVAIL_GROUP: &'static str = "
-
-#[interthread::group( 
-    
-AA  channel = 0 * 
-              n (usize)
-
-AA      lib = \"std\" *
-              \"smol\"
-              \"tokio\"
-              \"async_std\"
-
-AA     file = \"path/to/current/file.rs\"
-
-AA     debut(
-             legend
-            )   
-
-(AA)   show(
-             self::show,
-             ..
-            )
-
-(AA) include(
-            self::include(
-                          method_name,
-                          ..
-                         ),
-            ..
-            )
-
-(AA) exclude(
-            self::exclude(
-                          method_name,
-                          ..
-                         ),
-            ..
-            )            
-
-(AA)    edit( 
-             self::edit(
-                       script(..)
-                       live(..)
-                       ),
-             ..
-            ) 
-
-(AA)    name(
-             self::name = \"\",
-             ..
-            )
-
-(AA)    path(
-             a::path = \"path/to/type.rs\",
-             ..
-            )       
-    )
-]
-
-  *     -  default 
-  AA    -  similar to `actor` attribute argument.
- (AA)   -  a list of similar to `actor` attribute arguments.
-
- `self` - When specifying arguments for `(AA)`, remember \
- to prefix them with the corresponding field name to indicate \
- which member of the `group` they refer to. If the argument 
- pertains to the `group` struct itself, use the conventional `self` notation.
-
-
-For instance, given a struct 'Group':
-
-struct Group {
-    pub a: Type,
-    pub b: Type,
-}
-
-`edit( b::edit(script) )` - edit the `script` part of the field `b` model.
-
-`path( a::path= \"path/to/type.rs\" )` - provide the path to field `a` Type definition.
-
-";
-
 
 
 pub static HELP_EDIT_FILE_ACTOR: &'static str = "
@@ -422,10 +286,7 @@ but the former entirely writes to the file and excludes the macro,\
 while the latter only writes to the file, persisting in the form of \
 `edit(script, live)`.
 ";
-pub static EDIT_GROUP_FILE_OUTSIDE: &'static str ="
-The 'file' option must be used within the context of a 'field_name::edit' argument or 
-special case `edit(file)`.
-";
+
 
 pub static EXPECT_LIST: &'static str = "Expected a list!";
 pub static EXPECT_IDENT: &'static str = "Expected an identifier. Please pass only a single identifier without any namespace or path.";
@@ -444,50 +305,11 @@ generated code. However, in explicit notation like \
 file as `edit(script, live)`, despite that the whole model \
 is written to the file.";
 
-pub static ABOUT_SKIP: &'static str  =
-"The `group` macro automatically considers any non-private field as a \
-member of the group. The `skip` option is used to provide a list of \
-non-private fields to be excluded from `group` membership.";
-
-pub static SKIP_PRIVATE_FIELD_ERROR: &'static str  =
-"Use of private field. Ensure only non-private fields are included in the `skip` list.";
-
-pub static TUPLE_STRUCT_NOT_ALLOWED: &'static str  =
-"The `group` macro cannot be applied to a tuple struct. Please use it with a regular struct instead.";
-
-pub static GROUP_FIELD_TYPE: &'static str =
-"The non-private fields in the `group` struct must be paths or identifiers representing potential valid 'actor' types.";
 
 pub static REQ_FILE: &'static str  =
 r#"Expected a 'file' argument `file = "path/to/current/file.rs"`."#;
 
-// Mismatched impl block
-pub static MISMATCHED_IMPL_BLOCK: &'static str = "
-Mismatched impl block detected!
 
-Possible causes:
-
-    1) The 'file' parameter points to a different file with \
-a similar or identical struct name.
-    2) The macro may not be applied to the first impl block \
-of the associated struct.
-";
-
-pub static HELP_TYPE_NAMING_CONFLICT: &'static str ="
-    The model relies on a specific naming convention critical \
-for generating accurate type names. However, it encounters \
-issues in some cases:
-
-    `foo_bar`   -> FooBar
-    `_foo_bar`  -> FooBar
-    `foo_bar_`  -> FooBar
-    `_foo_bar_` -> FooBar
-
-    Please ensure that the provided names adhere to the \
-Rust camel case convention and differ by at least one character \
-to avoid naming conflicts. This will allow the model to function \
-correctly and generate accurate type names.
-";
 
 pub static FILTER_CONURENT_USE_OF_OPTIONS: &'static str = "Unexpected. Concurrent use of 'include' and 'exclude' options.";
 
@@ -513,59 +335,13 @@ The model will accept the following patterns in method parameters:
 pub static INTER_VARIABLE_SUPPORTED_PATTERN_NOTE: &'static str ="
 The ONLY pattern supported for `inter variable` is 'ident' (a variable name 'foo : Type')!";
 
-pub fn expected_path_ident(s: &str ) -> String {
-   format!("Expected a path, `field`::{s} .")
-}
-
-pub fn type_naming_conflict(a: &Ident, b: &Ident )-> String {
-    let ty_name = crate::model::name::script_field(a);
-    format!("Naming conflict detected. Conflicting \
-type names from the provided field names. Both`{a}` and `{b}` result \
-in {ty_name} .")
-}
-
 pub fn double_decl(s: &str) -> String {
     format!("Double declaration of `{s}` option.")
-}
-
-pub fn end_of_life( name: &syn::Ident, debut: &Debut ) -> TokenStream {
-    if debut.active(){
-        let msg = if debut.is_legend(){
-            format!("{name} [ {{:?}} ] to be continued ...")
-        } else { format!("{name} [ {{:?}} ] the end ...")};
-        quote!{ eprintln!(#msg,debut); }
-    } else { 
-        let msg = format!("{name} the end ...");
-        quote!{ eprintln!(#msg); }
-    }
 }
 
 pub fn direct_send(script_name: &syn::Ident, variant: &syn::Ident) -> TokenStream {
     let msg = format!("'{script_name}::{variant}.direct'. Sending on a closed channel.");
     quote!{.unwrap_or_else(|_error| core::panic!( #msg ))}
-
-}
-
-use std::path::PathBuf;
-#[derive(Clone,Debug)]
-pub struct OriginVars{
-    pub path: Option<PathBuf>,
-    pub actor_type: Type, 
-    pub sig: Signature,
-}
-
-impl OriginVars {
-    pub fn origin<T: ToString>(&self,e: T ) -> String {
-        let e = e.to_string();
-        let Self{ path,actor_type,sig} = self;
-        let actor_name = quote!{#actor_type}.to_string();
-        let path =  
-        if let Some(p) = path{
-            format!("Path : `{}` \n", p.to_string_lossy())
-        } else { "".to_string() };
-        let sig       = quote!(#sig).to_string();
-        format!("{path}Object : `{actor_name}`\nMethod : `{sig}`\n\n{e} ") 
-    }
 }
 
 pub static INTERACT_VARS_HELP: &str = "
@@ -600,3 +376,57 @@ where
     {} name.", var.to_string(),part.to_string())
 } 
 
+
+pub static AVAIL_FAMILY: &'static str = "
+#[interthread::family( 
+    
+  ~ channel = 0 * 
+              n (usize)
+
+        lib = \"std\" *
+              \"tokio\"
+              \"async_std\"
+
+        edit( 
+             live(..)
+            ) 
+
+        Mutex | RwLock *
+               
+        file = \"path/to/current/file.rs\"
+        
+        name = \"\" 
+
+        show
+
+        debut
+
+        actor(  
+                first_name = \"\" 
+
+                edit( 
+                    script(..)
+                    live(..)
+                    ) 
+
+                include|exclude 
+
+                show
+
+                interact
+
+                channel ~
+            )
+
+)]
+
+~  -  override 
+*  -  default 
+";
+
+
+pub static NOT_ALLOW_FAMILY_DIRECT_MUT_REF: &'static str = 
+"Mutable references (`mut`) are not allowed. 
+To use this method with the current signature, rename the receiver from `actor` to another name.";
+
+pub static NOT_ALLOW_FAMILY_IN_SMOL: &'static str = "The 'family' macro is only supported for the following runtimes: 'std' (standard), 'tokio' and 'async_std'.";

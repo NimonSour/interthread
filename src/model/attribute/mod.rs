@@ -1,88 +1,16 @@
 pub mod actor;
-pub mod group;
 pub mod example;
 
+
 pub use actor::*;
-pub use group::*;
 pub use example::*; 
 
 use crate::error;
-use crate::model::{generate_model, Lib, Model};
 
-use syn::{ punctuated::Punctuated,ItemImpl,Meta,Token,Attribute };
-use proc_macro2::TokenStream;
+use syn::{parse_quote, punctuated::Punctuated,Meta,Token,Attribute,Path};
 use proc_macro_error::abort;
-use quote::quote;
+use quote::{format_ident,quote};
 
-
-pub enum AttributeArguments {
-    Actor(ActorAttributeArguments),
-    Group(GroupAttributeArguments),
-}
-
-impl AttributeArguments {
-
-    pub fn from(    nested: Punctuated::<syn::Meta,syn::Token![,]>,
-                       mac: &Model ) -> Self {
-
-        match mac {
-            Model::Actor => { 
-                let mut aaa = ActorAttributeArguments::default();
-                aaa.parse_nested(nested);
-                Self::Actor(aaa)
-            },
-            Model::Group => { 
-                let mut gaa = GroupAttributeArguments::default();
-                gaa.parse_nested(nested);
-                Self::Group(gaa)
-            },
-        }
-    }
-
-    pub fn get_lib(&self) -> Lib {
-
-        match self {
-            Self::Actor(aaa) => aaa.lib.clone(),
-            Self::Group(gaa) => gaa.lib.clone(),
-        }
-    }
-
-    pub fn get_mac(&self) -> Model {
-        match &self {
-            Self::Actor(_) => Model::Actor,
-            Self::Group(_) => Model::Group,
-        }
-    }
-
-    pub fn cross_check(&mut self, item_impl: &ItemImpl){
-
-        match self {
-            Self::Actor(aaa) => { aaa.cross_check(); },
-            Self::Group(gaa) => { gaa.cross_check(item_impl); },
-        }
-    }
-
-    fn remove_show_option(&mut self) {
-
-        match self {
-            Self::Actor(aaa) => { aaa.show = false;},
-            Self::Group(gaa) => { gaa.show = None; },
-        }
-    }
-
-    pub fn generate_code( mut self, item_impl: &ItemImpl)  -> (TokenStream,TokenStream){
-        self.remove_show_option();
-        let model_sdpl = generate_model(self, item_impl, None );
-        let (mut code,edit) = model_sdpl.get_code_edit();
-
-        code = quote!{
-    
-            #item_impl
-            #code
-        };
-        (code,edit)
-    }
-}
 
 pub fn to_usize(value: &syn::LitInt) -> usize {
         
@@ -148,7 +76,7 @@ pub fn attr_to_meta_list( attr: &Attribute) -> Punctuated::<Meta,Token![,]> {
         match attr.parse_args_with(Punctuated::<Meta,Token![,]>::parse_terminated){
             Ok(p) => p,
             Err(e) => {
-                let msg = format!("Internal Error.'attribute::mod::attr_to_meta'. Failed to parse Attribute to Punctuated. Error {}",e.to_string());
+                let msg = format!("Internal Error|`attribute::mod::attr_to_meta`|: Failed to parse Attribute to Punctuated. Error {}",e.to_string());
                 abort!(attr,msg);
             }
         }
@@ -168,18 +96,30 @@ pub fn get_idents( nested: &Punctuated::<Meta,Token![,]> ) -> Vec<syn::Ident> {
     }).collect::<Vec<_>>()
 }
 
-pub fn check_path_set( nested: &Punctuated::<Meta,Token![,]> ){
+pub fn check_path_set<'a,I>( nested: I , except: Option<Vec<&'static str>> )
+where I: IntoIterator<Item = &'a Meta>,
+{
 
-    if nested.len() > 1 { 
+    let except =  
+        except.as_ref()
+            .map(|xx|
+            xx.iter()
+                .map(|x| format_ident!("{x}"))
+                .map(|i| parse_quote!(#i))
+                .collect::<Vec<Path>>()
+            );
 
-        let mut meta_list = nested.iter().cloned().collect::<Vec<_>>();
-        
+    let mut meta_list = nested.into_iter().cloned().collect::<Vec<_>>();
+    if meta_list.len() > 1 { 
         for _ in 0..(meta_list.len() -1) {
 
             if let Some(meta) = meta_list.pop(){
                 let path = meta.path();
                 if meta_list.iter().any(|x| path.eq(x.path())){
-                    let s = quote::quote!(#path).to_string();
+                    if let Some(except) = &except {
+                        if except.contains(&path) { continue; }
+                    }
+                    let s = quote!(#path).to_string();
                     abort!(meta, error::double_decl( &s.replace(" ","")));
                 }
             }
@@ -187,25 +127,10 @@ pub fn check_path_set( nested: &Punctuated::<Meta,Token![,]> ){
     }
 }
 
-pub fn get_ident_group( meta: &Meta,arg: &str) -> syn::Ident {
-    let edit_ident = quote::format_ident!("{arg}");
-    let self_ident = quote::format_ident!("Self");
-    let path = meta.path();
-    if path.segments.len() == 2 { 
-        if let Some(first_path_segment) =  path.segments.last(){
-            if first_path_segment.ident.eq(&edit_ident){
-                if let Some(last_path_segment) =  path.segments.first(){
-                    let ident =  last_path_segment.ident.clone();
-                    if ident.eq(&self_ident){
-                        let msg = format!("Expected path - `self::{arg}`.");
-                        abort!(meta.path(),msg);
-                    } else { return ident;}
-                }
-            }
-        }
-    } 
-    let msg = "Unexpected group option path!";
-    let note = "Expected a path containing < 'field_name' :: 'option' > .";
-    abort!(path, msg; note=note );
+pub fn meta_get_path( meta: &Meta ) -> std::path::PathBuf {
+    let file_str = get_lit_str(&meta,crate::FILE);
+    let path = std::path::PathBuf::from(&file_str);
+    if path.exists() { path }
+    else { abort!(meta, format!("Path - {file_str:?} does not exist.")); }
 }
 

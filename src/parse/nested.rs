@@ -1,7 +1,9 @@
 use std::ops::Range;
 
-use proc_macro_error::abort;
-use proc_macro2::Span;
+use proc_macro_error::abort_call_site;
+use syn::Attribute;
+use quote::quote;
+use super::ActiveTextParser;
 
 
 
@@ -131,7 +133,7 @@ pub fn get_option(attr_str: &str, v: &Vec<NestedArgument>, option: &str) -> Nest
         v[pos].clone()
     } else { 
         let msg = format!("Internal Error.`parse::nested::get_edit`. Argument '{}' not found.", option);
-        abort!(Span::call_site(),msg);
+        abort_call_site!(msg);
     }
 }
 
@@ -175,55 +177,26 @@ pub fn file_in_edit(
         files.iter().flat_map(|f| get_range( attr_str, &f )).collect::<Vec<_>>()
 
     } else {
-        let msg = "Internal Error.`parse::nested::file_in_edit`. Expected  some `close` value.";
-        abort!(Span::call_site(),msg);
+        abort_call_site!( "Internal Error.`parse::nested::file_in_edit`. Expected  some `close` value." );
     }
 }
 
-
-pub fn file_in_edit_ident(
+pub fn file_in_edit_family(
     attr_str: &str, 
-    nest_args: &Vec<NestedArgument>,
-    idents: &Option<Vec<syn::Ident>>) -> Vec<(usize, Range<usize>)> {
-
-    //find edit
-    let arg_edit = get_option(attr_str,nest_args,crate::EDIT);
+    nest_args: &Vec<NestedArgument> ) -> Vec<(usize, Range<usize>)> {
 
     let mut ranges = Vec::new();
-    let start = arg_edit.start;
-    if let Some(end) = arg_edit.close {
-        if let Some(idents) =  idents {
-            let mut arg_ident_edit = None;
-            for ident in idents {
-                let name_edit = format!("{}::edit",ident.to_string());
-                for arg in nest_args {
-                    if start < arg.start &&  end > arg.end { 
-                        if arg.is_list(){ 
-                            if arg.get_name(attr_str).eq(&name_edit){
-                                arg_ident_edit = Some(arg.clone());
-                                break;
-                            }
-                        } 
-                    }
-                }
-                if let Some(arg) = arg_ident_edit {
-                    ranges.extend(file_in_edit(attr_str,nest_args,Some(arg)));
-                }
-                arg_ident_edit = None;
-            }
 
-        } else { ranges = file_in_edit(attr_str,nest_args,None); }
+    for arg in nest_args {
 
-        ranges.sort_by(|a,b| a.0.cmp(&b.0));
-
-        ranges
-    } else {
-        let msg = "Internal Error.`parse::nested::file_in_edit`. Expected  some `close` value.";
-        abort!(Span::call_site(),msg);
+        if arg.is_list() && arg.get_name(attr_str)== "edit" && arg.depth < 3{
+            ranges.extend(file_in_edit(attr_str,nest_args,Some(arg.clone())));
+        }
     }
+
+    ranges.sort_by(|a,b| a.0.cmp(&b.0));
+    ranges
 }
-
-
 
 pub fn get_range( attr_str: &str, n: &NestedArgument) 
     -> Vec<(usize,std::ops::Range<usize>)>{
@@ -246,7 +219,7 @@ pub fn get_range( attr_str: &str, n: &NestedArgument)
 
             } else { msg = "Internal Error.`parse::nested::get_range`. Expected  some `close` value.";}
         } else { msg = "Internal Error.`parse::nested::get_range`. Expected some `open` value.";}
-        abort!(Span::call_site(),msg);
+        abort_call_site!(msg);
 
     // to be removed 
     } else {
@@ -259,14 +232,23 @@ pub fn get_range( attr_str: &str, n: &NestedArgument)
     }
 }
 
-pub fn edit_remove_active_file_args(actv_attr_str: &str, attr_str: &str, idents: &Option<Vec<syn::Ident>>) -> String {
+pub fn edit_remove_active_file_args(actv_attr_str: &str, attr_str: &str) -> String {
     
     let mut new_attr_str = attr_str.to_string();
     let args = parse_args(actv_attr_str);
-    let ranges =  file_in_edit_ident(actv_attr_str,&args,idents);
+    let ranges =  file_in_edit_family(actv_attr_str,&args);
     for (_,range) in ranges.into_iter().rev(){
         new_attr_str.replace_range(range, "");
     }
     new_attr_str
 
+}
+
+pub fn is_active( attr : &Attribute ) -> bool {
+    let mut atp = ActiveTextParser::new(0);
+    let attr_str = quote!{ #attr }.to_string();
+    let ( _,actv_attr_str) = atp.parse((0,attr_str));
+    let args = parse_args(&actv_attr_str);
+    let ranges =  file_in_edit_family(&actv_attr_str,&args);
+    !ranges.is_empty()
 }

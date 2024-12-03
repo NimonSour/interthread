@@ -16,18 +16,18 @@ impl MyActor {
         self.value
     }
 }
-pub enum MyActorScript {
+enum MyActorScript {
     Increment {},
     AddNumber { num: i8, inter_send: oneshot::Sender<i8> },
     GetValue { inter_send: oneshot::Sender<i8> },
 }
 impl MyActorScript {
-    pub fn direct(self, actor: &mut MyActor) {
+    fn direct(self, actor: &mut MyActor) {
         match self {
-            MyActorScript::Increment {} => {
+            Self::Increment {} => {
                 actor.increment();
             }
-            MyActorScript::AddNumber { num, inter_send } => {
+            Self::AddNumber { num, inter_send } => {
                 inter_send
                     .send(actor.add_number(num))
                     .unwrap_or_else(|_error| {
@@ -36,7 +36,7 @@ impl MyActorScript {
                         )
                     });
             }
-            MyActorScript::GetValue { inter_send } => {
+            Self::GetValue { inter_send } => {
                 inter_send
                     .send(actor.get_value())
                     .unwrap_or_else(|_error| {
@@ -47,19 +47,9 @@ impl MyActorScript {
             }
         }
     }
-    pub fn play(receiver: std::sync::mpsc::Receiver<MyActorScript>, mut actor: MyActor) {
-        while let std::result::Result::Ok(msg) = receiver.recv() {
+    fn play(receiver: std::sync::mpsc::Receiver<MyActorScript>, mut actor: MyActor) {
+        while let ::std::result::Result::Ok(msg) = receiver.recv() {
             msg.direct(&mut actor);
-        }
-        eprintln!("MyActor the end ...");
-    }
-}
-impl std::fmt::Debug for MyActorScript {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            MyActorScript::Increment { .. } => write!(f, "MyActorScript::Increment"),
-            MyActorScript::AddNumber { .. } => write!(f, "MyActorScript::AddNumber"),
-            MyActorScript::GetValue { .. } => write!(f, "MyActorScript::GetValue"),
         }
     }
 }
@@ -94,7 +84,9 @@ impl MyActorLive {
         inter_recv
             .recv()
             .unwrap_or_else(|_error| {
-                core::panic!("'MyActor::add_number' from inter_recv. Channel is closed!")
+                core::panic!(
+                    "'MyActorLive::add_number' from inter_recv. Channel is closed!"
+                )
             })
     }
     pub fn get_value(&self) -> i8 {
@@ -109,8 +101,9 @@ impl MyActorLive {
         inter_recv
             .recv()
             .unwrap_or_else(|_error| {
-                core::panic!("'MyActor::get_value' from inter_recv. Channel is closed!")
+                core::panic!(
+                    "'MyActorLive::get_value' from inter_recv. Channel is closed!"
+                )
             })
     }
 }
-
