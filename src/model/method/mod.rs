@@ -50,7 +50,7 @@ impl ModelPhantomData {
             }
     
             slf.phantom_fields = quote!{ #(#pats),*,};
-            slf.phantom_invoks = quote!{ #(#invoks);*;};
+            slf.phantom_invoks = quote!{ #(#invoks;)*};
             slf.phantom_init_vars = quote!{ #(#vars),*,}; 
         }
         slf

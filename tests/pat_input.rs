@@ -157,6 +157,7 @@ fn actor_async_std_bounded_gen() {
 //STD
 #[test]
 fn actor_sync_bounded_rest() {
+    #[allow(dead_code)]
     struct MyTupleStruct(i8,i8,i8);
     struct MyStruct{a:i8,_b:i8,c:i8}
 

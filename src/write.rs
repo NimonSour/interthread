@@ -17,14 +17,14 @@ pub fn get_text (path: &PathBuf) -> io::Result<String>{
 
 fn example_remove( path: &PathBuf) -> Result<(),String>{
     if let Err(_) = std::fs::remove_dir_all(path){
-        format!("Internal Error.'write::example_remove'. Failed to remove directory - {:?}!", path); 
+        return Err(format!("Internal Error.'write::example_remove'. Failed to remove directory - {:?}!", path)); 
     }
     Ok(())
 }
 
 fn example_create( path: &PathBuf) -> Result<(),String>{
     if let Err(_) = std::fs::create_dir(path){
-        format!("Internal Error.'write::example_create'. Failed to create directory - {:?}!", path);
+        return Err(format!("Internal Error.'write::example_create'. Failed to create directory - {:?}!", path));
     }
     Ok(())
 }

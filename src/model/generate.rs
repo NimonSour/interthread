@@ -88,7 +88,7 @@ pub fn generate_family(mut aaa: AAA, item_impl: &ItemImpl) -> ModelSdpl {
         
     &quote!{ 
         #vis struct #family_name #f_impl_generics #f_where_clause {
-            #( pub #member_fields),*
+            #( pub #member_fields ),*
         }
     };
 
@@ -105,7 +105,7 @@ pub fn generate_family(mut aaa: AAA, item_impl: &ItemImpl) -> ModelSdpl {
             let #actor = #arc_wraped_actor ;
             #debut_invoke
 
-            #(#member_invoks);*;
+            #(#member_invoks;)*
             #return_statement
         } 
     };

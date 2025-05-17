@@ -137,7 +137,7 @@ impl ModelReceiver{
                             }
 
                             if self.is_rcvr(&*pat_ty.ty,actor_type, lib){
-                                // since the live instance in method is not mutated 'self' is enougth
+                                // since the live instance in method is not mutated 'self' is enough
                                 // but we keep it consistent adding the mutability if present
                                 // which will be removed later by a specialised method 
                                 *input_rcvr = parse_quote!( #mutability self );
