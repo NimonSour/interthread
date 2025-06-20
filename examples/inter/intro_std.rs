@@ -47,7 +47,19 @@ impl MyActorScript {
             }
         }
     }
-    fn play(receiver: std::sync::mpsc::Receiver<MyActorScript>, mut actor: MyActor) {
+    fn play(
+        receiver: std::sync::mpsc::Receiver<MyActorScript>,
+        v: i8,
+        inter_send: oneshot::Sender<()>,
+    ) {
+        let mut actor = MyActor::new(v);
+        let _ = inter_send
+            .send(())
+            .unwrap_or_else(|_error| {
+                core::panic!(
+                    "'MyActorScript::play' from inter_send. Sending on a closed channel!"
+                )
+            });
         while let ::std::result::Result::Ok(msg) = receiver.recv() {
             msg.direct(&mut actor);
         }
@@ -59,9 +71,14 @@ pub struct MyActorLive {
 }
 impl MyActorLive {
     pub fn new(v: i8) -> Self {
-        let actor = MyActor::new(v);
         let (sender, receiver) = std::sync::mpsc::channel();
-        std::thread::spawn(move || { MyActorScript::play(receiver, actor) });
+        let (inter_send, inter_recv) = oneshot::channel();
+        std::thread::spawn(move || { MyActorScript::play(receiver, v, inter_send) });
+        let _ = inter_recv
+            .recv()
+            .unwrap_or_else(|_error| {
+                core::panic!("'MyActorLive::new' from inter_recv. Channel is closed!")
+            });
         Self { sender }
     }
     pub fn increment(&mut self) {
@@ -107,3 +124,4 @@ impl MyActorLive {
             })
     }
 }
+

@@ -1,6 +1,5 @@
 
-use crate::model::{ generics::turbofish,get_ident_type_generics, ModelGenerics,
-    name, ActorAttributeArguments, Mac,  MpscChannel, OneshotChannel};
+use crate::model::{ generics::turbofish, get_ident_type_generics, name, ActorAttributeArguments, Mac, ModelGenerics, MpscChannel, OneshotChannel };
 use super::actor_method::{MethodNew, ModelMethod};
 
 use proc_macro_error::abort_call_site;
@@ -14,6 +13,8 @@ use std::collections::HashSet;
 pub struct ConstVars {
 
     pub actor:             Ident,
+    pub short_actor:       Ident,
+    pub short_error:       Ident,
     pub name:              Ident,
     pub debut:             Ident,
     pub sender:            Ident,
@@ -41,8 +42,9 @@ impl ConstVars {
     pub fn new()  -> Self {
         
         Self {
-
             actor:             format_ident!("actor"),
+            short_actor:       format_ident!("act"),
+            short_error:       format_ident!("e"),
             name:              format_ident!("name"),
             debut:             format_ident!("debut"),
             sender:            format_ident!("sender"),
@@ -113,6 +115,7 @@ pub struct ImplVars {
     pub async_decl: Option<TokenStream>,
 
     pub direct_play_mut_token: TokenStream,
+    pub not_send_play_gen: Option<Generics>,
 
 }
 
@@ -133,7 +136,7 @@ impl ImplVars {
         imw.process_impl(item_impl);
 
         // model generics
-        let mod_gen = imw.get_mod_gen();
+        let mut mod_gen = imw.get_mod_gen();
         
         // model types
         let script_type  = get_type_path(&script_name, &mod_gen.script_gen);
@@ -144,11 +147,13 @@ impl ImplVars {
         let (oneshot,mpsc) = get_channels_one_mpsc( &const_vars,&aaa,&script_type, &live_name);
 
         // methods 
-        let ( met_new, actor_methods,async_decl ) = imw.get_methods(&oneshot);
+        let ( mut met_new, actor_methods,async_decl ) = imw.get_methods(&oneshot);
 
         let vis = met_new.as_ref().unwrap().met.vis.clone();
 
         let direct_play_mut_token = if aaa.mod_receiver.is_slf(){ quote!{ mut } } else { quote!{} };
+
+        let not_send_play_gen = aaa.ty_send.add_model_gen_bounds_and_update_play_gen( met_new.as_mut(), &mut mod_gen); 
 
         ImplVars {
 
@@ -174,7 +179,8 @@ impl ImplVars {
             const_vars,
             vis,
             async_decl,
-            direct_play_mut_token
+            direct_play_mut_token,
+            not_send_play_gen
         }
     }
 

@@ -1,7 +1,7 @@
 
 [package]
 name = "interthread"
-version = "3.0.0"
+version = "3.1.0"
 edition = "2021"
 description = "Auto implementation of the Actor Model"
 categories = ["development-tools", "asynchronous"]
@@ -19,17 +19,17 @@ proc-macro = true
 
 [dependencies]
 
-syn   = { version = "2.0.65", features = ["parsing","full","extra-traits"]}
-quote            = "1.0.36" 
-proc-macro2      = "1.0.83" 
+syn   = { version = "2.0.103", features = ["parsing","full","extra-traits"]}
+quote            = "1.0.40" 
+proc-macro2      = "1.0.95" 
 proc-macro-error = "1.0.4"
-proc-macro-crate = "3.1.0" 
-prettyplease     = "0.2.20"
+proc-macro-crate = "3.3.0" 
+prettyplease     = "0.2.34"
+
 
 [dev-dependencies]
-smol          = "2.0.0"
-oneshot       = "0.1.6"
+smol          = "2.0.2"
+oneshot       = "0.1.11"
 async-channel = "2.3.1"
-tokio         = { version= "1.37.0" ,features=["full"] }
-async-std     = { version = "1.12.0", features = ["attributes"] }
-
+tokio         = { version= "1.45.1" ,features=["full"] }
+async-std     = { version = "1.13.1", features = ["attributes"] }

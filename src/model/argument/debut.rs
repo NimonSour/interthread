@@ -2,7 +2,7 @@
 use crate::model::{ActorAttributeArguments as AAA, ConstVars, Cont, ImplVars, ModelGenerics};
 use quote::{quote,format_ident};
 use proc_macro2::TokenStream;
-use syn::{ parse_quote,Path,};
+use syn::{ parse_quote,Path,TypePath};
 
 use super::Mac;
 
@@ -147,13 +147,41 @@ impl Debut {
     }
 
     // helper methods 
-    pub fn get_path(&self) -> Option<Path> {
+    pub fn get_debut_path(&self) -> Option<Path> {
         if self.active {
             Some( parse_quote!( ::std::sync::Arc<::std::time::SystemTime> ))
         } else {
             None
         }
     }
+    pub fn get_live_fields(&self, const_vars: &ConstVars) -> TokenStream {
+        let ConstVars{debut,name,..} = const_vars;
+        if self.active {
+            quote!{
+                #debut : ::std::sync::Arc<::std::time::SystemTime>,
+                #name  : ::std::string::String,
+            }
+        } else { quote!{} }
+    }
+
+    pub fn get_debut_filds_init(&self,const_vars: &ConstVars) -> TokenStream { 
+        let ConstVars{debut,name,..} = const_vars;
+        if self.active {
+            quote!{
+                #debut : ::std::sync::Arc::new( #debut ),
+                #name  : ::std::string::String::new(),
+            }
+        } else { quote!{} }
+    }
+    
+    pub fn get_debut_decl_call(&self,script_path: &TypePath, const_vars: &ConstVars) -> TokenStream { 
+        let ConstVars{debut,..} = const_vars;
+        if self.active {
+            quote!{ let #debut = #script_path ::#debut(); }
+        } else { quote!{} }
+    }
+
+
 }
 
 impl Default for Debut {

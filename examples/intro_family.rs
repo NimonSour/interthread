@@ -1,10 +1,13 @@
 
+
+use std::sync::{Arc,RwLock};
+
 pub struct Actor {
     value: u16,
 }
 
 #[interthread::family( show,
-    actor( first_name = "User" ,show, include(increment)),
+    actor( first_name = "User" ,show, include(increment,method)),
     actor( first_name = "Admin" ,show, include(get_value)),
 )] 
 
@@ -20,10 +23,16 @@ impl Actor {
   pub fn get_value(&self) -> u16 {
       self.value
   }
+  
+  pub fn method(actor: &Arc<RwLock<Self>>, s: u16) -> u16 {
+    let _actor = actor.read().unwrap();
+    // some operations 
+    s
+  }
 
 }
 
-
+//  #[interthread::example(main,path="examples/intro_family.rs")] 
 fn main() {
 
     let family = ActorFamily::new(0);

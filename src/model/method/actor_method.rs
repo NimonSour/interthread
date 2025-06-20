@@ -103,8 +103,6 @@ pub struct MethodNew {
 }
 
 
-
-
 #[derive(Debug,Clone)]
 pub enum ModelMethod {
     Io  { met: ImplItemFn, await_call: Option<TokenStream>, _webs: Vec<Attribute>, turbo_gen: Option<TokenStream>, is_stat: bool, is_mut: bool, args: Vec<FnArg>, inter_vars: Option<InterVars>, output: Type },   
@@ -206,6 +204,7 @@ impl ModelMethod {
         let field_name = name::script_field(&ident);
         ( ident, field_name )
     }
+
 }
 
 
@@ -225,7 +224,7 @@ pub struct ImplWork<'a> {
     aaa: &'a ActorAttributeArguments,
     filter: ModelFilter,
 
-    gen_work: GenWork<'a>,
+    gen_work: GenWork,
 
     pub met_new: Option<MethodNew>,
     pub met_cont: Vec<ModelMethod>,
@@ -237,7 +236,7 @@ impl<'a> ImplWork<'a> {
 
         let filter = ModelFilter::new(&aaa);
         let actor_turbo_ty = crate::model::turbofish::from_type_path(&actor_ty);
-        let gen_work = GenWork::new(&impl_gen);
+        let gen_work = GenWork::new(&impl_gen,aaa.ty_send.is_send());
         Self { actor_ty, actor_turbo_ty, aaa, filter, gen_work, met_new: None, met_cont: vec![] }
     }
 
@@ -271,8 +270,10 @@ impl<'a> ImplWork<'a> {
 
                 if turbo_gen.is_none(){
                     // check for Context Generics and return method turbo
-                    self.gen_work.retain(&met.sig);
-                }
+                    self.gen_work.retain_io(&met.sig);
+                    // take all bounds from where clause 
+                    self.gen_work.take_bounds(&mut met.sig);
+                } 
 
                 let arg_flag = super::if_args_and_clean_pats(&mut met.sig);
                 
@@ -300,9 +301,13 @@ impl<'a> ImplWork<'a> {
 
             // needs to work NOO for SELF consumming 
             ModelMethod1::Slf(mut met)  => {
-                // if is an actor of family that and is not static - ignore
+
+                // self-consuminf not allowed in !Send model
+                if self.aaa.ty_send.is_not_send() { abort!(met, error::NOT_SEND_METHOD_ERROR; note=error::NOT_SEND_METHOD_NOTE)}
+                // if is an actor of family and is not static - ignore
                 // we can't raise an error since there may be different macros 
                 // for the same block
+                
                 if !is_stat  && !self.aaa.mod_receiver.is_slf() { return; }
 
                 if !self.filter.condition(&met.sig){ return; }
@@ -378,7 +383,8 @@ impl<'a> ImplWork<'a> {
                     //check if the receiver is 'actor'
                     if !is_stat {
 
-                        self.process_met( self.aaa.mod_receiver.second_sort(met,&self.actor_ty, &self.aaa.lib), true);
+                        let next_met = self.aaa.mod_receiver.second_sort(met,&self.actor_ty, &self.aaa.lib);
+                        self.process_met( next_met, true);
 
                     } else {
 
@@ -398,7 +404,7 @@ impl<'a> ImplWork<'a> {
 
     /// this function can be called after 
     /// full first process
-    pub fn get_mod_gen(&self) -> ModelGenerics {
+    pub fn get_mod_gen(&mut self) -> ModelGenerics {
         // check filter 
         self.filter.check();
 
@@ -479,6 +485,7 @@ impl<'a> ImplWork<'a> {
                 
                 if receiver.self_token == slf {
                     if receiver.reference.is_some(){
+
                         // reference 
                         return Some(ModelMethod1::Ref(met.clone(), receiver.mutability.is_some()));
                     } else {

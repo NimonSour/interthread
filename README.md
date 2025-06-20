@@ -15,8 +15,8 @@ Filename: Cargo.toml
 
 ```text
 [dependencies]
-interthread = "3.0.0"
-oneshot     = "0.1.6" 
+interthread = "3.1.0"
+oneshot     = "0.1.11" 
 ```
 
 Filename: main.rs

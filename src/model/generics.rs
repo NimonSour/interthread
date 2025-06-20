@@ -11,15 +11,18 @@ use super::ModelPhantomData;
 use quote::quote;
 
 
-pub struct GenWork<'a> {
-    pub impl_gen: &'a Generics,
-    actor_gen_set: HashMap<GenericArgument,GenericParam>,
+pub struct GenWork {
+    pub impl_gen: Generics,
+    org_arg_param_map: HashMap<GenericArgument,GenericParam>,
+    pub arg_param_map: HashMap<GenericArgument,GenericParam>,
+    is_send: bool,
 }
 
-impl<'a> GenWork<'a> {
+impl GenWork {
 
-    pub fn new(impl_gen: &'a Generics) -> Self {
-        let actor_gen_set = 
+    pub fn new(impl_gen: &Generics,is_send: bool) -> Self {
+
+        let arg_param_map: HashMap<GenericArgument,GenericParam> = 
         impl_gen.params
             .iter()
             .cloned()
@@ -31,66 +34,94 @@ impl<'a> GenWork<'a> {
             }
             )
             .collect();
-
-        Self { impl_gen, actor_gen_set }
+        let org_arg_param_map = arg_param_map.clone();
+        Self { impl_gen: impl_gen.clone(), org_arg_param_map, arg_param_map, is_send  }
     }
 
-    pub fn retain(&mut self, sig : &Signature ){
-        self.actor_gen_set.retain(|k,_| !crate::model::includes(&sig, k ));
+    pub fn retain_io(&mut self, sig : &Signature ){
+        self.arg_param_map.retain(|k,_| !crate::model::includes(&sig, k ));
     }
 
-    pub fn get_mod_gen(&self, full: bool) -> ModelGenerics {
+    /// should be used for method 'new' when !Sync
+    pub fn retain_i(&mut self, sig : &Signature ){
+        self.arg_param_map.retain(|k,_| !crate::model::includes(&sig.inputs, k ));
+    }
 
-        if full { 
-            let mut new_gen =self.impl_gen.clone();
-            add_model_bounds(&mut new_gen);
-            return ModelGenerics::new(new_gen);
+    // we do not attempt to extract 'where_predicates'from both 'where_clause's 
+    // and add (extend) the bounds if the type (generic) will match.
+    // later we'll try to take for 'script_gen' as many predicates as it is possible;
+    // the condition being for those : 'if none of params from `private_gen` are included in';
+    // this way more predicates will be lifted to 'script_gen'  
+
+    // TODO: Maybe in 'method::vars::ImplVars::new' just before the initiation to call a method 
+    //       which will clear the possible mess.
+
+    pub fn take_bounds(&mut self, sig : &mut Signature ){
+        if let Some(w_c ) = &sig.generics.where_clause.take(){
+            self.impl_gen.make_where_clause().predicates.extend(
+                w_c.predicates.iter().cloned()
+            );
+        } 
+    }
+
+    pub fn difference(&self) -> Vec<GenericParam> {
+        let mut loc = Vec::new();
+        for (arg,param) in self.org_arg_param_map.iter() {
+            if !self.arg_param_map.contains_key(arg){
+                loc.push(param.clone());
+            }
+        } 
+        loc
+    }
+
+    pub fn get_mod_gen(&mut self, full: bool) -> ModelGenerics {
+
+        let param_set = self.arg_param_map.keys().collect::<HashSet<_>>();
+        
+        if full || param_set.is_empty(){ 
+            add_model_bounds(&mut self.impl_gen);
+            return ModelGenerics::new(self.impl_gen.clone());
         }
 
         let mut script_gen:  Generics = Default::default();
         let mut private_gen: Generics = Default::default();
         let mut live_gen = self.impl_gen.clone();
 
-        let param_set = self.actor_gen_set.keys().collect::<HashSet<_>>();
+        // split params between script and private
+        for p in self.impl_gen.params.iter() {
+            // !!! keep this order, so all constants will be included in 'script_gen'
+            if param_set.contains(&gen_params::as_arg(p)) {
+                private_gen.params.push(p.clone());
+            } else {
+                script_gen.params.push(p.clone());
+            }
+        }
 
-        // calc params for private
-        let params = 
-            self.impl_gen.params.iter().filter_map(|p| {
-                if param_set.contains(&gen_params::as_arg(p)) {
-                    Some(p.clone())
-                } else { None }
-        }).collect::<Vec<_>>();
-        private_gen.params.extend(params.iter().cloned());
+        // split preds between script and private
+        for wp in self.impl_gen.make_where_clause().predicates.iter() {
+            if param_set.iter().any(|p| crate::model::includes(wp,p)){
+                private_gen.make_where_clause().predicates.push(wp.clone());
+            } else { 
+                script_gen.make_where_clause().predicates.push(wp.clone());
+            }
+        }
 
-        // calc params for script
-        let params = 
-            self.impl_gen.params.iter().filter_map(|p| {
-                if param_set.contains(&gen_params::as_arg(p)) {
-                    None
-                } else { Some(p.clone()) }
-        }).collect::<Vec<_>>();
-
-        // add params
-        script_gen.params.extend(params.iter().cloned());
-
-        // calc preds for script
-        let preds = 
-        live_gen.make_where_clause().predicates.iter()
-            .filter_map(|wp| {
-                if param_set.iter().any(|p| crate::model::includes(wp,p)){
-                    None
-                } else { Some( wp.clone())}
-            });
-
-        // add preds 
-        script_gen.make_where_clause().predicates.extend(preds);
-        
-        let phantom_data =  ModelPhantomData::from( &self.actor_gen_set);
+        let phantom_data =  ModelPhantomData::from( &self.arg_param_map);
 
 
         // add model bounds
-        add_model_bounds(&mut live_gen);
+        if self.is_send {
+            add_model_bounds(&mut live_gen);
+        } else {
+            // model bounds for params present in script only
+            for param in script_gen.params.iter(){
+                if !gen_params::is_const(param){
+                    add_bounds(param, &mut live_gen);
+                }
+            }
+        }
         add_model_bounds(&mut script_gen);
+
         ModelGenerics{
             script_gen, 
             private_gen,
@@ -100,9 +131,8 @@ impl<'a> GenWork<'a> {
 
     }
 
+
 }
-
-
 
 
 #[derive(Clone)]
@@ -141,7 +171,7 @@ impl ModelGenerics {
 
 /// add Generic restrictions to existing
 /// parameters if not present
-pub fn add_model_bounds(gen: &mut Generics ){
+pub fn add_model_bounds(gen: &mut Generics){
 
     let params = gen.params.clone();
 
@@ -174,7 +204,6 @@ pub fn add_bounds( param: &GenericParam, gen: &mut Generics ){
         return;
     } 
 
-    
     if let GenericParam::Type(TypeParam{ident,bounds: param_bounds,.. }) = param{
         let param_ty: Type = parse_quote!{ #ident };
         let mut model_bounds: Vec<TypeParamBound> = 
@@ -211,16 +240,9 @@ pub fn add_bounds( param: &GenericParam, gen: &mut Generics ){
     }
 }
 
-pub fn is_empty(gen: &Generics) -> bool {
-    let wcb =         
-    if let Some(where_clause) = &gen.where_clause{
-        where_clause.predicates.is_empty()
-    } else { true };
-    gen.params.is_empty() && wcb
-}
 
 pub fn get_some_turbo( gen: &Generics ) -> Option<TokenStream>{
-    if !is_empty(gen){
+    if !gen.params.is_empty(){
         let (_,gen_ty,_) = gen.split_for_impl();
         let turbo_gen = gen_ty.as_turbofish();
         Some(quote!{ #turbo_gen })
@@ -275,8 +297,6 @@ pub mod turbofish {
         }
     }
 }    
-
-
 
 pub mod gen_params {
 

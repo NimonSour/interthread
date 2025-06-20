@@ -163,16 +163,12 @@ impl ModelReceiver{
         }
     }
 
-
-
-
     pub fn is_slf(&self) -> bool {
         if let Self::Slf = self {
             return true;
         }
         false
     }
-
 
     pub fn get_lock(&self, lib: &Lib, const_vars: &ConstVars, is_mut: bool , is_stat: bool  ) -> TokenStream {
         if is_stat { return quote!{};}

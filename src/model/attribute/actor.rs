@@ -1,7 +1,7 @@
 use crate::error;
 use crate::model::{ 
     Mac,FilterSet,Channel,Lib, ModelReceiver, 
-    EditActor,Debut,ShowComment,
+    EditActor,Debut,ShowComment,TySend,
     generate_model,get_ident,get_lit,get_lit_str,
     get_list,to_usize };
 
@@ -30,6 +30,7 @@ pub struct ActorAttributeArguments {
     pub mod_receiver: ModelReceiver, 
     pub trait_debug : bool,
     pub mac   : Mac,
+    pub ty_send: TySend,
     /* ADD NEW OPTION */
 }
 
@@ -72,6 +73,16 @@ impl ActorAttributeArguments {
                     let str_name = get_lit_str(&meta,"first_name"); 
                 if &str_name == "" { abort!(&ident,"Attribute argument 'first_name' value is empty. Enter a name.")} 
                     self.first_name = Some(format_ident!("{str_name}"));  
+            }
+
+            // TY (type of actor for 'std' only)
+            // actor(ty="!Send")
+            else if meta.path().is_ident("ty"){
+                let str_name = get_lit_str(&meta,"ty");
+                if self.mac == Mac::Family { abort!(&ident, error::NOT_SEND_RESTRICTION)}
+                if &str_name == "Send"{ continue;}
+                else if &str_name == "!Send"{ self.ty_send.set_send(meta.clone());}
+                else { abort!(meta, error::TY_SEND_OPTIONS)} 
             } 
         
             // INTERACT
@@ -296,6 +307,14 @@ impl ActorAttributeArguments {
         if self.mac == Mac::Family  &&  self.lib == Lib::Smol {
             abort_call_site!(error::NOT_ALLOW_FAMILY_IN_SMOL);
         } 
+
+        //checks for '!Send' case of 'ty' (allowed for Lib::Std only)
+        if let Some(meta) = self.ty_send.get_send() {
+            if !self.lib.is_std(){
+                abort!(meta, error::NOT_SEND_RESTRICTION)
+            }
+        }
+
     }
 
     fn is_active(&self) -> bool {
@@ -343,10 +362,9 @@ impl Default for ActorAttributeArguments {
             members : Vec::new(),
             mod_receiver: ModelReceiver::default(),
             trait_debug : false,
-            mac     :  Mac::Actor,
+            mac     : Mac::Actor,
+            ty_send : TySend::default()
             /* ADD NEW ATTRIBUTE */
         }  
     }
 }
-
-

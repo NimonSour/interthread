@@ -5,6 +5,7 @@ mod interact;
 mod include_exclude;
 mod show;
 mod receiver;
+mod send;
 
 pub use channel::*;
 pub use debut::*;
@@ -13,6 +14,7 @@ pub use interact::*;
 pub use include_exclude::*;
 pub use show::ShowComment;
 pub use receiver::*;
+pub use send::*;
 
 use crate::error;
 
@@ -92,6 +94,13 @@ impl Lib {
             return true;
         }
         false
+    }
+
+    pub fn get_ok_or_some(&self) -> TokenStream {
+        match &self {
+            Lib::Tokio => quote!{::std::option::Option::Some},
+            _ => quote!{::std::result::Result::Ok}, 
+        }
     }
 
 

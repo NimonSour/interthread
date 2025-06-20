@@ -34,8 +34,6 @@ fn static_methods_generic_model() {
     let var = ActorLive::<String>::generic_static(1);
     act.set_field(var);
 
-
-
     assert_eq!(ActorLive::<String>::stat_method_io(3), 6u16 );
     assert_eq!(ActorLive::<String>::stat_method_i(3), () );
     assert_eq!(ActorLive::<String>::stat_method_o(), 144u16 );

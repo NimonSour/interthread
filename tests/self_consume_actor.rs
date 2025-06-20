@@ -129,7 +129,7 @@ fn std_family_mutex(){
 
             //----------------------------------------------------------------
             // static reference
-            pub fn met_stat_ref_io( actor: &mut Self, v: u16) -> u16 {
+            pub fn met_stat_ref_io(actor: &mut Self, v: u16) -> u16 {
                 actor.value += v;
                 actor.value
             }

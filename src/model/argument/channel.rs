@@ -1,6 +1,6 @@
 use crate::model::{ Lib,ConstVars,ActorAttributeArguments};
 
-use syn::{ Ident,Type };
+use syn::{ parse2, FnArg,Ident,Type };
 use quote::quote;
 use proc_macro2::TokenStream;
 
@@ -72,18 +72,18 @@ impl OneshotChannel {
                    _ =>  quote!{ #recv .await.unwrap_or_else(|_error| core::panic!( #error ))} ,
         }
     }
-    // pub fn send_call(&self,load: TokenStream, obj: &Ident, met: &Ident) -> TokenStream {
-    //     let  Self{send,..} = self;
-    //     let error = format!("'{obj}::{met}' from {send}. Sending on a closed channel!");
-    //     quote!{ #send .send( #load ).unwrap_or_else(|_error| core::panic!( #error )) }
-    // }
+    pub fn send_call(&self,load: TokenStream, obj: &Ident, met: &Ident) -> TokenStream {
+        let  Self{send,..} = self;
+        let error = format!("'{obj}::{met}' from {send}. Sending on a closed channel!");
+        quote!{ #send .send( #load ).unwrap_or_else(|_error| core::panic!( #error )) }
+    }
 }
 #[derive(Clone)]
 pub struct MpscChannel {
     pub type_sender:       TokenStream,    
     pub type_receiver:     TokenStream,     
-    pub pat_type_sender:   TokenStream,    
-    pub pat_type_receiver: TokenStream,   
+    pub pat_type_sender:   FnArg,    
+    pub pat_type_receiver: FnArg,   
     pub declaration:       TokenStream,    
     pub sender_call:       TokenStream,    
 }
@@ -99,12 +99,12 @@ impl MpscChannel {
         let error = format!("'{live_name}::method.send'. Channel is closed!");
         let type_sender:       TokenStream;    
         let type_receiver:     TokenStream;
-        let pat_type_sender:   TokenStream;    
-        let pat_type_receiver: TokenStream;
+        let pat_type_sender:   FnArg;    
+        let pat_type_receiver: FnArg;
         let declaration_call:  TokenStream;    
         let declaration:       TokenStream;    
         let mut sender_call = quote!{ let _ = self.#sender.send(msg).await; };
-
+        let exp_error_msg = "argument::channel::MpscChannel::new Failed to pars FnArg!";
         match  channel {
     
             Channel::Unbounded    => {
@@ -114,8 +114,8 @@ impl MpscChannel {
                    Lib::Std      => {
                         type_sender       = quote!{ std::sync::mpsc::Sender<#script_type>};    
                         type_receiver     = quote!{ std::sync::mpsc::Receiver<#script_type>};
-                        pat_type_sender   = quote!{ #sender: #type_sender, };   
-                        pat_type_receiver = quote!{ #receiver: #type_receiver, }; 
+                        pat_type_sender   = parse2(quote!{ #sender: #type_sender }).expect(exp_error_msg);   
+                        pat_type_receiver = parse2(quote!{ #receiver: #type_receiver }).expect(exp_error_msg); 
                         declaration_call  = quote!{ std::sync::mpsc::channel() };
                         declaration       = quote!{ let ( #sender, #receiver ) = #declaration_call ;};
                         sender_call       = quote!{ let _ = self.#sender.send(#msg).expect(#error);};
@@ -124,8 +124,8 @@ impl MpscChannel {
                    Lib::Tokio    => {
                         type_sender       = quote!{ tokio::sync::mpsc::UnboundedSender<#script_type>};    
                         type_receiver     = quote!{ tokio::sync::mpsc::UnboundedReceiver<#script_type>};
-                        pat_type_sender   = quote!{ #sender: #type_sender, };
-                        pat_type_receiver = quote!{ mut #receiver: #type_receiver, }; 
+                        pat_type_sender   = parse2(quote!{ #sender: #type_sender }).expect(exp_error_msg);
+                        pat_type_receiver = parse2(quote!{ mut #receiver: #type_receiver }).expect(exp_error_msg); 
                         declaration_call  = quote!{ tokio::sync::mpsc::unbounded_channel() };
                         declaration       = quote!{ let ( #sender, #receiver ) = #declaration_call ;};                
                         sender_call       = quote!{ let _ = self.#sender.send(#msg).expect(#error);};
@@ -134,8 +134,8 @@ impl MpscChannel {
                    Lib::AsyncStd  => {
                         type_sender       = quote!{ async_std::channel::Sender<#script_type>};    
                         type_receiver     = quote!{ async_std::channel::Receiver<#script_type>};
-                        pat_type_sender   = quote!{ #sender: #type_sender, };
-                        pat_type_receiver = quote!{ #receiver: #type_receiver, };
+                        pat_type_sender   = parse2(quote!{ #sender: #type_sender }).expect(exp_error_msg);
+                        pat_type_receiver = parse2(quote!{ #receiver: #type_receiver }).expect(exp_error_msg);
                         declaration_call  = quote!{ async_std::channel::unbounded() };
                         declaration       = quote!{ let ( #sender, #receiver ) = #declaration_call ;};                    
                    },
@@ -143,8 +143,8 @@ impl MpscChannel {
                    Lib::Smol      => {
                         type_sender       = quote!{ async_channel::Sender<#script_type>};    
                         type_receiver     = quote!{ async_channel::Receiver<#script_type>};
-                        pat_type_sender   = quote!{ #sender: #type_sender, };
-                        pat_type_receiver = quote!{ #receiver: #type_receiver, };
+                        pat_type_sender   = parse2(quote!{ #sender: #type_sender }).expect(exp_error_msg);
+                        pat_type_receiver = parse2(quote!{ #receiver: #type_receiver }).expect(exp_error_msg);
                         declaration_call  = quote!{ async_channel::unbounded() };
                         declaration       = quote!{ let ( #sender, #receiver ) = #declaration_call ;}; 
                    },
@@ -157,8 +157,8 @@ impl MpscChannel {
                    Lib::Std      => {
                         type_sender       = quote!{ std::sync::mpsc::SyncSender<#script_type> };    
                         type_receiver     = quote!{ std::sync::mpsc::Receiver<#script_type> };
-                        pat_type_sender   = quote!{ #sender: #type_sender, };
-                        pat_type_receiver = quote!{ #receiver: #type_receiver, };
+                        pat_type_sender   = parse2(quote!{ #sender: #type_sender }).expect(exp_error_msg);
+                        pat_type_receiver = parse2(quote!{ #receiver: #type_receiver}).expect(exp_error_msg);
                         declaration_call  = quote!{ std::sync::mpsc::sync_channel(#val) };
                         declaration       = quote!{ let ( #sender, #receiver ) = #declaration_call ;};
                         sender_call       = quote!{ let _ = self.#sender.send(#msg).expect(#error);};
@@ -166,8 +166,8 @@ impl MpscChannel {
                    Lib::Tokio    => {
                         type_sender       = quote!{ tokio::sync::mpsc::Sender<#script_type> };    
                         type_receiver     = quote!{ tokio::sync::mpsc::Receiver<#script_type> };
-                        pat_type_sender   = quote!{ #sender: #type_sender, };
-                        pat_type_receiver = quote!{ mut #receiver: #type_receiver, };
+                        pat_type_sender   = parse2(quote!{ #sender: #type_sender }).expect(exp_error_msg);
+                        pat_type_receiver = parse2(quote!{ mut #receiver: #type_receiver }).expect(exp_error_msg);
                         declaration_call  = quote!{ tokio::sync::mpsc::channel(#val) };
                         declaration       = quote!{ let ( #sender, #receiver ) = #declaration_call ;};               
                    },
@@ -175,8 +175,8 @@ impl MpscChannel {
                    Lib::AsyncStd  => {
                         type_sender       = quote!{ async_std::channel::Sender<#script_type> };    
                         type_receiver     = quote!{ async_std::channel::Receiver<#script_type> };
-                        pat_type_sender   = quote!{ #sender: #type_sender, };
-                        pat_type_receiver = quote!{ #receiver: #type_receiver, };
+                        pat_type_sender   = parse2(quote!{ #sender: #type_sender }).expect(exp_error_msg);
+                        pat_type_receiver = parse2(quote!{ #receiver: #type_receiver }).expect(exp_error_msg);
                         declaration_call  = quote!{ async_std::channel::bounded(#val) };
                         declaration       = quote!{ let ( #sender, #receiver ) = #declaration_call ;};
                    },
@@ -184,15 +184,15 @@ impl MpscChannel {
                    Lib::Smol      => {
                         type_sender       = quote!{ async_channel::Sender<#script_type> };    
                         type_receiver     = quote!{ async_channel::Receiver<#script_type> };
-                        pat_type_sender   = quote!{ #sender: #type_sender, };
-                        pat_type_receiver = quote!{ #receiver: #type_receiver, };
+                        pat_type_sender   = parse2(quote!{ #sender: #type_sender }).expect(exp_error_msg);
+                        pat_type_receiver = parse2(quote!{ #receiver: #type_receiver }).expect(exp_error_msg);
                         declaration_call  = quote!{ async_channel::bounded(#val) };
                         declaration       = quote!{ let ( #sender, #receiver ) = #declaration_call ;};
                    },
                }
             },
         };
-
+        
         Self {
             type_sender,
             type_receiver,

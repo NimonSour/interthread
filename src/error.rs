@@ -426,7 +426,35 @@ pub static AVAIL_FAMILY: &'static str = "
 
 
 pub static NOT_ALLOW_FAMILY_DIRECT_MUT_REF: &'static str = 
-"Mutable references (`mut`) are not allowed. 
-To use this method with the current signature, rename the receiver from `actor` to another name.";
+"Mutable references (`mut`) are not allowed for crate's 'actor' convention.
+
+Expected:
+    ( actor : &  Arc<Mutex<Actor>> ) 
+    ( actor : &  Arc<RwLock<Actor>> ) 
+
+";
 
 pub static NOT_ALLOW_FAMILY_IN_SMOL: &'static str = "The 'family' macro is only supported for the following runtimes: 'std' (standard), 'tokio' and 'async_std'.";
+
+pub static TY_SEND_OPTIONS: &'static str = "The 'ty' argument accepts two options: 'Send' (the default) or '!Send'.";
+pub static NOT_SEND_RESTRICTION: &'static str = 
+"
+The 'ty' argument accepts two options: 'Send' (the default) or '!Send'.
+If you intend to build a '!Send' actor, please note the following restrictions:
+
+    1) '!Send' actors can only be ordinary actors — they are not supported within a family context.
+    2) '!Send' actors are only supported for 'lib = \"std\"' - they are not supported within any 'async' context.
+    3) All arguments passed to the actor’s 'new' method must themselves be 'Send'.
+"
+;
+
+pub static NOT_SEND_METHOD_ERROR: &'static str = "
+Self-consuming methods, as well as static methods that ultimately 
+become self-consuming after macro expansion, are not allowed for `!Send` actors.
+";
+
+pub static NOT_SEND_METHOD_NOTE: &'static str = "
+When using `!Send`, the actor must remain on a single thread.
+However, consuming `self` in this method would cause the actor to be moved,
+which violates the `!Send` constraint.
+";

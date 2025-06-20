@@ -355,7 +355,7 @@ pub fn to_raw_parts (&mut self, impl_vars: &ImplVars, aaa : &ActorAttributeArgum
     //  create inter_play_stop
     if self.flag_slf {
 
-        let debut_path = aaa.debut.get_path().as_mut().map(|x| quote!{,#x});
+        let debut_path = aaa.debut.get_debut_path().as_mut().map(|x| quote!{,#x});
         let sig = quote!{     
             #async_decl fn inter_play_stop(self) -> ( #model_actor_type, #type_receiver, #type_sender #debut_path )
         }; 

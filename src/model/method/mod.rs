@@ -68,14 +68,12 @@ impl Default for ModelPhantomData {
 }
 
 
-
-
 pub fn get_new_sig( sig: &Signature, actor_ty: &Type) -> Signature {
     let actor_turbo_ty = super::turbofish::from_type(actor_ty);
-    super::replace(sig, &quote!{Self::},&actor_turbo_ty);
+    let sig = super::replace(sig, &quote!{Self::},&actor_turbo_ty);
 
     let ty_self: Type   = parse_quote!{ Self };
-    let mut signature = super::replace(sig, &ty_self,actor_ty);
+    let mut signature = super::replace(&sig, &ty_self,actor_ty);
     signature.output = super::replace(&sig.output,actor_ty,&ty_self);
     signature
 }
@@ -88,7 +86,8 @@ pub fn clean_path( path : &Path ) -> Path {
     path
 }
 
-
+// TODO: It needs really to accept generics with quilified (associated items) types.
+//       This means 'actor_ty' typepath may be different from ReturnType::Type of method 'new'.
 fn check_self_return( sig: &Signature, actor_ty: &TypePath ) -> (Signature,ModelOutput) {
 
     let option_ident = format_ident!("Option");
@@ -349,7 +348,6 @@ pub fn get_live_args_and_sig( sig: &Signature ) -> (Vec<FnArg>, Signature) {
         }).collect();
     (args, sig)
 }
-
 
 
 

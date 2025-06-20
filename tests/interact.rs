@@ -16,8 +16,7 @@ fn interact_simple(){
     impl Actor {
 
         pub fn new() -> Self { Self{} } 
-
-
+        
         pub fn needs_sender(&self, (a,b,..):(u8,u8,u8), inter_send: oneshot::Sender<String>){
             let _ = inter_send.send(format!("{a}-{b}"));
         }
