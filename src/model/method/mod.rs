@@ -69,8 +69,9 @@ impl Default for ModelPhantomData {
 
 
 pub fn get_new_sig( sig: &Signature, actor_ty: &Type) -> Signature {
+    // ! Self::X may require more attention when stable
     let actor_turbo_ty = super::turbofish::from_type(actor_ty);
-    let sig = super::replace(sig, &quote!{Self::},&actor_turbo_ty);
+    let sig = super::replace(sig, &quote!{Self::},&quote!{#actor_turbo_ty ::});
 
     let ty_self: Type   = parse_quote!{ Self };
     let mut signature = super::replace(&sig, &ty_self,actor_ty);
