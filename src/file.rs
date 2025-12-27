@@ -48,8 +48,14 @@ pub fn active_file_count( path: &std::path::PathBuf ) -> Result<EditAttribute,St
 
             syn::Item::Impl( item_impl) => {
                 for attr in &item_impl.attrs.clone() {
+                        // -------------
+                            // let is_actor = format!(" is_actor - {}", use_macro_actor.is(attr));
+                            // let is_family = format!(" is_family - {}", use_macro_family.is(attr));
+                            // // let msg = prettyplease::unparse(&attr);
+                            // abort_call_site!( format!("res = {is_actor}; {is_family}"));
 
-                    if use_macro_actor.is(attr) || use_macro_family.is(attr) {   
+                        // -------------- 
+                    if use_macro_actor.is(attr) || use_macro_family.is(attr) {  
                         if crate::parse::nested::is_active( attr ){
 
                             let edit_attr = EditAttribute { 
@@ -75,7 +81,7 @@ pub fn active_file_count( path: &std::path::PathBuf ) -> Result<EditAttribute,St
     // check if is one only
     if edit_attrs.len() == 0 {
         // error no file in attrs 
-        let msg = format!("Internal Error.'file::macro_file_count'. Failed to find a file active macro `group_actor` or `actor` in module {} .",
+        let msg = format!("Internal Error.'file::macro_file_count'. Failed to find a file active macro `group_actor` or `actor` in module {} .\nhelp: Possible the 'actor' is not defined at module scope but within a block scope (ex. function,mod,block..)",
          path.to_string_lossy() );
         return Err(msg);
     }

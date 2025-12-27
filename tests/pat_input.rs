@@ -19,7 +19,7 @@ fn actor_sync_bounded() {
         pub fn in_out_tuple_struct(&self,MyTupleStruct(a,b,c):MyTupleStruct)->i8{a+b+c}
         pub fn in_out_array(&self,[a,b,c]:[i8;3])->i8{a+b+c}
         pub fn in_out_array_with_slice(&self,[a,ref i @ ..,d]:[i8;4])->i8{let sum: i8 = i.iter().sum(); a+d + sum }
-        pub fn add(&mut self, mut v:i8) -> i8{v = v;self.0 += v;self.0}
+        pub fn add(&mut self, mut v:i8) -> i8{v=v;self.0 += v;self.0}
     }
     let mut live = ActorLive::new();
     live.input(3); 
